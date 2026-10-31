@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { RoleRepository } from "@/common/role.repository";
 import { ApiKey } from "./models/api-key.model";
+import { appError, AppError } from "@/common/app-error";
 import { Result, Ok, Failure, errorMessage } from "@/common/result";
 import { eq, and } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
@@ -17,7 +18,7 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
   async createApiKey(
     userId: string,
     name: string,
-  ): Promise<Result<ApiKey, string>> {
+  ): Promise<Result<ApiKey, AppError>> {
     try {
       // Generate a secure API key
       const apiKey = this.generateApiKey();
@@ -32,7 +33,7 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
       const result = await this.create(data);
 
       if (!result.success) {
-        return Failure(result.error.message);
+        return Failure(result.error);
       }
 
       // Return with the actual key
@@ -41,11 +42,11 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
         key: apiKey,
       } as ApiKey);
     } catch (error: unknown) {
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
-  async findByKey(key: string): Promise<Result<ApiKey, string>> {
+  async findByKey(key: string): Promise<Result<ApiKey, AppError>> {
     try {
       const records = await this.db
         .select()
@@ -55,7 +56,7 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
         );
 
       if (records.length === 0) {
-        return Failure("API key not found or inactive");
+        return Failure(appError("not_found", "API key not found or inactive"));
       }
 
       const apiKey = records[0];
@@ -75,11 +76,11 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
         throw error;
       }
       logger.error({ err: error }, "Error looking up API key");
-      return Failure("API key lookup failed");
+      return Failure(appError("internal", "API key lookup failed"));
     }
   }
 
-  async updateLastUsed(keyId: string): Promise<Result<void, string>> {
+  async updateLastUsed(keyId: string): Promise<Result<void, AppError>> {
     try {
       await this.db
         .update(this.table)
@@ -88,19 +89,19 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
 
       return Ok(null);
     } catch (error: unknown) {
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
   async deleteApiKey(
     userId: string,
     id: string,
-  ): Promise<Result<void, string>> {
+  ): Promise<Result<void, AppError>> {
     try {
       // First check if the API key exists and belongs to the user
       const existingKey = await this.findOne(userId, id);
       if (!existingKey.success) {
-        return Failure("API key not found");
+        return Failure(appError("not_found", "API key not found"));
       }
 
       await this.db
@@ -110,7 +111,7 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
       return Ok(null);
     } catch (error: unknown) {
       logger.error({ err: error }, "Error deleting API key");
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 

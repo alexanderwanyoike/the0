@@ -2,6 +2,7 @@
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { isConnectionError } from "@/common/database-errors";
 import { ApiKeyRepository } from "./api-key.repository";
+import { appError, AppError } from "@/common/app-error";
 import { Result, Ok, Failure } from "../common/result";
 import { ApiKey } from "./models/api-key.model";
 import { CreateApiKeyDto } from "./dto/create-api-key.dto";
@@ -35,18 +36,20 @@ export class ApiKeyService {
   async createApiKey(
     userId: string,
     createApiKeyDto: CreateApiKeyDto,
-  ): Promise<Result<ApiKeyCreatedResponseDto, string>> {
+  ): Promise<Result<ApiKeyCreatedResponseDto, AppError>> {
     // Check if user already has an API key with this name
     const existingKeys = await this.apiKeyRepository.findAll(userId);
     if (!existingKeys.success) {
-      return Failure(existingKeys.error.message);
+      return Failure(existingKeys.error);
     }
 
     const nameExists = existingKeys.data.some(
       (key) => key.name === createApiKeyDto.name,
     );
     if (nameExists) {
-      return Failure("An API key with this name already exists");
+      return Failure(
+        appError("validation", "An API key with this name already exists"),
+      );
     }
 
     // Create the API key
@@ -66,10 +69,10 @@ export class ApiKeyService {
    */
   async getUserApiKeys(
     userId: string,
-  ): Promise<Result<ApiKeyResponseDto[], string>> {
+  ): Promise<Result<ApiKeyResponseDto[], AppError>> {
     const result = await this.apiKeyRepository.findAll(userId);
     if (!result.success) {
-      return Failure(result.error.message);
+      return Failure(result.error);
     }
 
     return Ok(result.data.map(toResponseDto));
@@ -81,10 +84,10 @@ export class ApiKeyService {
   async getApiKeyById(
     userId: string,
     keyId: string,
-  ): Promise<Result<ApiKeyResponseDto, string>> {
+  ): Promise<Result<ApiKeyResponseDto, AppError>> {
     const result = await this.apiKeyRepository.findOne(userId, keyId);
     if (!result.success) {
-      return Failure(result.error.message);
+      return Failure(result.error);
     }
 
     return Ok(toResponseDto(result.data));
@@ -96,7 +99,7 @@ export class ApiKeyService {
   async deleteApiKey(
     userId: string,
     keyId: string,
-  ): Promise<Result<void, string>> {
+  ): Promise<Result<void, AppError>> {
     const result = await this.apiKeyRepository.deleteApiKey(userId, keyId);
     if (!result.success) {
       return Failure(result.error);
@@ -110,7 +113,7 @@ export class ApiKeyService {
    * for server-side logs only: callers answer clients with a generic message,
    * because a reason can carry database details.
    */
-  async validateApiKey(key: string): Promise<Result<ApiKey, string>> {
+  async validateApiKey(key: string): Promise<Result<ApiKey, AppError>> {
     try {
       const result = await this.apiKeyRepository.findByKey(key);
       if (!result.success) {
@@ -119,7 +122,7 @@ export class ApiKeyService {
 
       const user = await this.users.findById(result.data.userId);
       if (!user?.isActive) {
-        return Failure("API key owner is inactive");
+        return Failure(appError("forbidden", "API key owner is inactive"));
       }
 
       // Update last used timestamp
@@ -141,10 +144,10 @@ export class ApiKeyService {
    */
   async getApiKeyStats(
     userId: string,
-  ): Promise<Result<{ total: number; active: number }, string>> {
+  ): Promise<Result<{ total: number; active: number }, AppError>> {
     const result = await this.apiKeyRepository.findAll(userId);
     if (!result.success) {
-      return Failure(result.error.message);
+      return Failure(result.error);
     }
 
     const stats = {

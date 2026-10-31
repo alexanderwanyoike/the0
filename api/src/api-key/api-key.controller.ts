@@ -51,7 +51,7 @@ export class ApiKeyController {
       throw new HttpException(
         {
           statusCode: HttpStatus.BAD_REQUEST,
-          message: result.error,
+          message: result.error.message,
           error: "Bad Request",
         },
         HttpStatus.BAD_REQUEST,
@@ -78,7 +78,7 @@ export class ApiKeyController {
       throw new HttpException(
         {
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: result.error,
+          message: result.error.message,
           error: "Internal Server Error",
         },
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -102,13 +102,13 @@ export class ApiKeyController {
 
     if (!result.success) {
       const status =
-        result.error === "Not found"
+        result.error.code === "not_found"
           ? HttpStatus.NOT_FOUND
           : HttpStatus.INTERNAL_SERVER_ERROR;
       throw new HttpException(
         {
           statusCode: status,
-          message: result.error,
+          message: result.error.message,
           error:
             status === HttpStatus.NOT_FOUND
               ? "Not Found"
@@ -135,13 +135,13 @@ export class ApiKeyController {
 
     if (!result.success) {
       const status =
-        result.error === "API key not found"
+        result.error.code === "not_found"
           ? HttpStatus.NOT_FOUND
           : HttpStatus.INTERNAL_SERVER_ERROR;
       throw new HttpException(
         {
           statusCode: status,
-          message: result.error,
+          message: result.error.message,
           error:
             status === HttpStatus.NOT_FOUND
               ? "Not Found"
@@ -167,7 +167,7 @@ export class ApiKeyController {
       throw new HttpException(
         {
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: result.error,
+          message: result.error.message,
           error: "Internal Server Error",
         },
         HttpStatus.INTERNAL_SERVER_ERROR,

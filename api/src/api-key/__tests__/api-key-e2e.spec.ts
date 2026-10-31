@@ -204,7 +204,9 @@ describe("ApiKeyController (e2e)", () => {
   });
 
   it("/api-keys/:id (DELETE) should return 404 for non-existent key", async () => {
-    mockRepository.deleteApiKey.mockResolvedValue(Failure("API key not found"));
+    mockRepository.deleteApiKey.mockResolvedValue(
+      Failure(appError("not_found", "API key not found")),
+    );
 
     return request(app.getHttpServer())
       .delete("/api-keys/non-existent-id")
