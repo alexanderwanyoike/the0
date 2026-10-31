@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os/user"
 	"strings"
 	"time"
 
@@ -218,6 +219,16 @@ func (r *dockerRunner) containerLogs(containerID string) (string, error) {
 		return "", err
 	}
 	return string(logs), nil
+}
+
+// hostUserIDs is who should own what a build writes into the project, so
+// files written as the container's user do not end up owned by root.
+func hostUserIDs() (uid, gid string) {
+	current, err := user.Current()
+	if err != nil {
+		return "1000", "1000"
+	}
+	return current.Uid, current.Gid
 }
 
 // cleanDockerLogOutput removes Docker log headers from raw log data
