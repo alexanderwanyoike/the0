@@ -20,11 +20,39 @@ type apiRequest struct {
 	// timeout replaces the client's default for calls the server may take
 	// long to answer: uploads and bot queries.
 	timeout time.Duration
+	// noRelogin is for the call that tests a key, whose rejection is the
+	// answer rather than a reason to ask for another key.
+	noRelogin bool
 }
 
+// ReloginError is returned when the api rejected the key and asking for a
+// new one failed.
+type ReloginError struct {
+	Err error
+}
+
+func (e *ReloginError) Error() string { return e.Err.Error() }
+func (e *ReloginError) Unwrap() error { return e.Err }
+
 // send makes r with auth's API key. It returns the body of a 2xx response;
-// any other status becomes an *APIError.
+// any other status becomes an *APIError. When the key is rejected and
+// c.Relogin is set, the call is retried once with the new key, which also
+// replaces *auth so the caller's later calls use it.
 func (c *APIClient) send(auth *Auth, r apiRequest) ([]byte, error) {
+	body, err := c.sendOnce(auth, r)
+	if err == nil || c.Relogin == nil || r.noRelogin || !IsAuthError(err) {
+		return body, err
+	}
+
+	fresh, loginErr := c.Relogin()
+	if loginErr != nil {
+		return nil, &ReloginError{Err: loginErr}
+	}
+	*auth = *fresh
+	return c.sendOnce(auth, r)
+}
+
+func (c *APIClient) sendOnce(auth *Auth, r apiRequest) ([]byte, error) {
 	target := c.BaseURL + r.path
 	if len(r.query) > 0 {
 		target += "?" + r.query.Encode()

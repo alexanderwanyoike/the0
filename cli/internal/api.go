@@ -24,6 +24,9 @@ const DEFAULT_API_URL = "http://localhost:3000"
 type APIClient struct {
 	BaseURL    string
 	HTTPClient *http.Client
+	// Relogin, when set, is asked once for a new key after the api rejects
+	// the current one, and the call is retried with it.
+	Relogin func() (*Auth, error)
 }
 
 // Schema represents the JSON schema structure
@@ -143,7 +146,7 @@ type LogsParams struct {
 
 // TestAPIKey tests if an API key is valid
 func (c *APIClient) TestAPIKey(auth *Auth) error {
-	body, err := c.send(auth, apiRequest{method: "GET", path: "/auth/validate-api-key"})
+	body, err := c.send(auth, apiRequest{method: "GET", path: "/auth/validate-api-key", noRelogin: true})
 	if err != nil {
 		return err
 	}
