@@ -308,12 +308,18 @@ func TestLaunch_RunnerReadsExactlyWhatEachBackendSends(t *testing.T) {
 		require.NoError(t, err)
 		scheduled, err := generator.GenerateScheduledPodSpec(bot)
 		require.NoError(t, err)
+		queryExecutable := dockerQueryExecutable()
+		queryExecutable.Config = nil
+		queryPod, err := generator.GenerateQueryPod(bot, roundTripQueryPath, roundTripQueryParams, roundTripResultKey)
+		require.NoError(t, err)
 
 		for name, s := range map[string]sent{
 			"docker realtime run":      dockerSent(t, realtimeExecutable),
 			"docker scheduled run":     dockerSent(t, scheduledExecutable),
+			"docker query":             dockerSent(t, queryExecutable),
 			"kubernetes realtime run":  podSent(container(t, pod.Spec.Containers, "bot")),
 			"kubernetes scheduled run": podSent(container(t, scheduled.Containers, "bot")),
+			"kubernetes query":         podSent(container(t, queryPod.Spec.Containers, "bot")),
 		} {
 			got, err := read(t, s.command, s.env)
 			require.NoError(t, err, name)
