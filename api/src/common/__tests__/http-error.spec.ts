@@ -7,7 +7,12 @@ describe("toHttpException", () => {
     ["validation", 400, "Bad Request"],
     ["forbidden", 400, "Bad Request"],
     ["not_found", 404, "Not Found"],
+    ["conflict", 409, "Conflict"],
+    ["too_large", 413, "Payload Too Large"],
+    ["unprocessable", 422, "Unprocessable Entity"],
     ["internal", 500, "Internal Server Error"],
+    ["unavailable", 503, "Service Unavailable"],
+    ["timeout", 504, "Gateway Timeout"],
   ])("answers %s with %i and Nest's usual body", (code, status, statusText) => {
     const exception = toHttpException(appError(code, "The reason"));
 
