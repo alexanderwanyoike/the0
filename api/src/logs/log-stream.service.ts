@@ -5,6 +5,7 @@ import { LogFanOut } from "./log-fan-out";
 import { isValidBotId } from "./bot-id";
 import { sendSSEHeaders, sseEvent } from "./sse";
 import { utcDay } from "./log-entry";
+import { AppError } from "@/common/app-error";
 
 export const ACCESS_DENIED_MESSAGE = "Bot not found or access denied";
 
@@ -115,8 +116,8 @@ export class LogStreamService {
   }
 
   /** @returns true when the error refused access and the stream was ended. */
-  private endOnAccessError(res: Response, error: string | null): boolean {
-    if (error?.includes("not found") || error?.includes("access denied")) {
+  private endOnAccessError(res: Response, error: AppError | null): boolean {
+    if (error?.code === "not_found") {
       res.write(sseEvent("error", { message: ACCESS_DENIED_MESSAGE }));
       res.end();
       return true;

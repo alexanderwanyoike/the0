@@ -1,4 +1,5 @@
 import { LogStreamService, ACCESS_DENIED_MESSAGE } from "../log-stream.service";
+import { appError } from "@/common/app-error";
 import { LogFanOut } from "../log-fan-out";
 import { LogsService } from "../logs.service";
 import { NatsService } from "@/nats/nats.service";
@@ -149,7 +150,7 @@ describe("LogStreamService", () => {
 
     it("should terminate SSE when bot access is denied", async () => {
       (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
-        Failure("Bot not found or access denied"),
+        Failure(appError("not_found", "Bot not found or access denied")),
       );
 
       await service.stream("bot-denied", userId, mockReq, mockRes);
@@ -165,7 +166,7 @@ describe("LogStreamService", () => {
 
     it("should terminate SSE when bot is not found", async () => {
       (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
-        Failure("Bot not found"),
+        Failure(appError("not_found", "Bot not found")),
       );
 
       await service.stream("bot-missing", userId, mockReq, mockRes);
@@ -181,7 +182,9 @@ describe("LogStreamService", () => {
 
     it("should send warning event when getLogs fails for non-access reasons", async () => {
       (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
-        Failure("Failed to fetch logs: MinIO unavailable"),
+        Failure(
+          appError("internal", "Failed to fetch logs: MinIO unavailable"),
+        ),
       );
 
       await service.stream("bot-minio-fail", userId, mockReq, mockRes);
@@ -369,7 +372,9 @@ describe("LogStreamService", () => {
       const withOwner = (ownerId: string) => {
         const botService = {
           findOneByUserId: jest.fn(async (uid: string) =>
-            uid === ownerId ? Ok({ id: "bot-1" }) : Failure("Bot not found"),
+            uid === ownerId
+              ? Ok({ id: "bot-1" })
+              : Failure(appError("not_found", "Bot not found")),
           ),
         };
         const logsService = new LogsService(

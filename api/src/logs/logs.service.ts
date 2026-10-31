@@ -2,6 +2,7 @@ import { Injectable, Scope, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { BotService } from "@/bot/bot.service";
+import { appError, AppError } from "@/common/app-error";
 import {
   Result,
   Ok,
@@ -54,6 +55,9 @@ interface FilePosition {
 // 15 digits stay within Number.MAX_SAFE_INTEGER, far past any daily file.
 const POSITION_KEY = /^(\d{8}):(\d{1,15})$/;
 
+const invalid = <T>(message: string): Result<T, AppError> =>
+  Failure(appError("validation", message));
+
 const dayLogPath = (botId: string, date: string): string =>
   `logs/${botId}/${date}.log`;
 
@@ -85,10 +89,10 @@ export class LogsService {
   async checkAccess(
     botId: string,
     userId: string,
-  ): Promise<Result<true, string>> {
+  ): Promise<Result<true, AppError>> {
     const botResult = await this.botService.findOneByUserId(userId, botId);
     if (!botResult.success) {
-      return Failure("Bot not found or access denied");
+      return Failure(appError("not_found", "Bot not found or access denied"));
     }
     return Ok(true);
   }
@@ -97,7 +101,7 @@ export class LogsService {
     botId: string,
     query: LogsQuery,
     userId: string,
-  ): Promise<Result<LogsPage, string>> {
+  ): Promise<Result<LogsPage, AppError>> {
     const access = await this.checkAccess(botId, userId);
     if (!access.success) return Failure(access.error);
 
@@ -112,14 +116,16 @@ export class LogsService {
           ? "Error fetching latest logs"
           : "Error fetching logs",
       );
-      return Failure(`Failed to fetch logs: ${errorMessage(error)}`);
+      return Failure(
+        appError("internal", `Failed to fetch logs: ${errorMessage(error)}`),
+      );
     }
   }
 
   private async readPage(
     botId: string,
     query: LogsQuery,
-  ): Promise<Result<PageRead, string>> {
+  ): Promise<Result<PageRead, AppError>> {
     if (query.before !== undefined) return this.readBefore(botId, query);
 
     // Latest mode: no explicit window - serve the newest entries regardless
@@ -130,7 +136,7 @@ export class LogsService {
     }
 
     const dates = this.parseDateQuery(query);
-    if (!dates.length) return Failure(LogsService.INVALID_WINDOW);
+    if (!dates.length) return invalid(LogsService.INVALID_WINDOW);
 
     return Ok(await this.readNewestFirst(botId, [...dates].reverse(), query));
   }
@@ -149,14 +155,14 @@ export class LogsService {
   private async readBefore(
     botId: string,
     query: LogsQuery,
-  ): Promise<Result<PageRead, string>> {
+  ): Promise<Result<PageRead, AppError>> {
     if (query.offset) {
-      return Failure("before cannot be combined with offset");
+      return invalid("before cannot be combined with offset");
     }
     const window = this.isLatestMode(query)
       ? this.generateLookbackDates(query.lookbackDays!)
       : this.parseDateQuery(query).reverse();
-    if (!window.length) return Failure(LogsService.INVALID_WINDOW);
+    if (!window.length) return invalid(LogsService.INVALID_WINDOW);
 
     const cursor = await this.resolveCursor(botId, query.before!);
     if (!cursor.success) return Failure(cursor.error);
@@ -168,21 +174,21 @@ export class LogsService {
   private async resolveCursor(
     botId: string,
     key: string,
-  ): Promise<Result<FilePosition, string>> {
+  ): Promise<Result<FilePosition, AppError>> {
     const position = POSITION_KEY.exec(key);
     if (position && this.isValidDateFormat(position[1])) {
       return Ok({ date: position[1], offset: Number(position[2]) });
     }
     if (/^\d{8}:\d{16,}$/.test(key)) {
-      return Failure("Invalid before cursor: its byte offset is too large");
+      return invalid("Invalid before cursor: its byte offset is too large");
     }
     const date = runtimeKeyDay(key);
     if (!date) {
-      return Failure("Invalid before cursor: expected a log entry key");
+      return invalid("Invalid before cursor: expected a log entry key");
     }
     const offset = await this.findKeyOffset(botId, date, key);
     if (offset === null) {
-      return Failure("The before cursor matches no log entry");
+      return invalid("The before cursor matches no log entry");
     }
     return Ok({ date, offset });
   }

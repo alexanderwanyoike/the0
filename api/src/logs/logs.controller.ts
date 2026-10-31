@@ -77,13 +77,10 @@ export class LogsController {
     );
 
     if (!result.success) {
-      if (
-        result.error?.includes("not found") ||
-        result.error?.includes("access denied")
-      ) {
-        throw new NotFoundException(result.error);
+      if (result.error.code === "not_found") {
+        throw new NotFoundException(result.error.message);
       }
-      throw new BadRequestException(result.error);
+      throw new BadRequestException(result.error.message);
     }
 
     return {
