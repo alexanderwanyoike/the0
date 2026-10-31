@@ -10,9 +10,9 @@ import (
 	"testing"
 )
 
-// Dir returns the contracts folder, found from the test's working
+// dir returns the contracts folder, found from the test's working
 // directory, which is the package under test at any depth below runtime/.
-func Dir(t testing.TB) string {
+func dir(t testing.TB) string {
 	t.Helper()
 	dir, err := os.Getwd()
 	if err != nil {
@@ -31,10 +31,10 @@ func Dir(t testing.TB) string {
 	}
 }
 
-// Read returns the raw bytes of a contract file, e.g. "events/bot-created.json".
-func Read(t testing.TB, name string) []byte {
+// read returns the raw bytes of a contract file, e.g. "events/bot-created.json".
+func read(t testing.TB, name string) []byte {
 	t.Helper()
-	content, err := os.ReadFile(filepath.Join(Dir(t), filepath.FromSlash(name)))
+	content, err := os.ReadFile(filepath.Join(dir(t), filepath.FromSlash(name)))
 	if err != nil {
 		t.Fatalf("contracts: %v", err)
 	}
@@ -44,7 +44,7 @@ func Read(t testing.TB, name string) []byte {
 // Load decodes a contract file into v.
 func Load(t testing.TB, name string, v any) {
 	t.Helper()
-	if err := json.Unmarshal(Read(t, name), v); err != nil {
+	if err := json.Unmarshal(read(t, name), v); err != nil {
 		t.Fatalf("contracts: %s: %v", name, err)
 	}
 }
