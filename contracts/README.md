@@ -17,7 +17,7 @@ Change a contract here first, then make both sides pass. An example only one sid
 | `events/streams.json` | The JetStream streams the api creates and the subjects each holds |
 | `events/bot-*.json` | One bot event per THE0_EVENTS subject: the subject and the payload the api publishes on it. A code archive's storage key travels here as `custom.filePath`, which the runtime downloads as is |
 | `log-lines.json` | A raw log chunk, the NDJSON the runtime formats it into for storage and NATS, the subject it goes out on, and the entries the api reads from it |
-| `storage-keys.json` | Where the runtime writes a bot's daily logs (by the UTC day of the line) and its state, which the api reads and the runtime's garbage collector reads back |
+| `storage-keys.json` | Where the runtime writes a bot's daily logs (by the UTC day of the line) and its state, which the api reads, and which the runtime's garbage collector reads back to their bot and deletes at |
 | `query.json` | The query server's default port and path, the request the api sends, and each status and body the server answers with, along with what the api reports for it. `{body}` in an api message stands for the body exactly as the server sent it |
 | `bot-ids.json` | Bot IDs both sides accept and use unchanged, and IDs the api refuses to read logs or state for |
 
