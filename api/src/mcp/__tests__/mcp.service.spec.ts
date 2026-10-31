@@ -181,10 +181,10 @@ describe("McpService", () => {
     relay = { publishCommitted: jest.fn() };
 
     const mockCustomBotService = {
-      getAllGlobalCustomBots: jest.fn(),
-      getAllGlobalVersions: jest.fn(),
-      getGlobalLatestVersion: jest.fn(),
-      getGlobalSpecificVersion: jest.fn(findInCatalogue),
+      listCatalogue: jest.fn(),
+      findVersions: jest.fn(),
+      findLatestVersion: jest.fn(),
+      findVersion: jest.fn(findInCatalogue),
       checkOrphaned: jest
         .fn()
         .mockResolvedValue(
@@ -917,7 +917,7 @@ describe("McpService", () => {
             updatedAt: new Date(),
           },
         ];
-        customBotService.getAllGlobalCustomBots.mockResolvedValue(
+        customBotService.listCatalogue.mockResolvedValue(
           Ok(mockBotsWithVersions),
         );
 
@@ -936,9 +936,7 @@ describe("McpService", () => {
 
     describe("custom_bot_get", () => {
       it("should return custom bot details", async () => {
-        customBotService.getGlobalLatestVersion.mockResolvedValue(
-          Ok(mockCustomBot),
-        );
+        customBotService.findLatestVersion.mockResolvedValue(Ok(mockCustomBot));
 
         const result = await service.handleToolCall(
           "custom_bot_get",
@@ -955,9 +953,7 @@ describe("McpService", () => {
       });
 
       it("should get specific version when provided", async () => {
-        customBotService.getGlobalSpecificVersion.mockResolvedValue(
-          Ok(mockCustomBot),
-        );
+        customBotService.findVersion.mockResolvedValue(Ok(mockCustomBot));
 
         await service.handleToolCall(
           "custom_bot_get",
@@ -968,7 +964,7 @@ describe("McpService", () => {
           actor,
         );
 
-        expect(customBotService.getGlobalSpecificVersion).toHaveBeenCalledWith(
+        expect(customBotService.findVersion).toHaveBeenCalledWith(
           "test-custom-bot",
           "1.0.0",
         );
@@ -977,9 +973,7 @@ describe("McpService", () => {
 
     describe("custom_bot_schema", () => {
       it("should return bot configuration schema", async () => {
-        customBotService.getGlobalLatestVersion.mockResolvedValue(
-          Ok(mockCustomBot),
-        );
+        customBotService.findLatestVersion.mockResolvedValue(Ok(mockCustomBot));
 
         const result = await service.handleToolCall(
           "custom_bot_schema",
@@ -1088,7 +1082,7 @@ describe("McpService", () => {
       });
 
       it("reports a Custom bot missing from the Catalogue", async () => {
-        customBotService.getGlobalLatestVersion.mockResolvedValue(
+        customBotService.findLatestVersion.mockResolvedValue(
           Failure(appError("not_found", "Not found")),
         );
 
@@ -1175,9 +1169,7 @@ describe("McpService", () => {
           expect(store.events).toEqual([]);
           expect(logsService.getLogs).not.toHaveBeenCalled();
           expect(botQueryService.executeQuery).not.toHaveBeenCalled();
-          expect(
-            customBotService.getGlobalLatestVersion,
-          ).not.toHaveBeenCalled();
+          expect(customBotService.findLatestVersion).not.toHaveBeenCalled();
         });
 
         it("ignores arguments no tool reads", async () => {

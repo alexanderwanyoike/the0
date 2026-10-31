@@ -60,11 +60,10 @@ export class BotEventFactory {
       return Failure(botType.error);
     }
 
-    const customBotResult =
-      await this.customBotService.getGlobalSpecificVersion(
-        botType.data.customBotName,
-        configVersion,
-      );
+    const customBotResult = await this.customBotService.findVersion(
+      botType.data.customBotName,
+      configVersion,
+    );
     if (!customBotResult.success) {
       return Ok(deletedOnEverySubject(bot.id, payload));
     }

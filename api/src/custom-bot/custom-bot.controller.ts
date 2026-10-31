@@ -249,7 +249,7 @@ export class CustomBotController {
   @ApiParam(NAME_PARAM)
   @ApiNotFoundResponse({ description: "Custom bot not found" })
   async getAllVersions(@Param("name") name: string) {
-    const result = await this.customBotService.getAllGlobalVersions(name);
+    const result = await this.customBotService.findVersions(name);
 
     if (!result.success) {
       throw toHttpException(result.error);
@@ -270,7 +270,7 @@ export class CustomBotController {
   @ApiNotFoundResponse({ description: "Bot or frontend bundle not found" })
   async getFrontendBundleById(@Param("id") id: string, @Res() res: Response) {
     // Get custom bot by ID (includes specific version info)
-    const result = await this.customBotService.getById(id);
+    const result = await this.customBotService.findVersionById(id);
 
     if (!result.success) {
       throw toHttpException(
@@ -368,10 +368,7 @@ export class CustomBotController {
     @Param("name") name: string,
     @Param("version") version: string,
   ) {
-    const result = await this.customBotService.getGlobalSpecificVersion(
-      name,
-      version,
-    );
+    const result = await this.customBotService.findVersion(name, version);
 
     if (!result.success) {
       throw toHttpException(result.error);

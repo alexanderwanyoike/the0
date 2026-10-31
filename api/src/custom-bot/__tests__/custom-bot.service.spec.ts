@@ -1160,7 +1160,7 @@ describe("CustomBotService", () => {
     });
   });
 
-  describe("getAllGlobalVersions", () => {
+  describe("findVersions", () => {
     it("should return all global versions for a bot successfully", async () => {
       const botName = "test-bot";
       const mockVersions: CustomBotWithVersions = {
@@ -1186,7 +1186,7 @@ describe("CustomBotService", () => {
 
       mockRepository.getAllGlobalVersions.mockResolvedValue(Ok(mockVersions));
 
-      const result = await service.getAllGlobalVersions(botName);
+      const result = await service.findVersions(botName);
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockVersions);
@@ -1194,7 +1194,7 @@ describe("CustomBotService", () => {
     });
   });
 
-  describe("getGlobalSpecificVersion", () => {
+  describe("findVersion", () => {
     it("should return global specific version successfully", async () => {
       const botName = "test-bot";
       const version = "1.0.0";
@@ -1212,7 +1212,7 @@ describe("CustomBotService", () => {
 
       mockRepository.findGlobalByKeyAndVersion.mockResolvedValue(Ok(mockBot));
 
-      const result = await service.getGlobalSpecificVersion(botName, version);
+      const result = await service.findVersion(botName, version);
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockBot);

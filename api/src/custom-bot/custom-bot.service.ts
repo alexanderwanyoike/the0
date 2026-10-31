@@ -359,13 +359,13 @@ export class CustomBotService {
     }
   }
 
-  async getAllGlobalVersions(
+  async findVersions(
     name: string,
   ): Promise<Result<CustomBotWithVersions, AppError>> {
     return await this.customBotRepository.getAllGlobalVersions(name);
   }
 
-  async getGlobalSpecificVersion(
+  async findVersion(
     name: string,
     version: string,
   ): Promise<Result<CustomBot, AppError>> {
@@ -375,19 +375,15 @@ export class CustomBotService {
     );
   }
 
-  async getGlobalLatestVersion(
-    name: string,
-  ): Promise<Result<CustomBot, AppError>> {
+  async findLatestVersion(name: string): Promise<Result<CustomBot, AppError>> {
     return await this.customBotRepository.getGlobalLatestVersion(name);
   }
 
-  async getAllGlobalCustomBots(): Promise<
-    Result<CustomBotWithVersions[], AppError>
-  > {
+  async listCatalogue(): Promise<Result<CustomBotWithVersions[], AppError>> {
     return await this.customBotRepository.getAllGlobalCustomBots();
   }
 
-  async getById(id: string): Promise<Result<CustomBot, AppError>> {
+  async findVersionById(id: string): Promise<Result<CustomBot, AppError>> {
     return await this.customBotRepository.findOneById(id);
   }
 

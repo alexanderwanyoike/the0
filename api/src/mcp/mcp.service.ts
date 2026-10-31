@@ -354,7 +354,7 @@ export class McpService {
 
   // Custom Bot Handlers
   private async handleCustomBotList(): Promise<ToolResult> {
-    const result = await this.customBotService.getAllGlobalCustomBots();
+    const result = await this.customBotService.listCatalogue();
     if (!result.success) return result;
     // Return summary fields only
     return Ok(
@@ -404,11 +404,8 @@ export class McpService {
 
   private findCustomBot(input: CustomBotArguments) {
     return input.version
-      ? this.customBotService.getGlobalSpecificVersion(
-          input.name,
-          input.version,
-        )
-      : this.customBotService.getGlobalLatestVersion(input.name);
+      ? this.customBotService.findVersion(input.name, input.version)
+      : this.customBotService.findLatestVersion(input.name);
   }
 }
 

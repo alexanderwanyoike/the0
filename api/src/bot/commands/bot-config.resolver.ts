@@ -36,11 +36,10 @@ export class BotConfigResolver {
       return invalid("Invalid version format. Expected format: x.y.z");
     }
 
-    const customBotResult =
-      await this.customBotService.getGlobalSpecificVersion(
-        botType.data.customBotName,
-        version,
-      );
+    const customBotResult = await this.customBotService.findVersion(
+      botType.data.customBotName,
+      version,
+    );
     if (!customBotResult.success) {
       return customBotResult.error.code === "not_found"
         ? invalid(`Bot type '${type}' not found`)

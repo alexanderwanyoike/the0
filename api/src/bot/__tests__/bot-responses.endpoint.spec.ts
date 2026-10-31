@@ -237,9 +237,9 @@ describe("/bot responses", () => {
   describe("refuse a Custom bot version deleted while the bot is saved", () => {
     const deleteVersionOnceResolved = (id: string) => {
       const customBots = app.get(CustomBotService);
-      const resolve = customBots.getGlobalSpecificVersion.bind(customBots);
+      const resolve = customBots.findVersion.bind(customBots);
       jest
-        .spyOn(customBots, "getGlobalSpecificVersion")
+        .spyOn(customBots, "findVersion")
         .mockImplementation(async (name, version) => {
           const resolved = await resolve(name, version);
           await db().delete(customBotsTable).where(eq(customBotsTable.id, id));

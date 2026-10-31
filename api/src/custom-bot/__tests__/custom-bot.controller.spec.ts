@@ -45,8 +45,8 @@ describe("CustomBotController", () => {
       publishFirstVersion: jest.fn(),
       publishVersion: jest.fn(),
       getUserCustomBots: jest.fn(),
-      getAllGlobalVersions: jest.fn(),
-      getGlobalSpecificVersion: jest.fn(),
+      findVersions: jest.fn(),
+      findVersion: jest.fn(),
       getPublishedBots: jest.fn(),
       getPublishedBotsByCategory: jest.fn(),
       getUserPublishedBots: jest.fn(),
@@ -248,18 +248,18 @@ describe("CustomBotController", () => {
         updatedAt: new Date(),
       };
 
-      mockService.getAllGlobalVersions.mockResolvedValue(Ok(mockVersions));
+      mockService.findVersions.mockResolvedValue(Ok(mockVersions));
 
       const result = await controller.getAllVersions("test-bot");
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockVersions);
       expect(result.message).toBe("Bot versions retrieved successfully");
-      expect(mockService.getAllGlobalVersions).toHaveBeenCalledWith("test-bot");
+      expect(mockService.findVersions).toHaveBeenCalledWith("test-bot");
     });
 
     it("should throw NotFoundException when bot not found", async () => {
-      mockService.getAllGlobalVersions.mockResolvedValue(
+      mockService.findVersions.mockResolvedValue(
         Failure(appError("not_found", "Bot not found")),
       );
 
@@ -282,21 +282,18 @@ describe("CustomBotController", () => {
         updatedAt: new Date(),
       };
 
-      mockService.getGlobalSpecificVersion.mockResolvedValue(Ok(mockBot));
+      mockService.findVersion.mockResolvedValue(Ok(mockBot));
 
       const result = await controller.getSpecificVersion("test-bot", "1.0.0");
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockBot);
       expect(result.message).toBe("Bot version retrieved successfully");
-      expect(mockService.getGlobalSpecificVersion).toHaveBeenCalledWith(
-        "test-bot",
-        "1.0.0",
-      );
+      expect(mockService.findVersion).toHaveBeenCalledWith("test-bot", "1.0.0");
     });
 
     it("should throw NotFoundException when version not found", async () => {
-      mockService.getGlobalSpecificVersion.mockResolvedValue(
+      mockService.findVersion.mockResolvedValue(
         Failure(appError("not_found", "Version not found")),
       );
 
