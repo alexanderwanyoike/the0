@@ -63,11 +63,9 @@ func (b *ScalaBuilder) Build(vm *VendorManager) error {
 	}
 
 	// Run build container
-	containerID, err := b.runBuildContainer(vm)
-	if err != nil {
+	if err := b.runBuildContainer(vm); err != nil {
 		return fmt.Errorf("failed to run Scala build container: %v", err)
 	}
-	defer vm.runner.Remove(containerID)
 
 	// Verify output was created
 	binaryPath := b.FindBinary(vm.projectPath)
@@ -162,10 +160,10 @@ func (b *ScalaBuilder) ensureAssemblyPlugin(projectPath string) error {
 }
 
 // runBuildContainer creates and runs a container for Scala building.
-func (b *ScalaBuilder) runBuildContainer(vm *VendorManager) (string, error) {
+func (b *ScalaBuilder) runBuildContainer(vm *VendorManager) error {
 	absProjectPath, err := filepath.Abs(vm.projectPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute project path: %v", err)
+		return fmt.Errorf("failed to get absolute project path: %v", err)
 	}
 
 	// Build command

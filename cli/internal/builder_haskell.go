@@ -61,11 +61,9 @@ func (b *HaskellBuilder) Build(vm *VendorManager) error {
 	}
 
 	// Run build container
-	containerID, err := b.runBuildContainer(vm)
-	if err != nil {
+	if err := b.runBuildContainer(vm); err != nil {
 		return fmt.Errorf("failed to run Haskell build container: %v", err)
 	}
-	defer vm.runner.Remove(containerID)
 
 	// Verify binaries were created in bin/
 	binaries := b.FindAllBinaries(vm.projectPath)
@@ -123,10 +121,10 @@ func (b *HaskellBuilder) FindAllBinaries(projectPath string) []string {
 }
 
 // runBuildContainer creates and runs a container for Haskell building.
-func (b *HaskellBuilder) runBuildContainer(vm *VendorManager) (string, error) {
+func (b *HaskellBuilder) runBuildContainer(vm *VendorManager) error {
 	absProjectPath, err := filepath.Abs(vm.projectPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute project path: %v", err)
+		return fmt.Errorf("failed to get absolute project path: %v", err)
 	}
 
 	// Build command: build with optimizations, then copy all executables to bin/

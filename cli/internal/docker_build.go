@@ -57,10 +57,9 @@ type BuildRunner interface {
 	Ping() error
 	// EnsureImage pulls image unless a local image has that tag.
 	EnsureImage(image string) error
-	// Run runs step to completion, streaming its output.
-	Run(step BuildStep) (containerID string, err error)
-	// Remove deletes a container Run created.
-	Remove(containerID string)
+	// Run runs step to completion, streaming its output, and removes its
+	// container whether the step passed or not.
+	Run(step BuildStep) error
 	Close() error
 }
 
@@ -116,7 +115,7 @@ func (r *dockerRunner) EnsureImage(ref string) error {
 	return nil
 }
 
-func (r *dockerRunner) Run(step BuildStep) (string, error) {
+func (r *dockerRunner) Run(step BuildStep) error {
 	ctx := context.Background()
 
 	name := fmt.Sprintf("%s%s%d", vendorContainerName, step.NamePrefix, time.Now().Unix())
@@ -134,11 +133,12 @@ func (r *dockerRunner) Run(step BuildStep) (string, error) {
 
 	resp, err := r.api.ContainerCreate(ctx, config, hostConfig, nil, nil, name)
 	if err != nil {
-		return "", err
+		return err
 	}
+	defer r.api.ContainerRemove(context.Background(), resp.ID, container.RemoveOptions{Force: true})
 
 	if err := r.api.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		return "", err
+		return err
 	}
 
 	logReader, err := r.api.ContainerLogs(ctx, resp.ID, container.LogsOptions{
@@ -148,7 +148,7 @@ func (r *dockerRunner) Run(step BuildStep) (string, error) {
 		Timestamps: false,
 	})
 	if err != nil {
-		return resp.ID, fmt.Errorf("failed to get container logs: %v", err)
+		return fmt.Errorf("failed to get container logs: %v", err)
 	}
 
 	logColor := step.LogColor
@@ -181,7 +181,7 @@ func (r *dockerRunner) Run(step BuildStep) (string, error) {
 	select {
 	case err := <-errCh:
 		if err != nil {
-			return resp.ID, err
+			return err
 		}
 	case status := <-statusCh:
 		<-logDone
@@ -192,15 +192,11 @@ func (r *dockerRunner) Run(step BuildStep) (string, error) {
 			if logs != "" {
 				red.Printf("Full error log:\n%s\n", logs)
 			}
-			return resp.ID, fmt.Errorf("%s failed with exit code %d", step.FailedCommand, status.StatusCode)
+			return fmt.Errorf("%s failed with exit code %d", step.FailedCommand, status.StatusCode)
 		}
 	}
 
-	return resp.ID, nil
-}
-
-func (r *dockerRunner) Remove(containerID string) {
-	r.api.ContainerRemove(context.Background(), containerID, container.RemoveOptions{Force: true})
+	return nil
 }
 
 // containerLogs reads everything a finished container wrote.

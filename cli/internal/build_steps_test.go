@@ -15,7 +15,6 @@ type fakeRunner struct {
 	ensured []string
 	steps   []BuildStep
 	onRun   func(step BuildStep) error
-	removed []string
 }
 
 func (f *fakeRunner) Ping() error { return nil }
@@ -25,15 +24,13 @@ func (f *fakeRunner) EnsureImage(image string) error {
 	return nil
 }
 
-func (f *fakeRunner) Run(step BuildStep) (string, error) {
+func (f *fakeRunner) Run(step BuildStep) error {
 	f.steps = append(f.steps, step)
 	if f.onRun != nil {
-		return "ctr-1", f.onRun(step)
+		return f.onRun(step)
 	}
-	return "ctr-1", nil
+	return nil
 }
-
-func (f *fakeRunner) Remove(id string) { f.removed = append(f.removed, id) }
 
 func (f *fakeRunner) Close() error { return nil }
 

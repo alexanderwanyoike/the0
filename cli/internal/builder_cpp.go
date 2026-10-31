@@ -71,11 +71,9 @@ func (b *CppBuilder) Build(vm *VendorManager) error {
 	}
 
 	// Run build container
-	containerID, err := b.runBuildContainer(vm, isCMake)
-	if err != nil {
+	if err := b.runBuildContainer(vm, isCMake); err != nil {
 		return fmt.Errorf("failed to run C/C++ build container: %v", err)
 	}
-	defer vm.runner.Remove(containerID)
 
 	// Verify binary was created
 	binaryPath := b.FindBinary(vm.projectPath)
@@ -156,10 +154,10 @@ func (b *CppBuilder) findExecutableInDir(dir string) string {
 }
 
 // runBuildContainer creates and runs a container for C/C++ building.
-func (b *CppBuilder) runBuildContainer(vm *VendorManager, isCMake bool) (string, error) {
+func (b *CppBuilder) runBuildContainer(vm *VendorManager, isCMake bool) error {
 	absProjectPath, err := filepath.Abs(vm.projectPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute project path: %v", err)
+		return fmt.Errorf("failed to get absolute project path: %v", err)
 	}
 
 	var buildCmd string

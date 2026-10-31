@@ -35,11 +35,9 @@ func buildFrontend(vm *VendorManager) error {
 	}
 
 	// Step 2: Run frontend build container
-	containerID, err := runFrontendBuildContainer(vm)
-	if err != nil {
+	if err := runFrontendBuildContainer(vm); err != nil {
 		return fmt.Errorf("failed to run frontend build container: %v", err)
 	}
-	defer vm.runner.Remove(containerID)
 
 	// Step 3: Verify bundle was created
 	bundlePath := filepath.Join(vm.projectPath, "frontend", "dist", "bundle.js")
@@ -55,11 +53,11 @@ func buildFrontend(vm *VendorManager) error {
 	return nil
 }
 
-func runFrontendBuildContainer(vm *VendorManager) (string, error) {
+func runFrontendBuildContainer(vm *VendorManager) error {
 	// Prepare absolute paths for volume mounting
 	absProjectPath, err := filepath.Abs(vm.projectPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute project path: %v", err)
+		return fmt.Errorf("failed to get absolute project path: %v", err)
 	}
 
 	uid, gid := hostUserIDs()

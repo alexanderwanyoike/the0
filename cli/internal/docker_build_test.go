@@ -130,13 +130,8 @@ func TestDockerRunner_Run(t *testing.T) {
 	t.Run("runs the step in a container built from it", func(t *testing.T) {
 		docker := &fakeDocker{output: "Compiling bot\n"}
 
-		id, err := (&dockerRunner{api: docker}).Run(rustStep())
-
-		if err != nil {
+		if err := (&dockerRunner{api: docker}).Run(rustStep()); err != nil {
 			t.Fatalf("Run() error = %v", err)
-		}
-		if id != "ctr-1" {
-			t.Errorf("container = %q, want ctr-1", id)
 		}
 		want := &container.Config{
 			Image:      "rust:latest",
@@ -162,13 +157,10 @@ func TestDockerRunner_Run(t *testing.T) {
 	t.Run("reports a non-zero exit with the step's command", func(t *testing.T) {
 		docker := &fakeDocker{exitCode: 101, output: "error[E0425]\n"}
 
-		id, err := (&dockerRunner{api: docker}).Run(rustStep())
+		err := (&dockerRunner{api: docker}).Run(rustStep())
 
 		if err == nil || err.Error() != "cargo build failed with exit code 101" {
 			t.Errorf("error = %v, want cargo build failed with exit code 101", err)
-		}
-		if id != "ctr-1" {
-			t.Errorf("container = %q, want ctr-1", id)
 		}
 		if docker.logsCalls != 2 {
 			t.Errorf("read the logs %d times, want 2 (stream, then the full log)", docker.logsCalls)
@@ -178,7 +170,7 @@ func TestDockerRunner_Run(t *testing.T) {
 	t.Run("removes its container when the step passes", func(t *testing.T) {
 		docker := &fakeDocker{}
 
-		if _, err := (&dockerRunner{api: docker}).Run(rustStep()); err != nil {
+		if err := (&dockerRunner{api: docker}).Run(rustStep()); err != nil {
 			t.Fatal(err)
 		}
 		if !reflect.DeepEqual(docker.removed, []string{"ctr-1"}) {
@@ -189,7 +181,7 @@ func TestDockerRunner_Run(t *testing.T) {
 	t.Run("removes its container when the step fails", func(t *testing.T) {
 		docker := &fakeDocker{exitCode: 1}
 
-		if _, err := (&dockerRunner{api: docker}).Run(rustStep()); err == nil {
+		if err := (&dockerRunner{api: docker}).Run(rustStep()); err == nil {
 			t.Fatal("Run() error = nil, want the failed exit")
 		}
 		if !reflect.DeepEqual(docker.removed, []string{"ctr-1"}) {
@@ -201,7 +193,7 @@ func TestDockerRunner_Run(t *testing.T) {
 		createErr := errors.New("no such image")
 		docker := &fakeDocker{createErr: createErr}
 
-		_, err := (&dockerRunner{api: docker}).Run(rustStep())
+		err := (&dockerRunner{api: docker}).Run(rustStep())
 
 		if !errors.Is(err, createErr) {
 			t.Errorf("error = %v, want %v", err, createErr)

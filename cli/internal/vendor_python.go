@@ -84,11 +84,9 @@ func (v *PythonVendor) Vendor(vm *VendorManager) error {
 	}
 
 	// Step 3: Run vendoring container
-	containerID, err := v.runContainer(vm)
-	if err != nil {
+	if err := v.runContainer(vm); err != nil {
 		return fmt.Errorf("failed to run vendoring container: %v", err)
 	}
-	defer vm.runner.Remove(containerID)
 
 	// Step 4: Verify vendored files
 	if err := vm.verifyVendoredFiles(vendorPath); err != nil {
@@ -100,19 +98,19 @@ func (v *PythonVendor) Vendor(vm *VendorManager) error {
 }
 
 // runContainer creates and runs a container for Python vendoring
-func (v *PythonVendor) runContainer(vm *VendorManager) (string, error) {
+func (v *PythonVendor) runContainer(vm *VendorManager) error {
 	// Prepare absolute paths for volume mounting
 	vendorPath := filepath.Join(vm.projectPath, vendorDir)
 	requirementsPath := filepath.Join(vm.projectPath, "requirements.txt")
 
 	absVendorPath, err := filepath.Abs(vendorPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute vendor path: %v", err)
+		return fmt.Errorf("failed to get absolute vendor path: %v", err)
 	}
 
 	absRequirementsPath, err := filepath.Abs(requirementsPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute requirements path: %v", err)
+		return fmt.Errorf("failed to get absolute requirements path: %v", err)
 	}
 
 	return vm.runner.Run(BuildStep{

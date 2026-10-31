@@ -62,11 +62,9 @@ func (b *DotnetBuilder) Build(vm *VendorManager) error {
 	}
 
 	// Run build container
-	containerID, err := b.runBuildContainer(vm)
-	if err != nil {
+	if err := b.runBuildContainer(vm); err != nil {
 		return fmt.Errorf("failed to run .NET build container: %v", err)
 	}
-	defer vm.runner.Remove(containerID)
 
 	// Verify output was created
 	binaryPath := b.FindBinary(vm.projectPath)
@@ -116,10 +114,10 @@ func (b *DotnetBuilder) FindBinary(projectPath string) string {
 }
 
 // runBuildContainer creates and runs a container for .NET building.
-func (b *DotnetBuilder) runBuildContainer(vm *VendorManager) (string, error) {
+func (b *DotnetBuilder) runBuildContainer(vm *VendorManager) error {
 	absProjectPath, err := filepath.Abs(vm.projectPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute project path: %v", err)
+		return fmt.Errorf("failed to get absolute project path: %v", err)
 	}
 
 	// Build command - publish each .csproj to its own temp dir, then merge outputs

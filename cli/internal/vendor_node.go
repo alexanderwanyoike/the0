@@ -108,12 +108,10 @@ func (v *NodeVendor) Vendor(vm *VendorManager) error {
 	}
 
 	// Step 3: Run vendoring container
-	containerID, err := v.runContainer(vm, hasTypeScript)
-	if err != nil {
+	if err := v.runContainer(vm, hasTypeScript); err != nil {
 		v.restoreNodeModulesBackup(vm.projectPath)
 		return fmt.Errorf("failed to run Node vendoring container: %v", err)
 	}
-	defer vm.runner.Remove(containerID)
 
 	// Step 4: Verify vendored files
 	if err := vm.verifyVendoredFiles(nodeModulesPath); err != nil {
@@ -142,11 +140,11 @@ func (v *NodeVendor) hasTypeScriptFiles(projectPath string) bool {
 }
 
 // runContainer creates and runs a container for Node.js vendoring
-func (v *NodeVendor) runContainer(vm *VendorManager, hasTypeScript bool) (string, error) {
+func (v *NodeVendor) runContainer(vm *VendorManager, hasTypeScript bool) error {
 	// Get absolute project path for mounting
 	absProjectPath, err := filepath.Abs(vm.projectPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute project path: %v", err)
+		return fmt.Errorf("failed to get absolute project path: %v", err)
 	}
 
 	// Build install command
