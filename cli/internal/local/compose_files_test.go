@@ -95,6 +95,13 @@ func TestComposeFiles_QueryPortAgrees(t *testing.T) {
 	}
 }
 
+func TestComposeFiles_QueryServerPortMovesEveryQueryPort(t *testing.T) {
+	for name, file := range baseComposeFiles {
+		services := loadCompose(t, file, map[string]string{"QUERY_SERVER_PORT": "9999"})
+		assertQueryPort(t, name, services, "9999")
+	}
+}
+
 func assertQueryPort(t *testing.T, name string, services map[string]composeService, port string) {
 	t.Helper()
 	query := services["query-server"]
