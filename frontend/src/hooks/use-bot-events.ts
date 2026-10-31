@@ -2,7 +2,8 @@
 
 import { useMemo, useCallback, useEffect, useRef } from "react";
 import { useBotLogs, DEFAULT_LOOKBACK_DAYS } from "./use-bot-logs";
-import { BotEvent, parseEvents } from "@/lib/events/event-parser";
+import type { BotEvent, BotEventUtils } from "the0-react";
+import { parseEvents } from "@/lib/events/event-parser";
 import * as eventUtils from "@/lib/events/event-utils";
 
 interface UseBotEventsOptions {
@@ -16,40 +17,6 @@ interface UseBotEventsOptions {
    *  of a fixed date window (scheduled bots that don't run every day).
    *  Takes precedence over dateRange. */
   latest?: boolean;
-}
-
-interface BotEventUtils {
-  /** Filter events from the last N duration (e.g., '1h', '30m', '1d') */
-  since: (duration: string) => BotEvent[];
-  /** Filter events between two dates */
-  between: (start: Date, end: Date) => BotEvent[];
-  /** Filter by metric type */
-  filterByType: (metricType: string) => BotEvent[];
-  /** Get only log events */
-  logs: () => BotEvent[];
-  /** Get only metric events */
-  metrics: () => BotEvent[];
-  /** Get latest event of a metric type */
-  latest: (metricType: string) => BotEvent | null;
-  /** Get all metric types present */
-  getMetricTypes: () => string[];
-  /** Group events by metric type */
-  groupByMetricType: () => Record<string, BotEvent[]>;
-  /** Group events by time window */
-  groupByTimeWindow: (
-    window: "1m" | "5m" | "15m" | "1h" | "4h" | "1d",
-  ) => BotEvent[][];
-  /** Group events by execution run (for scheduled bots) */
-  groupByRun: (gapThreshold?: number) => BotEvent[][];
-  /** Get latest value for each metric type */
-  latestByType: () => Record<string, BotEvent>;
-  /** Count events by metric type */
-  countByType: () => Record<string, number>;
-  /** Extract time series data for charting */
-  extractTimeSeries: (
-    metricType: string,
-    valueKey?: string,
-  ) => { timestamp: Date; value: number }[];
 }
 
 interface UseBotEventsReturn {
@@ -173,15 +140,13 @@ export function useBotEvents({
   // handed consumers all-new event objects. Replace fetches create fresh
   // entry objects, which correctly miss the cache; WeakMap lets the old
   // generation be GC'd.
-  const parseCacheRef = useRef(
-    new WeakMap<object, (BotEvent & { timestamp: Date })[]>(),
-  );
+  const parseCacheRef = useRef(new WeakMap<object, BotEvent[]>());
 
   // Parse raw logs into events
   // Ensure timestamps are always Date objects for SDK compatibility
   const events = useMemo(() => {
     const cache = parseCacheRef.current;
-    const all: (BotEvent & { timestamp: Date })[] = [];
+    const all: BotEvent[] = [];
 
     for (const log of rawLogs) {
       let parsed = cache.get(log);
@@ -204,8 +169,11 @@ export function useBotEvents({
   }, [rawLogs]);
 
   // Create bound utilities
-  const utils = useMemo<BotEventUtils>(
-    () => ({
+  const utils = useMemo<BotEventUtils>(() => {
+    // Built apart from the return so the platform's extra utilities are not
+    // rejected as excess properties by the0-react 0.2, which does not
+    // declare them yet. Dashboards call them all the same.
+    const bound = {
       since: (duration: string) => eventUtils.since(events, duration),
       between: (start: Date, end: Date) =>
         eventUtils.between(events, start, end),
@@ -216,7 +184,7 @@ export function useBotEvents({
       latest: (metricType: string) => eventUtils.latest(events, metricType),
       getMetricTypes: () => eventUtils.getMetricTypes(events),
       groupByMetricType: () => eventUtils.groupByMetricType(events),
-      groupByTimeWindow: (window) =>
+      groupByTimeWindow: (window: "1m" | "5m" | "15m" | "1h" | "4h" | "1d") =>
         eventUtils.groupByTimeWindow(events, window),
       groupByRun: (gapThreshold?: number) =>
         eventUtils.groupByRun(events, gapThreshold),
@@ -224,9 +192,9 @@ export function useBotEvents({
       countByType: () => eventUtils.countByType(events),
       extractTimeSeries: (metricType: string, valueKey?: string) =>
         eventUtils.extractTimeSeries(events, metricType, valueKey),
-    }),
-    [events],
-  );
+    };
+    return bound;
+  }, [events]);
 
   return {
     events,
@@ -244,6 +212,3 @@ export function useBotEvents({
     rawLogs,
   };
 }
-
-// Re-export types for convenience
-export type { BotEvent, BotEventUtils };
