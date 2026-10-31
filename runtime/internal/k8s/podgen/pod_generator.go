@@ -55,12 +55,14 @@ type PodGeneratorConfig struct {
 	ControllerName string
 
 	// MinIO configuration for downloading bot code
-	MinIOEndpoint    string
-	MinIOAccessKey   string
-	MinIOSecretKey   string
-	MinIOBucket      string
-	MinIOStateBucket string // Bucket for persistent bot state (default: "bot-state")
-	MinIOUseSSL      bool
+	MinIOEndpoint           string
+	MinIOAccessKey          string
+	MinIOSecretKey          string
+	MinIOBucket             string
+	MinIOStateBucket        string
+	MinIOLogsBucket         string
+	MinIOQueryResultsBucket string
+	MinIOUseSSL             bool
 
 	StorageCredentials StorageCredentialsSecret
 
@@ -280,12 +282,14 @@ func (g *PodGenerator) launchOf(bot model.Bot, cfg *botConfig) (launch.Settings,
 		LogsPath:   constants.DefaultLogsPath,
 		StateDir:   launch.DefaultStateDir,
 		Storage: launch.Storage{
-			Endpoint:    g.config.MinIOEndpoint,
-			AccessKey:   g.config.MinIOAccessKey,
-			SecretKey:   g.config.MinIOSecretKey,
-			UseSSL:      g.config.MinIOUseSSL,
-			CodeBucket:  g.config.MinIOBucket,
-			StateBucket: g.config.MinIOStateBucket,
+			Endpoint:           g.config.MinIOEndpoint,
+			AccessKey:          g.config.MinIOAccessKey,
+			SecretKey:          g.config.MinIOSecretKey,
+			UseSSL:             g.config.MinIOUseSSL,
+			CodeBucket:         g.config.MinIOBucket,
+			StateBucket:        g.config.MinIOStateBucket,
+			LogsBucket:         g.config.MinIOLogsBucket,
+			QueryResultsBucket: g.config.MinIOQueryResultsBucket,
 		},
 	}, nil
 }
