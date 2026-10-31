@@ -102,15 +102,18 @@ describe("/logs responses", () => {
       expectAnswer(res, 400, "before cannot be combined with offset");
     });
 
-    it("answers a storage failure with 400 and the storage message", async () => {
-      minio.getObject.mockRejectedValue(new Error("storage down"));
+    it.each(["storage down", "access denied by the bucket policy"])(
+      "answers a storage failure (%s) with 500 and the storage message",
+      async (message) => {
+        minio.getObject.mockRejectedValue(new Error(message));
 
-      const res = await api()
-        .get(`/logs/${OWNED_BOT}?date=20260101`)
-        .set(AS_OWNER);
+        const res = await api()
+          .get(`/logs/${OWNED_BOT}?date=20260101`)
+          .set(AS_OWNER);
 
-      expectAnswer(res, 400, "Failed to fetch logs: storage down");
-    });
+        expectAnswer(res, 500, `Failed to fetch logs: ${message}`);
+      },
+    );
   });
 
   describe("stream", () => {

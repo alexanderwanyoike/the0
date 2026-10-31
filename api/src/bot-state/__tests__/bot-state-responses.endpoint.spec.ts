@@ -88,7 +88,7 @@ describe("/bots/:botId/state responses", () => {
         .get("/bots/someone-elses/state/positions")
         .set(AS_OWNER);
 
-      expectAnswer(res, 404, "Bot or state key not found");
+      expectAnswer(res, 404, "Bot not found or access denied");
     });
   });
 
@@ -101,10 +101,10 @@ describe("/bots/:botId/state responses", () => {
       expectAnswer(res, 400, "Invalid state key");
     });
 
-    it("answers an invalid bot ID with 400 and the operation", async () => {
+    it("answers an invalid bot ID with 400", async () => {
       const res = await api().get("/bots/bad.id/state").set(AS_OWNER);
 
-      expectAnswer(res, 400, "Failed to list state keys");
+      expectAnswer(res, 400, "Invalid bot ID format");
     });
   });
 
@@ -113,10 +113,10 @@ describe("/bots/:botId/state responses", () => {
       .get(`/bots/${OWNED_BOT}/state/positions`)
       .set(AS_OWNER);
 
-    expectAnswer(res, 404, "Bot or state key not found");
+    expectAnswer(res, 404, "State key not found");
   });
 
-  describe("answer a storage failure with 400 and the operation", () => {
+  describe("answer a storage failure with 500 and the operation", () => {
     beforeEach(() => {
       minio.statObject.mockRejectedValue(storageDown());
       minio.removeObject.mockRejectedValue(storageDown());
@@ -152,7 +152,7 @@ describe("/bots/:botId/state responses", () => {
         [method](`/bots/${OWNED_BOT}${path}`)
         .set(AS_OWNER);
 
-      expectAnswer(res, 400, message);
+      expectAnswer(res, 500, message);
     });
   });
 });

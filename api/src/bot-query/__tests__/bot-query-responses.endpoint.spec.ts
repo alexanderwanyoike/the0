@@ -68,7 +68,7 @@ describe("/query responses", () => {
   it("answers a bot the runtime does not hold with 404", async () => {
     runtimeAnswers(404, "bot not running");
 
-    expectAnswer(await query(), 404, "Bot not found or access denied");
+    expectAnswer(await query(), 404, "Bot not found in runtime");
   });
 
   it("answers a bot that defines no queries with 422", async () => {
@@ -111,10 +111,10 @@ describe("/query responses", () => {
     expectAnswer(await query(), 504, "Query timed out after 30 seconds");
   });
 
-  it("answers any other runtime failure with 400", async () => {
+  it("answers any other runtime failure with 500", async () => {
     runtimeThrows(new Error("socket hang up"));
 
-    expectAnswer(await query(), 400, "Query failed: socket hang up");
+    expectAnswer(await query(), 500, "Query failed: socket hang up");
   });
 
   it("refuses a request without a query path through the DTO", async () => {

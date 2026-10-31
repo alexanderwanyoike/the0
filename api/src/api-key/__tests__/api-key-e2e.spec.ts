@@ -233,6 +233,20 @@ describe("ApiKeyController (e2e)", () => {
       });
   });
 
+  it("/api-keys (POST) should answer a repository error with 500", async () => {
+    mockRepository.findAll.mockResolvedValue(
+      Failure(appError("internal", "Failed to read from the database")),
+    );
+
+    return request(app.getHttpServer())
+      .post("/api-keys")
+      .send({ name: "cli" })
+      .expect(500)
+      .expect((res) => {
+        expect(res.body.message).toBe("Failed to read from the database");
+      });
+  });
+
   it("should handle repository errors gracefully", async () => {
     mockRepository.findAll.mockResolvedValue(
       Failure(appError("internal", "Database connection error")),
