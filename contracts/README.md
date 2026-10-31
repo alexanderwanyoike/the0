@@ -18,6 +18,7 @@ Change a contract here first, then make both sides pass. A test that only one si
 | `events/<subject>.json` | One bot event per subject: the subject and the payload the api publishes on it |
 | `log-lines.json` | A raw log chunk, the NDJSON the runtime formats it into for storage and NATS, the subject it goes out on, and the entries the api reads from it |
 | `storage-keys.json` | Where the runtime writes a bot's daily logs (by the UTC day of the line) and its state, which the api reads and the runtime's garbage collector reads back |
+| `query.json` | The query server's default port and path, the request the api sends, and each status and body the server answers with, along with what the api reports for it |
 | `bot-ids.json` | Bot IDs both sides accept and use unchanged, and IDs the api refuses to read logs or state for |
 
 ## Where the tests are
