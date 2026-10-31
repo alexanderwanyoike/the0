@@ -108,7 +108,8 @@ for release in the0 the0-the0 trading; do
   for shared_case in "${shared_value_cases[@]}"; do
     label="${shared_case%%|*} (release $release)"
     read -ra overrides <<< "${shared_case#*|}"
-    helm template "$release" "$CHART_DIR" "${overrides[@]}" > "$rendering"
+    # bash before 4.4 treats an empty "${overrides[@]}" as unbound under set -u.
+    helm template "$release" "$CHART_DIR" ${overrides[@]+"${overrides[@]}"} > "$rendering"
 
     api_nats=$(rendered_env "$rendering" the0-api.yaml NATS_URLS)
     check_agrees "controller NATS_URL matches api NATS_URLS: $label" \
