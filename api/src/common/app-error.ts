@@ -3,7 +3,7 @@
  * Add a code only when a caller has to react to it differently from the
  * existing ones.
  */
-export type ErrorCode = "validation" | "not_found" | "internal";
+export type ErrorCode = "validation" | "forbidden" | "not_found" | "internal";
 
 /**
  * The error every service and Bot command fails with. The message is for
