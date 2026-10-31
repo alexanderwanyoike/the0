@@ -113,8 +113,8 @@ func inDocker(s launch.Settings) launch.Settings {
 	s.Storage.StateBucket = "acme-state"
 	s.Storage.LogsBucket = "acme-logs"
 	s.Storage.QueryResultsBucket = "acme-results"
-	s.Storage.MaxStateSizeMB = 4096
-	s.Storage.MaxStateFileSizeMB = 20
+	s.Storage.MaxStateSizeMB = megabytes(4096)
+	s.Storage.MaxStateFileSizeMB = megabytes(20)
 	return s
 }
 

@@ -37,12 +37,14 @@ func realtimeRun() launch.Settings {
 			StateBucket:        "acme-state",
 			LogsBucket:         "acme-logs",
 			QueryResultsBucket: "acme-results",
-			MaxStateSizeMB:     4096,
-			MaxStateFileSizeMB: 20,
+			MaxStateSizeMB:     megabytes(4096),
+			MaxStateFileSizeMB: megabytes(20),
 		},
 		NATSURL: "nats://nats:4222",
 	}
 }
+
+func megabytes(n int64) *int64 { return &n }
 
 func scheduledRun() launch.Settings {
 	s := realtimeRun()
@@ -294,4 +296,17 @@ func TestReadStorage_DefaultsTheBuckets(t *testing.T) {
 	assert.Equal(t, []string{"custom-bots", "bot-state", "bot-logs", "query-results"}, []string{
 		launch.DefaultCodeBucket, launch.DefaultStateBucket, launch.DefaultLogsBucket, launch.DefaultQueryResultsBucket,
 	})
+}
+
+func TestEnv_SendsAnExplicitZeroStateLimit(t *testing.T) {
+	sent := launch.Settings{Mode: launch.Run, BotID: "bot-1", Storage: launch.Storage{
+		MaxStateSizeMB:     megabytes(0),
+		MaxStateFileSizeMB: megabytes(0),
+	}}
+
+	env := sent.SyncEnv()
+
+	assert.Contains(t, env, launch.Var{Name: "MAX_STATE_SIZE_MB", Value: "0"})
+	assert.Contains(t, env, launch.Var{Name: "MAX_STATE_FILE_SIZE_MB", Value: "0"})
+	assert.Equal(t, sent.Storage.WithDefaults(), launch.ReadStorage(lookupIn(env)))
 }
