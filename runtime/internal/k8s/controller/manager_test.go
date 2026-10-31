@@ -72,8 +72,8 @@ func TestManagerConfig_EveryPodAndTheQueryHandlerUseTheControllersBuckets(t *tes
 	require.NoError(t, err)
 
 	containers := map[string]corev1.Container{
-		"realtime bot":  realtime.Containers[0],
-		"sync sidecar":  realtime.InitContainers[0],
+		"realtime bot":  containerNamed(t, realtime.Containers, "bot"),
+		"sync sidecar":  containerNamed(t, realtime.InitContainers, "sync"),
 		"scheduled bot": cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0],
 		"query pod":     queryPod.Spec.Containers[0],
 	}
@@ -86,4 +86,15 @@ func TestManagerConfig_EveryPodAndTheQueryHandlerUseTheControllersBuckets(t *tes
 
 	assert.Equal(t, "team-results", config.queryStorageConfig().QueryResultBucket,
 		"the query handler must read results from the bucket query pods write them to")
+}
+
+func containerNamed(t *testing.T, containers []corev1.Container, name string) corev1.Container {
+	t.Helper()
+	for _, c := range containers {
+		if c.Name == name {
+			return c
+		}
+	}
+	t.Fatalf("no %s container", name)
+	return corev1.Container{}
 }
