@@ -48,7 +48,6 @@ the0Api:
     BACKTEST_BUCKET: "the0-backtests"
     NODE_ENV: "production"
     PORT: "3000"
-    API_BASE_URL: "https://api.the0.app"
     FRONTEND_URL: "https://app.the0.app"
     JWT_SECRET: "CHANGEME"
     JWT_EXPIRES_IN: "7d"

@@ -127,8 +127,8 @@ func TestLoadConfigFromEnv_WithOptionalFields(t *testing.T) {
 	assert.Equal(t, "/custom/temp", cfg.TempDir)
 	assert.Equal(t, int64(2048*1024*1024), cfg.MemoryLimitMB)
 	assert.Equal(t, int64(512), cfg.CPUShares)
-	assert.Equal(t, int64(4096*1024*1024), cfg.MaxStateSizeBytes)
-	assert.Equal(t, int64(20*1024*1024), cfg.MaxStateFileSizeBytes)
+	assert.Equal(t, int64(4096), cfg.MaxStateSizeMB)
+	assert.Equal(t, int64(20), cfg.MaxStateFileSizeMB)
 	assert.Equal(t, "/dev/runtime", cfg.DevRuntimePath)
 	assert.Equal(t, "custom-network", cfg.DockerNetwork)
 }
@@ -177,10 +177,10 @@ func TestLoadConfigFromEnv_DefaultValues(t *testing.T) {
 	// Check defaults
 	assert.False(t, cfg.MinIOUseSSL)
 	assert.Equal(t, "query-results", cfg.MinIOQueryResultsBucket)
-	assert.Equal(t, int64(512*1024*1024), cfg.MemoryLimitMB)        // Default 512MB
-	assert.Equal(t, int64(512), cfg.CPUShares)                      // Default 512
-	assert.Equal(t, int64(8192*1024*1024), cfg.MaxStateSizeBytes)   // Default 8GB
-	assert.Equal(t, int64(10*1024*1024), cfg.MaxStateFileSizeBytes) // Default 10MB
+	assert.Equal(t, int64(512*1024*1024), cfg.MemoryLimitMB) // Default 512MB
+	assert.Equal(t, int64(512), cfg.CPUShares)               // Default 512
+	assert.Equal(t, int64(8192), cfg.MaxStateSizeMB)         // Default 8GB
+	assert.Equal(t, int64(10), cfg.MaxStateFileSizeMB)       // Default 10MB
 }
 
 func TestLoadConfigFromEnv_InvalidMemoryLimit(t *testing.T) {
@@ -238,7 +238,7 @@ func TestLoadConfigFromEnv_InvalidMaxStateSize(t *testing.T) {
 
 	require.NoError(t, err)
 	// Should use default when parsing fails (8GB)
-	assert.Equal(t, int64(8192*1024*1024), cfg.MaxStateSizeBytes)
+	assert.Equal(t, int64(8192), cfg.MaxStateSizeMB)
 }
 
 func TestLoadConfigFromEnv_InvalidMaxStateFileSize(t *testing.T) {
@@ -257,7 +257,7 @@ func TestLoadConfigFromEnv_InvalidMaxStateFileSize(t *testing.T) {
 
 	require.NoError(t, err)
 	// Should use default when parsing fails (10MB)
-	assert.Equal(t, int64(10*1024*1024), cfg.MaxStateFileSizeBytes)
+	assert.Equal(t, int64(10), cfg.MaxStateFileSizeMB)
 }
 
 func TestGetContainerEndpoint_WithContainerEndpoint(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 
+	"runtime/internal/launch"
 	"runtime/internal/model"
 	"runtime/internal/query"
 )
@@ -15,11 +16,13 @@ func TestPodGenerator_GeneratePod_RealtimeBot(t *testing.T) {
 	generator := NewPodGenerator(PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
-		RuntimeImage:   "the0/runtime:latest",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
+		RuntimeImage: "the0/runtime:latest",
 	})
 
 	bot := model.Bot{
@@ -117,12 +120,14 @@ func TestPodGenerator_GeneratePod_RealtimeBot(t *testing.T) {
 
 func TestPodGenerator_GeneratePod_WithQueryEntrypoint(t *testing.T) {
 	generator := NewPodGenerator(PodGeneratorConfig{
-		Namespace:      "the0",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
-		RuntimeImage:   "the0/runtime:latest",
+		Namespace: "the0",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "key",
+			SecretKey:  "secret",
+			CodeBucket: "bots",
+		},
+		RuntimeImage: "the0/runtime:latest",
 	})
 
 	bot := model.Bot{
@@ -164,12 +169,14 @@ func TestPodGenerator_GeneratePod_WithQueryEntrypoint(t *testing.T) {
 
 func TestPodGenerator_GenerateScheduledPodSpec(t *testing.T) {
 	generator := NewPodGenerator(PodGeneratorConfig{
-		Namespace:      "the0",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
-		RuntimeImage:   "the0/runtime:latest",
+		Namespace: "the0",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "key",
+			SecretKey:  "secret",
+			CodeBucket: "bots",
+		},
+		RuntimeImage: "the0/runtime:latest",
 	})
 
 	bot := model.Bot{
@@ -216,12 +223,14 @@ func TestPodGenerator_GenerateScheduledPodSpec(t *testing.T) {
 
 func TestPodGenerator_GenerateQueryPod(t *testing.T) {
 	generator := NewPodGenerator(PodGeneratorConfig{
-		Namespace:      "the0",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
-		RuntimeImage:   "the0/runtime:latest",
+		Namespace: "the0",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "key",
+			SecretKey:  "secret",
+			CodeBucket: "bots",
+		},
+		RuntimeImage: "the0/runtime:latest",
 	})
 
 	bot := model.Bot{
@@ -268,12 +277,14 @@ func TestPodGenerator_GenerateQueryPod(t *testing.T) {
 
 func TestPodGenerator_GenerateQueryPod_RefusesBotWithoutQueryEntrypoint(t *testing.T) {
 	generator := NewPodGenerator(PodGeneratorConfig{
-		Namespace:      "the0",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
-		RuntimeImage:   "the0/runtime:latest",
+		Namespace: "the0",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "key",
+			SecretKey:  "secret",
+			CodeBucket: "bots",
+		},
+		RuntimeImage: "the0/runtime:latest",
 	})
 	bot := model.Bot{
 		ID: "no-query",
@@ -296,10 +307,12 @@ func TestPodGenerator_GenerateQueryPod_RefusesBotWithoutQueryEntrypoint(t *testi
 
 func TestPodGenerator_ValidationErrors(t *testing.T) {
 	generator := NewPodGenerator(PodGeneratorConfig{
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "key",
+			SecretKey:  "secret",
+			CodeBucket: "bots",
+		},
 	})
 
 	tests := []struct {
@@ -373,10 +386,12 @@ func TestPodGenerator_ValidationErrors(t *testing.T) {
 
 func TestPodGenerator_CustomResources(t *testing.T) {
 	generator := NewPodGenerator(PodGeneratorConfig{
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "key",
+			SecretKey:  "secret",
+			CodeBucket: "bots",
+		},
 	})
 
 	bot := model.Bot{
@@ -461,10 +476,12 @@ func TestExtractBotID(t *testing.T) {
 
 func TestConfigChanged(t *testing.T) {
 	generator := NewPodGenerator(PodGeneratorConfig{
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "key",
+			SecretKey:  "secret",
+			CodeBucket: "bots",
+		},
 	})
 
 	bot := model.Bot{
@@ -499,11 +516,13 @@ func TestConfigChanged(t *testing.T) {
 	// A generator with a different NATS URL must also detect a change, so
 	// existing pods are reconciled when live streaming is (re)configured
 	natsGenerator := NewPodGenerator(PodGeneratorConfig{
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
-		NATSURL:        "nats://nats:4222",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "key",
+			SecretKey:  "secret",
+			CodeBucket: "bots",
+		},
+		NATSURL: "nats://nats:4222",
 	})
 	assert.True(t, configChanged(t, natsGenerator, pod, bot))
 }
@@ -647,13 +666,15 @@ func natsTestBot(id, botRuntime string) model.Bot {
 
 func TestPodGenerator_NATSURLPropagation(t *testing.T) {
 	withNATS := NewPodGenerator(PodGeneratorConfig{
-		Namespace:      "the0",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
-		RuntimeImage:   "the0/runtime:latest",
-		NATSURL:        "nats://nats:4222",
+		Namespace: "the0",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "key",
+			SecretKey:  "secret",
+			CodeBucket: "bots",
+		},
+		RuntimeImage: "the0/runtime:latest",
+		NATSURL:      "nats://nats:4222",
 	})
 
 	t.Run("realtime sync sidecar receives NATS_URL", func(t *testing.T) {
@@ -680,12 +701,14 @@ func TestPodGenerator_NATSURLPropagation(t *testing.T) {
 
 	t.Run("empty NATS_URL sets no env var", func(t *testing.T) {
 		withoutNATS := NewPodGenerator(PodGeneratorConfig{
-			Namespace:      "the0",
-			MinIOEndpoint:  "minio:9000",
-			MinIOAccessKey: "key",
-			MinIOSecretKey: "secret",
-			MinIOBucket:    "bots",
-			RuntimeImage:   "the0/runtime:latest",
+			Namespace: "the0",
+			Storage: launch.Storage{
+				Endpoint:   "minio:9000",
+				AccessKey:  "key",
+				SecretKey:  "secret",
+				CodeBucket: "bots",
+			},
+			RuntimeImage: "the0/runtime:latest",
 		})
 
 		pod, err := withoutNATS.GeneratePod(natsTestBot("rt-bot", "python3.11"))
@@ -705,12 +728,14 @@ func TestPodGenerator_NATSURLPropagation(t *testing.T) {
 
 func TestPodGenerator_StorageCredentialsComeFromTheSecret(t *testing.T) {
 	generator := NewPodGenerator(PodGeneratorConfig{
-		Namespace:      "the0",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "literal-access-key",
-		MinIOSecretKey: "literal-secret-key",
-		MinIOBucket:    "bots",
-		RuntimeImage:   "the0/runtime:latest",
+		Namespace: "the0",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "literal-access-key",
+			SecretKey:  "literal-secret-key",
+			CodeBucket: "bots",
+		},
+		RuntimeImage: "the0/runtime:latest",
 		StorageCredentials: StorageCredentialsSecret{
 			Name:           "the0-the0-secrets",
 			AccessKeyField: "minio-access-key",
@@ -764,22 +789,26 @@ func assertSecretKeyRef(t *testing.T, env []corev1.EnvVar, name, secret, key str
 
 func TestConfigChanged_FollowsEveryGeneratorSettingInThePod(t *testing.T) {
 	base := PodGeneratorConfig{
-		Namespace:      "the0",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
-		RuntimeImage:   "the0/runtime:latest",
+		Namespace: "the0",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "key",
+			SecretKey:  "secret",
+			CodeBucket: "bots",
+		},
+		RuntimeImage: "the0/runtime:latest",
 	}
 	cases := []struct {
 		name   string
 		change func(*PodGeneratorConfig)
 	}{
-		{"storage endpoint", func(c *PodGeneratorConfig) { c.MinIOEndpoint = "storage.example:443" }},
-		{"storage SSL", func(c *PodGeneratorConfig) { c.MinIOUseSSL = true }},
-		{"code bucket", func(c *PodGeneratorConfig) { c.MinIOBucket = "other-bots" }},
-		{"state bucket", func(c *PodGeneratorConfig) { c.MinIOStateBucket = "other-state" }},
-		{"literal secret key rotated", func(c *PodGeneratorConfig) { c.MinIOSecretKey = "rotated" }},
+		{"storage endpoint", func(c *PodGeneratorConfig) { c.Storage.Endpoint = "storage.example:443" }},
+		{"storage SSL", func(c *PodGeneratorConfig) { c.Storage.UseSSL = true }},
+		{"code bucket", func(c *PodGeneratorConfig) { c.Storage.CodeBucket = "other-bots" }},
+		{"state bucket", func(c *PodGeneratorConfig) { c.Storage.StateBucket = "other-state" }},
+		{"logs bucket", func(c *PodGeneratorConfig) { c.Storage.LogsBucket = "other-logs" }},
+		{"query results bucket", func(c *PodGeneratorConfig) { c.Storage.QueryResultsBucket = "other-results" }},
+		{"literal secret key rotated", func(c *PodGeneratorConfig) { c.Storage.SecretKey = "rotated" }},
 		{"credentials moved to the secret", func(c *PodGeneratorConfig) {
 			c.StorageCredentials = StorageCredentialsSecret{Name: "the0-the0-secrets", AccessKeyField: "minio-access-key", SecretKeyField: "minio-secret-key"}
 		}},
@@ -802,7 +831,7 @@ func TestConfigChanged_FollowsEveryGeneratorSettingInThePod(t *testing.T) {
 }
 
 func TestConfigChanged_KeepsAPodWhoseBotCanNoLongerBeGenerated(t *testing.T) {
-	generator := NewPodGenerator(PodGeneratorConfig{MinIOEndpoint: "minio:9000", RuntimeImage: "the0/runtime:latest"})
+	generator := NewPodGenerator(PodGeneratorConfig{Storage: launch.Storage{Endpoint: "minio:9000"}, RuntimeImage: "the0/runtime:latest"})
 	bot := natsTestBot("rt-bot", "python3.11")
 	pod, err := generator.GeneratePod(bot)
 	require.NoError(t, err)

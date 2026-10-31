@@ -35,8 +35,8 @@ type DockerRunnerConfig struct {
 	MinioLogsBucket         string // Bucket for storing logs
 	MinioStateBucket        string // Bucket for storing persistent bot state
 	MinIOQueryResultsBucket string // Bucket for ephemeral query results
-	MaxStateSizeBytes       int64  // Maximum total size of bot state folder (default: 8GB)
-	MaxStateFileSizeBytes   int64  // Maximum size of individual state file (default: 10MB)
+	MaxStateSizeMB          int64  // Maximum total size of bot state folder in MB (default: 8192)
+	MaxStateFileSizeMB      int64  // Maximum size of individual state file in MB (default: 10)
 	TempDir                 string // Temporary directory for extracted bot code
 	MemoryLimitMB           int64  // Memory limit in bytes for containers
 	CPUShares               int64  // CPU shares allocated to containers
@@ -126,8 +126,8 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 		MinioLogsBucket:         logsBucket,
 		MinioStateBucket:        stateBucket,
 		MinIOQueryResultsBucket: queryResultsBucket,
-		MaxStateSizeBytes:       getMaxStateSize(),
-		MaxStateFileSizeBytes:   getMaxStateFileSize(),
+		MaxStateSizeMB:          getMaxStateSize(),
+		MaxStateFileSizeMB:      getMaxStateFileSize(),
 		TempDir:                 tempDir,
 		MemoryLimitMB:           getMemoryLimit(),
 		CPUShares:               getCPUShares(),
@@ -178,34 +178,34 @@ func getMemoryLimit() int64 {
 	return int64(limitMB) * 1024 * 1024
 }
 
-// getMaxStateSize returns the maximum total state folder size in bytes from MAX_STATE_SIZE_MB.
-// Defaults to 8GB if not set or invalid.
+// getMaxStateSize returns the maximum total state folder size in MB from MAX_STATE_SIZE_MB.
+// Defaults to 8192 (8GB) if not set or invalid.
 func getMaxStateSize() int64 {
 	maxStateMB := os.Getenv("MAX_STATE_SIZE_MB")
 	if maxStateMB == "" {
-		return 8 * 1024 * 1024 * 1024 // Default 8GB
+		return 8192 // Default 8GB
 	}
 
 	sizeMB, err := strconv.Atoi(maxStateMB)
 	if err != nil {
-		return 8 * 1024 * 1024 * 1024 // Default on error
+		return 8192 // Default on error
 	}
 
-	return int64(sizeMB) * 1024 * 1024
+	return int64(sizeMB)
 }
 
-// getMaxStateFileSize returns the maximum individual state file size in bytes from MAX_STATE_FILE_SIZE_MB.
-// Defaults to 10MB if not set or invalid.
+// getMaxStateFileSize returns the maximum individual state file size in MB from MAX_STATE_FILE_SIZE_MB.
+// Defaults to 10 if not set or invalid.
 func getMaxStateFileSize() int64 {
 	maxFileMB := os.Getenv("MAX_STATE_FILE_SIZE_MB")
 	if maxFileMB == "" {
-		return 10 * 1024 * 1024 // Default 10MB
+		return 10 // Default 10MB
 	}
 
 	sizeMB, err := strconv.Atoi(maxFileMB)
 	if err != nil {
-		return 10 * 1024 * 1024 // Default on error
+		return 10 // Default on error
 	}
 
-	return int64(sizeMB) * 1024 * 1024
+	return int64(sizeMB)
 }

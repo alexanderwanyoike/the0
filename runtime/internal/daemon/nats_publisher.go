@@ -85,8 +85,11 @@ func (p *NATSPublisher) Publish(botID string, content string) error {
 	if p.conn == nil {
 		return fmt.Errorf("NATS connection is closed")
 	}
-	subject := fmt.Sprintf("the0.bot.logs.%s", sanitizeBotID(botID))
-	return p.conn.Publish(subject, []byte(content))
+	return p.conn.Publish(logSubject(botID), []byte(content))
+}
+
+func logSubject(botID string) string {
+	return fmt.Sprintf("the0.bot.logs.%s", sanitizeBotID(botID))
 }
 
 // Close drains and closes the NATS connection.

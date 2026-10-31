@@ -1,0 +1,128 @@
+{
+  "port": 9477,
+  "path": "/query",
+  "request": {
+    "bot_id": "q3n8v1x7k2m9p4r6t0w5y8z1",
+    "query_path": "/today",
+    "params": { "symbol": "AAPL", "days": 5 },
+    "timeout_sec": 12
+  },
+  "responses": [
+    {
+      "case": "answered",
+      "status": 200,
+      "body": {
+        "status": "ok",
+        "data": { "trades": 3, "pnl": 12.5 },
+        "duration": 1500000,
+        "timestamp": "2026-10-31T12:00:00Z"
+      },
+      "api": {
+        "result": {
+          "status": "ok",
+          "data": { "trades": 3, "pnl": 12.5 },
+          "duration": 1500000,
+          "timestamp": "2026-10-31T12:00:00Z"
+        }
+      }
+    },
+    {
+      "case": "bot not found",
+      "status": 404,
+      "body": {
+        "status": "error",
+        "error": "bot not found: q3n8v1x7k2m9p4r6t0w5y8z1",
+        "duration": 0,
+        "timestamp": "2026-10-31T12:00:00Z"
+      },
+      "api": {
+        "error": {
+          "code": "BOT_NOT_FOUND",
+          "message": "Bot not found in runtime"
+        }
+      }
+    },
+    {
+      "case": "no queries defined",
+      "status": 422,
+      "body": {
+        "status": "error",
+        "error": "bot has no query entrypoint: q3n8v1x7k2m9p4r6t0w5y8z1",
+        "duration": 0,
+        "timestamp": "2026-10-31T12:00:00Z"
+      },
+      "api": {
+        "error": {
+          "code": "NO_QUERY_ENTRYPOINT",
+          "message": "This bot defines no queries. Add a query entrypoint (entrypoints.query in bot-config.yaml) to answer them."
+        }
+      }
+    },
+    {
+      "case": "no handler for the path",
+      "status": 500,
+      "body": {
+        "status": "error",
+        "error": "No handler for path: /status (available: /today, /history, /health, /info)",
+        "duration": 2500000,
+        "timestamp": "2026-10-31T12:00:00Z"
+      },
+      "api": {
+        "error": {
+          "code": "QUERY_FAILED",
+          "message": "Query failed: {body}"
+        }
+      }
+    },
+    {
+      "case": "bot not running",
+      "status": 500,
+      "body": {
+        "status": "error",
+        "error": "failed to get container IP: container is not running",
+        "duration": 1000000,
+        "timestamp": "2026-10-31T12:00:00Z"
+      },
+      "api": {
+        "error": {
+          "code": "QUERY_FAILED",
+          "message": "Query failed: {body}"
+        }
+      }
+    },
+    {
+      "case": "no query path",
+      "request": { "bot_id": "q3n8v1x7k2m9p4r6t0w5y8z1", "params": {} },
+      "status": 400,
+      "body": {
+        "status": "error",
+        "error": "query_path is required",
+        "duration": 0,
+        "timestamp": "2026-10-31T12:00:00Z"
+      },
+      "api": {
+        "error": {
+          "code": "QUERY_FAILED",
+          "message": "Query failed: {body}"
+        }
+      }
+    },
+    {
+      "case": "method not allowed",
+      "method": "GET",
+      "status": 405,
+      "body": {
+        "status": "error",
+        "error": "method not allowed",
+        "duration": 0,
+        "timestamp": "2026-10-31T12:00:00Z"
+      },
+      "api": {
+        "error": {
+          "code": "QUERY_FAILED",
+          "message": "Query failed: {body}"
+        }
+      }
+    }
+  ]
+}

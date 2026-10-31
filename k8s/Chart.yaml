@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.16.0
-appVersion: "1.21.0"
+version: 0.17.0
+appVersion: "1.22.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,27 +31,25 @@ annotations:
       url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
     - kind: changed
-      description: "The runtime formats each log chunk once and stamps every line with a stable _key, so stored and live log lines are byte for byte the same"
+      description: "The api, gc and bot controller read the NATS URL, MinIO host and port, logs bucket and code bucket from one chart value each, so the two sides cannot drift"
     - kind: changed
-      description: "REST and live log streams return one entry shape (key, date, timestamp, content), where content is the stored line as written"
-    - kind: added
-      description: "Log pages take a before cursor and return nextCursor, so new lines no longer shift older pages; offset is capped at 10000"
-    - kind: added
-      description: "The log stream accepts history=false, and each bot page shares one live log stream between the console and the dashboard"
+      description: "The bot controller takes logs and query results bucket settings, and bot pods, sync sidecars and query pods use them instead of fixed bucket names"
     - kind: fixed
-      description: "Live log lines no longer show twice; the frontend matches duplicates by entry key"
+      description: "The aws and gcp example values no longer point the api and the bot controller at different code buckets"
     - kind: fixed
-      description: "sort=asc returns the newest entries in time order on every read, and busy metric windows return the latest metrics instead of the earliest"
-    - kind: fixed
-      description: "Single-day log reads honour sort, and daily log files and today use UTC everywhere"
-    - kind: fixed
-      description: "The bot page catches up on lines missed while the live log stream was down"
-    - kind: fixed
-      description: "MCP logs_summary counts errors by log level instead of matching words anywhere in the line"
+      description: "gc cleans the logs bucket the api reads and the bot pods write"
     - kind: changed
-      description: "Log export downloads NDJSON, and console times are shown in UTC"
+      description: "If only botController.minio.bucket is set, the api now uses that code bucket too; copy existing objects from custom-bots or set the0Api.env.CUSTOM_BOTS_BUCKET"
     - kind: changed
-      description: "Log access is checked against the caller's own user only"
+      description: "The api defaults LOG_BUCKET to bot-logs"
+    - kind: removed
+      description: "The unused API_BASE_URL value"
+    - kind: fixed
+      description: "Bots on Docker get the runner's state size limits, and a bot without config gets BOT_CONFIG={} on Docker and Kubernetes alike"
+    - kind: removed
+      description: "Docker bot containers no longer set the unread ID, CONFIG, ENTRYPOINT_TYPE and CODE_MOUNT_DIR variables"
+    - kind: changed
+      description: "Upgrading rewrites every scheduled-bot CronJob and restarts every realtime bot pod once"
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api

@@ -4,7 +4,6 @@ package docker
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"runtime/internal/launch"
 	"runtime/internal/model"
@@ -241,12 +240,11 @@ func ContainerConfig(
 // launchSettings is the launch a runner with config gives the container it
 // starts for executable.
 func launchSettings(config *DockerRunnerConfig, executable model.Executable) launch.Settings {
-	botConfig := "{}"
-	if executable.Config != nil {
-		if data, err := json.Marshal(executable.Config); err == nil {
-			botConfig = string(data)
-		}
+	botConfig, err := launch.BotConfig(executable.Config)
+	if err != nil {
+		botConfig = "{}"
 	}
+	maxStateSizeMB, maxStateFileSizeMB := config.MaxStateSizeMB, config.MaxStateFileSizeMB
 	settings := launch.Settings{
 		BotID:           executable.ID,
 		CodeFile:        executable.FilePath,
@@ -264,6 +262,8 @@ func launchSettings(config *DockerRunnerConfig, executable model.Executable) lau
 			StateBucket:        config.MinioStateBucket,
 			LogsBucket:         config.MinioLogsBucket,
 			QueryResultsBucket: config.MinIOQueryResultsBucket,
+			MaxStateSizeMB:     &maxStateSizeMB,
+			MaxStateFileSizeMB: &maxStateFileSizeMB,
 		},
 	}
 

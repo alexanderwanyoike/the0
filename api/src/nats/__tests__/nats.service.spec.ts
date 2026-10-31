@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { NatsService } from "../nats.service";
 import { createMockLogger } from "@/test/mock-logger";
+import { loadContract } from "@/test/contracts";
 
 // Mock NATS at the top level to avoid hoisting issues
 jest.mock("nats", () => {
@@ -196,6 +197,21 @@ describe("NatsService", () => {
   });
 
   describe("Stream Setup", () => {
+    it("creates the streams and subjects of the shared contract", () => {
+      const streams = loadContract<Record<string, string[]>>(
+        "events/streams.json",
+      );
+
+      const created = natsMocks.mockJetStreamManager.streams.add.mock.calls.map(
+        ([{ name, subjects }]: [{ name: string; subjects: string[] }]) => [
+          name,
+          subjects,
+        ],
+      );
+
+      expect(Object.fromEntries(created)).toEqual(streams);
+    });
+
     it("should create streams when they do not exist", () => {
       // add() resolves by default (stream doesn't exist), so ensureStream creates
       expect(natsMocks.mockJetStreamManager.streams.add).toHaveBeenCalledWith(

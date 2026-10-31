@@ -28,12 +28,9 @@ type ManagerConfig struct {
 	// ReconcileInterval is how often controllers reconcile state.
 	ReconcileInterval time.Duration
 
-	// MinIO configuration for downloading bot code
-	MinIOEndpoint  string
-	MinIOAccessKey string
-	MinIOSecretKey string
-	MinIOBucket    string
-	MinIOUseSSL    bool
+	// Storage is the MinIO bot pods download code from and save state,
+	// logs and query results to.
+	Storage launch.Storage
 
 	StorageCredentials podgen.StorageCredentialsSecret
 
@@ -125,13 +122,7 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 	podGenerator := podgen.NewPodGenerator(config.queryPodGeneratorConfig())
 
 	// Create MinIO client for query result storage
-	storageCfg := &storage.Config{
-		Endpoint:          config.MinIOEndpoint,
-		AccessKey:         config.MinIOAccessKey,
-		SecretKey:         config.MinIOSecretKey,
-		UseSSL:            config.MinIOUseSSL,
-		QueryResultBucket: launch.DefaultQueryResultsBucket,
-	}
+	storageCfg := config.queryStorageConfig()
 	minioClient, err := storage.NewMinioClient(storageCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MinIO client: %w", err)
@@ -173,11 +164,7 @@ func (config ManagerConfig) botControllerConfig(name string) BotControllerConfig
 		Namespace:              config.Namespace,
 		ReconcileInterval:      config.ReconcileInterval,
 		ControllerName:         name,
-		MinIOEndpoint:          config.MinIOEndpoint,
-		MinIOAccessKey:         config.MinIOAccessKey,
-		MinIOSecretKey:         config.MinIOSecretKey,
-		MinIOBucket:            config.MinIOBucket,
-		MinIOUseSSL:            config.MinIOUseSSL,
+		Storage:                config.Storage,
 		StorageCredentials:     config.StorageCredentials,
 		NATSURL:                config.NATSURL,
 		RuntimeImage:           config.RuntimeImage,
@@ -190,11 +177,7 @@ func (config ManagerConfig) scheduleControllerConfig(name string) BotScheduleCon
 		Namespace:              config.Namespace,
 		ReconcileInterval:      config.ReconcileInterval,
 		ControllerName:         name,
-		MinIOEndpoint:          config.MinIOEndpoint,
-		MinIOAccessKey:         config.MinIOAccessKey,
-		MinIOSecretKey:         config.MinIOSecretKey,
-		MinIOBucket:            config.MinIOBucket,
-		MinIOUseSSL:            config.MinIOUseSSL,
+		Storage:                config.Storage,
 		StorageCredentials:     config.StorageCredentials,
 		NATSURL:                config.NATSURL,
 		RuntimeImage:           config.RuntimeImage,
@@ -206,14 +189,21 @@ func (config ManagerConfig) queryPodGeneratorConfig() podgen.PodGeneratorConfig 
 	return podgen.PodGeneratorConfig{
 		Namespace:              config.Namespace,
 		ControllerName:         "the0-query-handler",
-		MinIOEndpoint:          config.MinIOEndpoint,
-		MinIOAccessKey:         config.MinIOAccessKey,
-		MinIOSecretKey:         config.MinIOSecretKey,
-		MinIOBucket:            config.MinIOBucket,
-		MinIOUseSSL:            config.MinIOUseSSL,
+		Storage:                config.Storage,
 		StorageCredentials:     config.StorageCredentials,
 		RuntimeImage:           config.RuntimeImage,
 		RuntimeImagePullPolicy: corev1.PullPolicy(config.RuntimeImagePullPolicy),
+	}
+}
+
+// queryStorageConfig is the storage the query handler reads query results from.
+func (config ManagerConfig) queryStorageConfig() *storage.Config {
+	return &storage.Config{
+		Endpoint:          config.Storage.Endpoint,
+		AccessKey:         config.Storage.AccessKey,
+		SecretKey:         config.Storage.SecretKey,
+		UseSSL:            config.Storage.UseSSL,
+		QueryResultBucket: config.Storage.QueryResultsBucket,
 	}
 }
 

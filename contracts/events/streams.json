@@ -1,0 +1,13 @@
+{
+  "THE0_EVENTS": [
+    "the0.bot.created",
+    "the0.bot.updated",
+    "the0.bot.deleted",
+    "the0.bot-schedule.created",
+    "the0.bot-schedule.updated",
+    "the0.bot-schedule.deleted"
+  ],
+  "THE0_BOT_LOGS": [
+    "the0.bot.logs.>"
+  ]
+}

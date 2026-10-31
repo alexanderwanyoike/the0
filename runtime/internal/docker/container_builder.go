@@ -7,7 +7,6 @@
 package docker
 
 import (
-	"encoding/json"
 	"fmt"
 	"runtime/internal/launch"
 	"runtime/internal/model"
@@ -98,24 +97,9 @@ func (b *ContainerBuilder) WithAutoRemove(autoRemove bool) *ContainerBuilder {
 	return b
 }
 
-// WithExecutable configures the container from an Executable, setting environment
-// variables, labels, and extracting the entrypoint file.
-// If config marshaling fails, an empty JSON object is used as fallback.
+// WithExecutable labels the container with the executable it runs.
 func (b *ContainerBuilder) WithExecutable(executable model.Executable) *ContainerBuilder {
-	// Extract entrypoint file from executable
 	entrypointFile := executable.EntrypointFiles[executable.Entrypoint]
-
-	configJSON, err := json.Marshal(executable.Config)
-	if err != nil {
-		// Fallback to empty config if marshaling fails
-		configJSON = []byte("{}")
-	}
-	b.config.Env = append(b.config.Env,
-		fmt.Sprintf("ID=%s", executable.ID),
-		fmt.Sprintf("CONFIG=%s", string(configJSON)),
-		fmt.Sprintf("ENTRYPOINT_TYPE=%s", executable.Entrypoint),
-		fmt.Sprintf("CODE_MOUNT_DIR=%s", executable.Entrypoint),
-	)
 
 	b.config.Labels["runtime.id"] = executable.ID
 	b.config.Labels["runtime.entrypoint"] = entrypointFile

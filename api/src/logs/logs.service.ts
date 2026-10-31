@@ -78,7 +78,7 @@ export class LogsService {
     private readonly botService: BotService,
     private readonly logger: PinoLogger,
   ) {
-    this.logBucket = this.configService.get<string>("LOG_BUCKET") || "bot-logs";
+    this.logBucket = this.configService.get<string>("LOG_BUCKET");
   }
 
   /** Whether the user may read the bot's logs. */

@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/launch"
 	"runtime/internal/model"
 )
 
@@ -120,11 +121,13 @@ func createTestPod(botID string, phase corev1.PodPhase) corev1.Pod {
 
 func testControllerConfig() BotControllerConfig {
 	return BotControllerConfig{
-		Namespace:      "the0",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
+		Namespace: "the0",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
 	}
 }
 
@@ -188,10 +191,12 @@ func TestBotController_Reconcile_NoActionForHealthyMatchingPod(t *testing.T) {
 	generator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
 	})
 	expectedPod, err := generator.GeneratePod(bot)
 	require.NoError(t, err)
@@ -282,10 +287,12 @@ func TestBotController_Reconcile_RecreatesFailedPod(t *testing.T) {
 	generator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
 	})
 	expectedPod, _ := generator.GeneratePod(bot)
 
@@ -644,10 +651,12 @@ func TestBotController_Reconcile_MixedStates(t *testing.T) {
 	generator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
 	})
 	expectedPod2, _ := generator.GeneratePod(bot2)
 
@@ -723,10 +732,12 @@ func TestBotController_Reconcile_ReplacesPodWhenNATSURLAdded(t *testing.T) {
 	oldGenerator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
 	})
 	oldPod, err := oldGenerator.GeneratePod(bot)
 	require.NoError(t, err)
@@ -753,11 +764,13 @@ func TestBotController_Reconcile_ReplacesPodWhenRuntimeImageChanges(t *testing.T
 	oldGenerator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
-		RuntimeImage:   "ghcr.io/the0/runtime:1.14.8",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
+		RuntimeImage: "ghcr.io/the0/runtime:1.14.8",
 	})
 	oldPod, err := oldGenerator.GeneratePod(bot)
 	require.NoError(t, err)
@@ -775,6 +788,40 @@ func TestBotController_Reconcile_ReplacesPodWhenRuntimeImageChanges(t *testing.T
 	require.NoError(t, err)
 	assert.Equal(t, 1, mockK8s.DeleteCalled,
 		"pod on an older runtime image must be replaced after a platform upgrade")
+}
+
+func TestBotController_Reconcile_ReplacesPodWhenStorageSettingsChange(t *testing.T) {
+	cases := []struct {
+		name   string
+		change func(*BotControllerConfig)
+	}{
+		{"storage endpoint", func(c *BotControllerConfig) { c.Storage.Endpoint = "storage.example:443" }},
+		{"code bucket", func(c *BotControllerConfig) { c.Storage.CodeBucket = "team-code" }},
+		{"logs bucket", func(c *BotControllerConfig) { c.Storage.LogsBucket = "team-logs" }},
+		{"query results bucket", func(c *BotControllerConfig) { c.Storage.QueryResultsBucket = "team-results" }},
+		{"storage SSL", func(c *BotControllerConfig) { c.Storage.UseSSL = true }},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			bot := createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11")
+			mockRepo := &MockDesiredBots{Running: []model.Bot{bot}}
+
+			before := &MockK8sClient{}
+			require.NoError(t, NewBotController(testControllerConfig(), mockRepo, before).Reconcile(context.Background()))
+			require.Len(t, before.CreatedPods, 1)
+			running := *before.CreatedPods[0]
+			running.Status.Phase = corev1.PodRunning
+
+			config := testControllerConfig()
+			tc.change(&config)
+			after := &MockK8sClient{Pods: []corev1.Pod{running}}
+			require.NoError(t, NewBotController(config, mockRepo, after).Reconcile(context.Background()))
+
+			assert.Equal(t, []string{running.Name}, after.DeletedPods,
+				"a running pod must be replaced when the controller's storage settings change")
+		})
+	}
 }
 
 func TestBotController_Reconcile_PodReadsStorageCredentialsFromTheSecret(t *testing.T) {

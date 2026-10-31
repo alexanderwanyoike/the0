@@ -53,18 +53,24 @@ var (
 		MinioStateBucket:        "acme-state",
 		MinioLogsBucket:         "acme-logs",
 		MinIOQueryResultsBucket: "acme-results",
+		MaxStateSizeMB:          4096,
+		MaxStateFileSizeMB:      20,
 		NatsURL:                 roundTripNATSURL,
 	}
 	podConfig = podgen.PodGeneratorConfig{
-		Namespace:        "the0",
-		MinIOEndpoint:    "minio:9000",
-		MinIOAccessKey:   "access",
-		MinIOSecretKey:   "secret",
-		MinIOUseSSL:      true,
-		MinIOBucket:      "acme-code",
-		MinIOStateBucket: "acme-state",
-		NATSURL:          roundTripNATSURL,
-		RuntimeImage:     roundTripImage,
+		Namespace: "the0",
+		Storage: launch.Storage{
+			Endpoint:           "minio:9000",
+			AccessKey:          "access",
+			SecretKey:          "secret",
+			UseSSL:             true,
+			CodeBucket:         "acme-code",
+			StateBucket:        "acme-state",
+			LogsBucket:         "acme-logs",
+			QueryResultsBucket: "acme-results",
+		},
+		NATSURL:      roundTripNATSURL,
+		RuntimeImage: roundTripImage,
 	}
 )
 
@@ -100,21 +106,25 @@ func launchOf(mode launch.Mode, botType string) launch.Settings {
 	return s
 }
 
-// inDocker is a launch as the Docker runner sends it, with every bucket the
-// runner is configured with.
+// inDocker is a launch as the Docker runner sends it, with every bucket and
+// state limit the runner is configured with.
 func inDocker(s launch.Settings) launch.Settings {
 	s.Storage.CodeBucket = "acme-code"
 	s.Storage.StateBucket = "acme-state"
 	s.Storage.LogsBucket = "acme-logs"
 	s.Storage.QueryResultsBucket = "acme-results"
+	s.Storage.MaxStateSizeMB = megabytes(4096)
+	s.Storage.MaxStateFileSizeMB = megabytes(20)
 	return s
 }
 
 // inPod is a launch as a pod sends it, which spells out the container paths
-// and carries the code and state buckets the controller is configured with.
+// and carries every bucket the controller is configured with.
 func inPod(s launch.Settings, skipSync, skipQueryServer bool) launch.Settings {
 	s.Storage.CodeBucket = "acme-code"
 	s.Storage.StateBucket = "acme-state"
+	s.Storage.LogsBucket = "acme-logs"
+	s.Storage.QueryResultsBucket = "acme-results"
 	s.CodePath = "/bot"
 	s.StatePath = "/state"
 	s.LogsPath = "/var/the0/logs"
@@ -187,7 +197,7 @@ func container(t *testing.T, containers []corev1.Container, name string) corev1.
 // Each backend also sets these for the bot process itself. `runtime execute`
 // reads none of them.
 var (
-	dockerProcessEnv = []string{"PYTHONDONTWRITEBYTECODE", "PYTHONUNBUFFERED", "ID", "CONFIG", "ENTRYPOINT_TYPE", "CODE_MOUNT_DIR"}
+	dockerProcessEnv = []string{"PYTHONDONTWRITEBYTECODE", "PYTHONUNBUFFERED"}
 	podProcessEnv    = []string{"PYTHONUNBUFFERED"}
 )
 
@@ -284,6 +294,36 @@ func TestLaunch_RunnerReadsExactlyWhatEachBackendSends(t *testing.T) {
 			got, err := read(t, s.command, s.env)
 			require.NoError(t, err)
 			assert.Equal(t, "{}", got.QueryParams)
+		}
+	})
+
+	t.Run("a bot without config sends BOT_CONFIG as {} on both backends", func(t *testing.T) {
+		bot := roundTripBot
+		bot.Config = nil
+		realtimeExecutable := dockerExecutable(true)
+		realtimeExecutable.Config = nil
+		scheduledExecutable := dockerExecutable(false)
+		scheduledExecutable.Config = nil
+		pod, err := generator.GeneratePod(bot)
+		require.NoError(t, err)
+		scheduled, err := generator.GenerateScheduledPodSpec(bot)
+		require.NoError(t, err)
+		queryExecutable := dockerQueryExecutable()
+		queryExecutable.Config = nil
+		queryPod, err := generator.GenerateQueryPod(bot, roundTripQueryPath, roundTripQueryParams, roundTripResultKey)
+		require.NoError(t, err)
+
+		for name, s := range map[string]sent{
+			"docker realtime run":      dockerSent(t, realtimeExecutable),
+			"docker scheduled run":     dockerSent(t, scheduledExecutable),
+			"docker query":             dockerSent(t, queryExecutable),
+			"kubernetes realtime run":  podSent(container(t, pod.Spec.Containers, "bot")),
+			"kubernetes scheduled run": podSent(container(t, scheduled.Containers, "bot")),
+			"kubernetes query":         podSent(container(t, queryPod.Spec.Containers, "bot")),
+		} {
+			got, err := read(t, s.command, s.env)
+			require.NoError(t, err, name)
+			assert.Equal(t, "{}", got.BotConfig, name)
 		}
 	})
 

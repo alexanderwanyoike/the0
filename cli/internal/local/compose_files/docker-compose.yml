@@ -1,3 +1,15 @@
+# Settings the api and runtime services share, referenced by alias below
+# (why: Infrastructure Connection Helpers in k8s/templates/_helpers.tpl).
+x-shared-settings:
+  nats-url: &nats-url nats://nats:4222
+  minio-host: &minio-host minio
+  minio-port: &minio-port "9000"
+  # minio-host and minio-port again, joined: YAML cannot concatenate aliases.
+  minio-endpoint: &minio-endpoint minio:9000
+  minio-use-ssl: &minio-use-ssl "false"
+  logs-bucket: &logs-bucket bot-logs
+  code-bucket: &code-bucket custom-bots
+
 services:
   # PostgreSQL Database
   postgres:
@@ -93,20 +105,19 @@ services:
       DATABASE_TYPE: postgres
 
       # NATS configuration
-      NATS_URLS: nats://nats:4222
+      NATS_URLS: *nats-url
 
 
       # MinIO configuration
-      MINIO_ENDPOINT: minio # Internal endpoint hostname for API to connect to MinIO
-      MINIO_PORT: "9000"
-      MINIO_USE_SSL: "false"
+      MINIO_ENDPOINT: *minio-host # Internal endpoint hostname for API to connect to MinIO
+      MINIO_PORT: *minio-port
+      MINIO_USE_SSL: *minio-use-ssl
       MINIO_ACCESS_KEY: the0admin
       MINIO_SECRET_KEY: the0password
 
       # Application configuration
       NODE_ENV: production
       PORT: 3000
-      API_BASE_URL: http://localhost:3000
 
       # Frontend configuration
       FRONTEND_URL: http://localhost:3001
@@ -119,8 +130,8 @@ services:
 
       # Storage configuration
       STORAGE_PATH: /app/uploads/custom-bots
-      CUSTOM_BOTS_BUCKET: custom-bots
-      LOG_BUCKET: bot-logs
+      CUSTOM_BOTS_BUCKET: *code-bucket
+      LOG_BUCKET: *logs-bucket
       BACKTEST_BUCKET: backtests
 
       # Bot API configuration (used by frontend API routes)
@@ -166,15 +177,15 @@ services:
       MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017
 
       # NATS configuration (optional - enables instant updates)
-      NATS_URL: nats://nats:4222
+      NATS_URL: *nats-url
 
       # MinIO configuration
-      MINIO_ENDPOINT: minio:9000
+      MINIO_ENDPOINT: *minio-endpoint
       MINIO_ACCESS_KEY: the0admin
       MINIO_SECRET_KEY: the0password
-      MINIO_USE_SSL: "false"
-      MINIO_LOGS_BUCKET: bot-logs
-      MINIO_CODE_BUCKET: custom-bots
+      MINIO_USE_SSL: *minio-use-ssl
+      MINIO_LOGS_BUCKET: *logs-bucket
+      MINIO_CODE_BUCKET: *code-bucket
       MINIO_REGION: us-east-1
 
       # Docker configuration
@@ -228,15 +239,15 @@ services:
       MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017
 
       # NATS configuration (required for scheduler)
-      NATS_URL: nats://nats:4222
+      NATS_URL: *nats-url
 
       # MinIO configuration
-      MINIO_ENDPOINT: minio:9000
+      MINIO_ENDPOINT: *minio-endpoint
       MINIO_ACCESS_KEY: the0admin
       MINIO_SECRET_KEY: the0password
-      MINIO_USE_SSL: "false"
-      MINIO_LOGS_BUCKET: bot-logs
-      MINIO_CODE_BUCKET: custom-bots
+      MINIO_USE_SSL: *minio-use-ssl
+      MINIO_LOGS_BUCKET: *logs-bucket
+      MINIO_CODE_BUCKET: *code-bucket
 
       # Docker configuration
       DOCKER_TEMP_DIR: /tmp/bot-scheduler
@@ -283,11 +294,11 @@ services:
     pull_policy: never
     environment:
       MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017
-      MINIO_ENDPOINT: minio:9000
+      MINIO_ENDPOINT: *minio-endpoint
       MINIO_ACCESS_KEY: the0admin
       MINIO_SECRET_KEY: the0password
-      MINIO_USE_SSL: "false"
-      MINIO_LOGS_BUCKET: bot-logs
+      MINIO_USE_SSL: *minio-use-ssl
+      MINIO_LOGS_BUCKET: *logs-bucket
       MINIO_STATE_BUCKET: bot-state
     depends_on:
       mongo:
@@ -322,11 +333,11 @@ services:
       MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017
 
       # MinIO configuration
-      MINIO_ENDPOINT: minio:9000
+      MINIO_ENDPOINT: *minio-endpoint
       MINIO_ACCESS_KEY: the0admin
       MINIO_SECRET_KEY: the0password
-      MINIO_USE_SSL: "false"
-      MINIO_CODE_BUCKET: custom-bots
+      MINIO_USE_SSL: *minio-use-ssl
+      MINIO_CODE_BUCKET: *code-bucket
 
       # Docker configuration
       DOCKER_TEMP_DIR: /tmp/query-server

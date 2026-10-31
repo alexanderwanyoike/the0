@@ -37,10 +37,14 @@ func realtimeRun() launch.Settings {
 			StateBucket:        "acme-state",
 			LogsBucket:         "acme-logs",
 			QueryResultsBucket: "acme-results",
+			MaxStateSizeMB:     megabytes(4096),
+			MaxStateFileSizeMB: megabytes(20),
 		},
 		NATSURL: "nats://nats:4222",
 	}
 }
+
+func megabytes(n int64) *int64 { return &n }
 
 func scheduledRun() launch.Settings {
 	s := realtimeRun()
@@ -269,6 +273,7 @@ func TestSyncEnv_IsTheStorageAndNATSTheSyncProcessReads(t *testing.T) {
 	assert.ElementsMatch(t, []string{
 		"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_USE_SSL",
 		"MINIO_CODE_BUCKET", "MINIO_STATE_BUCKET", "MINIO_LOGS_BUCKET", "MINIO_QUERY_RESULTS_BUCKET",
+		"MAX_STATE_SIZE_MB", "MAX_STATE_FILE_SIZE_MB",
 		"NATS_URL",
 	}, names(env))
 	assert.Equal(t, sent.Storage, launch.ReadStorage(lookupIn(env)))
@@ -291,4 +296,17 @@ func TestReadStorage_DefaultsTheBuckets(t *testing.T) {
 	assert.Equal(t, []string{"custom-bots", "bot-state", "bot-logs", "query-results"}, []string{
 		launch.DefaultCodeBucket, launch.DefaultStateBucket, launch.DefaultLogsBucket, launch.DefaultQueryResultsBucket,
 	})
+}
+
+func TestEnv_SendsAnExplicitZeroStateLimit(t *testing.T) {
+	sent := launch.Settings{Mode: launch.Run, BotID: "bot-1", Storage: launch.Storage{
+		MaxStateSizeMB:     megabytes(0),
+		MaxStateFileSizeMB: megabytes(0),
+	}}
+
+	env := sent.SyncEnv()
+
+	assert.Contains(t, env, launch.Var{Name: "MAX_STATE_SIZE_MB", Value: "0"})
+	assert.Contains(t, env, launch.Var{Name: "MAX_STATE_FILE_SIZE_MB", Value: "0"})
+	assert.Equal(t, sent.Storage.WithDefaults(), launch.ReadStorage(lookupIn(env)))
 }
