@@ -123,6 +123,8 @@ spec:
               value: {{ include "the0.minioEndpointWithPort" . | quote }}
             - name: MINIO_BUCKET
               value: {{ .Values.botController.minio.bucket | quote }}
+            - name: MINIO_LOGS_BUCKET
+              value: {{ include "the0.logsBucket" . | quote }}
             - name: MONGO_URI
               valueFrom:
                 secretKeyRef:
