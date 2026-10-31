@@ -2,9 +2,59 @@ package internal
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestVerifyVendoredFiles(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(vendorPath string) error
+		wantErr string
+	}{
+		{
+			name: "a vendor directory with packages passes",
+			setup: func(vendorPath string) error {
+				if err := os.MkdirAll(filepath.Join(vendorPath, "requests"), 0755); err != nil {
+					return err
+				}
+				return os.WriteFile(filepath.Join(vendorPath, "requests", "__init__.py"), []byte("# requests"), 0644)
+			},
+		},
+		{
+			name:    "an empty vendor directory fails",
+			setup:   func(vendorPath string) error { return os.MkdirAll(vendorPath, 0755) },
+			wantErr: "no packages were vendored",
+		},
+		{
+			name:    "a missing vendor directory fails",
+			setup:   func(string) error { return nil },
+			wantErr: "failed to read vendor directory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vendorPath := filepath.Join(t.TempDir(), "vendor")
+			if err := tt.setup(vendorPath); err != nil {
+				t.Fatal(err)
+			}
+
+			err := (&VendorManager{}).verifyVendoredFiles(vendorPath)
+
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("verifyVendoredFiles() error = %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("verifyVendoredFiles() error = %v, want it to contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}
 
 func TestGetBuildEnvVars_NoSecrets(t *testing.T) {
 	// Use a temp home directory with no secrets
