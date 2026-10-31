@@ -56,15 +56,17 @@ var (
 		NatsURL:                 roundTripNATSURL,
 	}
 	podConfig = podgen.PodGeneratorConfig{
-		Namespace:        "the0",
-		MinIOEndpoint:    "minio:9000",
-		MinIOAccessKey:   "access",
-		MinIOSecretKey:   "secret",
-		MinIOUseSSL:      true,
-		MinIOBucket:      "acme-code",
-		MinIOStateBucket: "acme-state",
-		NATSURL:          roundTripNATSURL,
-		RuntimeImage:     roundTripImage,
+		Namespace:               "the0",
+		MinIOEndpoint:           "minio:9000",
+		MinIOAccessKey:          "access",
+		MinIOSecretKey:          "secret",
+		MinIOUseSSL:             true,
+		MinIOBucket:             "acme-code",
+		MinIOStateBucket:        "acme-state",
+		MinIOLogsBucket:         "acme-logs",
+		MinIOQueryResultsBucket: "acme-results",
+		NATSURL:                 roundTripNATSURL,
+		RuntimeImage:            roundTripImage,
 	}
 )
 
@@ -111,10 +113,12 @@ func inDocker(s launch.Settings) launch.Settings {
 }
 
 // inPod is a launch as a pod sends it, which spells out the container paths
-// and carries the code and state buckets the controller is configured with.
+// and carries every bucket the controller is configured with.
 func inPod(s launch.Settings, skipSync, skipQueryServer bool) launch.Settings {
 	s.Storage.CodeBucket = "acme-code"
 	s.Storage.StateBucket = "acme-state"
+	s.Storage.LogsBucket = "acme-logs"
+	s.Storage.QueryResultsBucket = "acme-results"
 	s.CodePath = "/bot"
 	s.StatePath = "/state"
 	s.LogsPath = "/var/the0/logs"
