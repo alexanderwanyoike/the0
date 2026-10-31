@@ -1005,25 +1005,36 @@ describe("McpService", () => {
       });
     });
 
-    describe("tool errors", () => {
+    describe("tool errors keep their code", () => {
+      const toolError = (code: string, message: string) => ({
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ error: { code, message } }, null, 2),
+          },
+        ],
+        isError: true,
+        structuredContent: { error: { code, message } },
+      });
+
       it.each([
         {
           failure: "a bot the caller cannot see",
           tool: "bot_get",
           args: { bot_id: "bot-456" },
-          text: "Error: Not found",
+          error: ["not_found", "Not found"],
         },
         {
           failure: "deleting a bot the caller cannot see",
           tool: "bot_delete",
           args: { bot_id: "bot-456" },
-          text: "Error: Bot not found",
+          error: ["not_found", "Bot not found"],
         },
         {
           failure: "a deploy without a name",
           tool: "bot_deploy",
           args: { config: { type: "scheduled/test-bot", version: "1.0.0" } },
-          text: "Error: Config must include a 'name' field",
+          error: ["validation", "Config must include a 'name' field"],
         },
         {
           failure: "a deploy of a Custom bot missing from the Catalogue",
@@ -1035,48 +1046,39 @@ describe("McpService", () => {
               version: "1.0.0",
             },
           },
-          text: "Error: Bot type 'scheduled/unknown-bot' not found",
-        },
-        {
-          failure: "an update without a config",
-          tool: "bot_update",
-          args: { bot_id: "bot-123" },
-          text: "Error: Cannot destructure property 'type' of 'config' as it is undefined.",
+          error: ["validation", "Bot type 'scheduled/unknown-bot' not found"],
         },
         {
           failure: "a state list without a bot_id",
           tool: "bot_state_list",
           args: {},
-          text: "Error: bot_id is required",
+          error: ["validation", "bot_id is required"],
         },
         {
           failure: "a state read without a key",
           tool: "bot_state_get",
           args: { bot_id: "bot-123" },
-          text: "Error: key is required",
+          error: ["validation", "key is required"],
         },
         {
           failure: "a query without a path",
           tool: "bot_query",
           args: { bot_id: "bot-123" },
-          text: "Error: query_path is required",
+          error: ["validation", "query_path is required"],
         },
         {
           failure: "an unknown tool",
           tool: "unknown_tool",
           args: {},
-          text: "Unknown tool: unknown_tool",
+          error: ["validation", "Unknown tool: unknown_tool"],
         },
-      ])("reports $failure as text", async ({ tool, args, text }) => {
+      ])("reports $failure", async ({ tool, args, error: [code, message] }) => {
         const result = await service.handleToolCall(tool, args, actor);
 
-        expect(result).toEqual({
-          content: [{ type: "text", text }],
-          isError: true,
-        });
+        expect(result).toEqual(toolError(code, message));
       });
 
-      it("reports a Custom bot missing from the Catalogue as text", async () => {
+      it("reports a Custom bot missing from the Catalogue", async () => {
         customBotService.getGlobalLatestVersion.mockResolvedValue(
           Failure(appError("not_found", "Not found")),
         );
@@ -1087,10 +1089,39 @@ describe("McpService", () => {
           actor,
         );
 
-        expect(result).toEqual({
-          content: [{ type: "text", text: "Error: Not found" }],
-          isError: true,
-        });
+        expect(result).toEqual(toolError("not_found", "Not found"));
+      });
+
+      it.each([
+        ["unavailable", "Bot runtime is not available."],
+        ["timeout", "Query timed out after 30 seconds"],
+        ["unprocessable", "This bot defines no queries."],
+      ])("reports a query that fails as %s", async (code, message) => {
+        botQueryService.executeQuery.mockResolvedValue(
+          Failure(appError(code as never, message)),
+        );
+
+        const result = await service.handleToolCall(
+          "bot_query",
+          { bot_id: "bot-123", query_path: "/today" },
+          actor,
+        );
+
+        expect(result).toEqual(toolError(code, message));
+      });
+
+      it("reports an unexpected exception as internal, without its message", async () => {
+        botStateService.listKeys.mockRejectedValue(
+          new Error("connect ECONNREFUSED 10.0.0.5:9000"),
+        );
+
+        const result = await service.handleToolCall(
+          "bot_state_list",
+          { bot_id: "bot-123" },
+          actor,
+        );
+
+        expect(result).toEqual(toolError("internal", "Tool execution failed"));
       });
     });
   });
