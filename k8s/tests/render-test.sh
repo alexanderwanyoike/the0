@@ -101,6 +101,7 @@ shared_value_cases=(
   "in-cluster ports|--set nats.port=4333 --set minio.port=9100"
   "external NATS URL and S3|--set global.existingSecret=s --set nats.enabled=false --set nats.external.url=nats://nats.example:4222 --set minio.enabled=false --set minio.external.endpoint=s3.example.com --set minio.external.port=8443 --set minio.external.useSSL=false"
   "external NATS host and port|--set global.existingSecret=s --set nats.enabled=false --set nats.external.host=nats.example --set nats.external.port=4333"
+  "custom logs bucket|--set the0Api.env.LOG_BUCKET=team-logs"
 )
 
 for release in the0 the0-the0 trading; do
@@ -126,6 +127,10 @@ for release in the0 the0-the0 trading; do
       "$api_ssl" "$(rendered_env "$rendering" bot-controller.yaml MINIO_USE_SSL)"
     check_agrees "gc MINIO_USE_SSL matches the api: $label" \
       "$api_ssl" "$(rendered_env "$rendering" gc-cronjob.yaml MINIO_USE_SSL)"
+
+    api_logs=$(rendered_env "$rendering" the0-api.yaml LOG_BUCKET | paste -sd ' ')
+    check_agrees "gc MINIO_LOGS_BUCKET matches api LOG_BUCKET: $label" \
+      "$api_logs" "$(rendered_env "$rendering" gc-cronjob.yaml MINIO_LOGS_BUCKET)"
   done
 done
 
