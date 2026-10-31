@@ -65,9 +65,8 @@ check "api RUNTIME_QUERY_URL honours an explicit override" \
 check "api RUNTIME_QUERY_URL is set once when overridden" \
   "$override" "$(api_env the0 RUNTIME_QUERY_URL --set the0Api.env.RUNTIME_QUERY_URL="$override" | paste -sd ' ')"
 
-# The api and the runtime read the same settings under different names, and
-# the MinIO endpoint in a different shape. Each case below sets the values a
-# self-hoster would, and every container must still agree with the api.
+# Each case below sets the values a self-hoster would, and every container
+# must still agree with the api.
 in_template='/^# Source: / { in_t = ($3 == t) }'
 
 rendered_env() {

@@ -18,9 +18,6 @@ type composeService struct {
 
 var composeVariable = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(:-([^}]*))?\}`)
 
-// loadCompose resolves a compose file the way ExtractComposeFiles and docker
-// compose would: the repo path placeholder, then ${VAR} and ${VAR:-default}
-// from vars, then YAML aliases.
 func loadCompose(t *testing.T, file []byte, vars map[string]string) map[string]composeService {
 	t.Helper()
 	text := strings.ReplaceAll(string(file), "{{REPO_PATH}}", "/repo")
@@ -45,9 +42,6 @@ var baseComposeFiles = map[string][]byte{
 	"docker-compose.prebuilt.yml": embeddedComposePrebuiltFile,
 }
 
-// The api and the runtime read these settings under different names (the
-// MinIO endpoint also in a different shape), so the compose files must hand
-// both sides the same value.
 func TestComposeFiles_RuntimeServicesReadTheApisSettings(t *testing.T) {
 	pairs := []struct {
 		setting string

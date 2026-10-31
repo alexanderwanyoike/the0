@@ -1,6 +1,5 @@
-# The api and the runtime read these settings under different names, and
-# MinIO in a different shape, so each is written once here and both sides
-# reference it by alias.
+# Settings the api and runtime services share, referenced by alias below
+# (why: Infrastructure Connection Helpers in k8s/templates/_helpers.tpl).
 x-shared-settings:
   nats-url: &nats-url nats://nats:4222
   minio-host: &minio-host minio

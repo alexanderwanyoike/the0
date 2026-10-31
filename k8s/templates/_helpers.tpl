@@ -76,6 +76,10 @@ Do NOT use Sprig's urlquery here: it is query-string encoding (spaces become +).
 Resolve internal vs external connection strings for each infrastructure service.
 When <service>.enabled is true, use internal cluster addresses.
 When false, use external.connectionString (if set) or build from external.* fields.
+The api and the runtime read NATS, MinIO and bucket settings under different
+names, and MinIO in a different shape, so each helper renders both sides from
+one value. The compose files in cli/internal/local/compose_files do the same
+with YAML aliases.
 */}}
 
 {{/*
@@ -192,8 +196,8 @@ false
 {{- end }}
 
 {{/*
-Logs bucket. The api reads it as LOG_BUCKET and the runtime as
-MINIO_LOGS_BUCKET; the0Api.env.LOG_BUCKET stays the one value self-hosters set.
+Logs bucket, from the0Api.env.LOG_BUCKET because that is the value
+self-hosters already set.
 */}}
 {{- define "the0.logsBucket" -}}
 {{ .Values.the0Api.env.LOG_BUCKET | default "bot-logs" }}
