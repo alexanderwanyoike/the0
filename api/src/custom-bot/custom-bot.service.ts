@@ -12,9 +12,8 @@ import {
   SUPPORTED_RUNTIMES,
   COMPILED_RUNTIMES,
 } from "./custom-bot.types";
-import { appError, AppError } from "@/common/app-error";
+import { appError, AppError, WRITE_FAILED } from "@/common/app-error";
 import { Result, Failure, Ok, errorMessage } from "@/common/result";
-import { WRITE_FAILED } from "@/common/role.repository";
 
 @Injectable()
 export class CustomBotService {

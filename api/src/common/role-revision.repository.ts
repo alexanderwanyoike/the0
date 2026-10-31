@@ -1,6 +1,5 @@
-import { appError, AppError } from "./app-error";
+import { appError, AppError, READ_FAILED, WRITE_FAILED } from "./app-error";
 import { Result, Ok, Failure } from "./result";
-import { READ_FAILED, WRITE_FAILED } from "./role.repository";
 import { getDatabase, getTables } from "@/database/connection";
 import { eq, and, desc } from "drizzle-orm";
 import pino from "pino";

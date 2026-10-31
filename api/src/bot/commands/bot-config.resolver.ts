@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import * as semver from "semver";
-import { appError, AppError } from "@/common/app-error";
+import { AppError, invalid } from "@/common/app-error";
 import { Failure, Ok, Result } from "@/common/result";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { CustomBot } from "@/custom-bot/custom-bot.types";
@@ -61,6 +61,3 @@ export class BotConfigResolver {
     return Ok(customBot);
   }
 }
-
-const invalid = (message: string): Result<CustomBot, AppError> =>
-  Failure(appError("validation", message));
