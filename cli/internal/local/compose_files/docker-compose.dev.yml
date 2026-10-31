@@ -52,7 +52,6 @@ services:
       BACKTEST_BUCKET: backtests
       BOT_API_URL: http://the0-api:3000
       PORT: 3000
-      API_BASE_URL: http://localhost:3000
       MIGRATIONS_PATH: /app/src/database/migrations
     ports:
       - "3000:3000"

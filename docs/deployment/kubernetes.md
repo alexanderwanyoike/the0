@@ -143,7 +143,6 @@ the0Api:
     THE0_ADMIN_EMAIL: "admin@example.com"
     NODE_ENV: "production"
     FRONTEND_URL: "https://the0.example.com"
-    API_BASE_URL: "https://api.the0.example.com"
   extraEnv:
     - name: THE0_ADMIN_PASSWORD
       valueFrom:

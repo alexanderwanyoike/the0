@@ -143,7 +143,6 @@ the0Api:
     BACKTEST_BUCKET: "backtests"
     NODE_ENV: "development"
     PORT: "3000"
-    API_BASE_URL: "http://the0-api:3000"
     FRONTEND_URL: "http://the0.local:30001"
     JWT_SECRET: "your-jwt-secret-key"
     JWT_EXPIRES_IN: "7d"

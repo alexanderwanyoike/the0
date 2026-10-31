@@ -119,7 +119,6 @@ services:
       # Application configuration
       NODE_ENV: production
       PORT: 3000
-      API_BASE_URL: http://localhost:3000
 
       # Frontend configuration
       FRONTEND_URL: http://localhost:3001
