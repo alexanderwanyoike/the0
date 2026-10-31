@@ -110,7 +110,7 @@ spec:
             - "--namespace={{ .Release.Namespace }}"
             - "--reconcile-interval={{ .Values.botController.reconcileInterval }}"
             - "--minio-endpoint={{ include "the0.minioEndpointWithPort" . }}"
-            - "--minio-bucket={{ .Values.botController.minio.bucket }}"
+            - "--minio-bucket={{ include "the0.codeBucket" . }}"
             - "--runtime-image={{ .Values.botController.runtimeImage | default (printf "%s:%s" .Values.botController.image.repository .Chart.AppVersion) }}"
             - "--runtime-image-pull-policy={{ .Values.botController.runtimeImagePullPolicy }}"
             - "--storage-credentials-secret={{ include "the0.secretName" . }}"
@@ -122,7 +122,7 @@ spec:
             - name: MINIO_ENDPOINT
               value: {{ include "the0.minioEndpointWithPort" . | quote }}
             - name: MINIO_BUCKET
-              value: {{ .Values.botController.minio.bucket | quote }}
+              value: {{ include "the0.codeBucket" . | quote }}
             - name: MINIO_LOGS_BUCKET
               value: {{ include "the0.logsBucket" . | quote }}
             - name: MONGO_URI
