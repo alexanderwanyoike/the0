@@ -46,6 +46,7 @@ describe("/custom-bots responses", () => {
     extractAndStoreFrontend: jest.fn(),
     listObjects: jest.fn(),
     deleteFile: jest.fn(),
+    uploadBotFile: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -396,6 +397,20 @@ describe("/custom-bots responses", () => {
       const res = await api().get(path).set(as(UPLOADER));
 
       expectRefusal(res, 500, "Failed to read from the database");
+    });
+
+    it("answers an upload the storage refuses", async () => {
+      storage.uploadBotFile.mockResolvedValue(
+        Failure(appError("internal", "Error uploading file: down")),
+      );
+
+      const res = await api()
+        .post("/custom-bots/sma-bot/upload")
+        .set(as(UPLOADER))
+        .field("version", "1.0.0")
+        .attach("file", Buffer.from("PK"), "sma-bot.zip");
+
+      expectRefusal(res, 500, "Upload failed: Error uploading file: down");
     });
 
     it("answers a deploy whose file check fails", async () => {
