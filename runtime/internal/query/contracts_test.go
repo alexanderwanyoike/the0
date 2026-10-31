@@ -106,7 +106,7 @@ func TestContracts_QueryServerAnswersAsTheApiExpects(t *testing.T) {
 			})
 			w := httptest.NewRecorder()
 
-			server.HandleQuery(w, httptest.NewRequest(http.MethodPost, contract.Path, bytes.NewReader(contract.Request)))
+			server.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodPost, contract.Path, bytes.NewReader(contract.Request)))
 
 			assert.Equal(t, want.Status, w.Code)
 			var body map[string]interface{}
