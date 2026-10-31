@@ -170,9 +170,7 @@ export function useBotEvents({
 
   // Create bound utilities
   const utils = useMemo<BotEventUtils>(() => {
-    // Built apart from the return so the platform's extra utilities are not
-    // rejected as excess properties by the0-react 0.2, which does not
-    // declare them yet. Dashboards call them all the same.
+    // Dodges 0.2's excess-property check on the extra utilities; inline it on moving to the SDK release with contract.ts.
     const bound = {
       since: (duration: string) => eventUtils.since(events, duration),
       between: (start: Date, end: Date) =>
