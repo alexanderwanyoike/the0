@@ -76,6 +76,10 @@ Do NOT use Sprig's urlquery here: it is query-string encoding (spaces become +).
 Resolve internal vs external connection strings for each infrastructure service.
 When <service>.enabled is true, use internal cluster addresses.
 When false, use external.connectionString (if set) or build from external.* fields.
+The api and the runtime read NATS, MinIO and bucket settings under different
+names, and MinIO in a different shape, so each helper renders both sides from
+one value. The compose files in cli/internal/local/compose_files do the same
+with YAML aliases.
 */}}
 
 {{/*
@@ -137,10 +141,18 @@ nats://{{ .Values.nats.external.host }}:{{ .Values.nats.external.port }}
 {{- end }}
 
 {{/*
+Bot-controller query server port. Not a value: the controller binary always
+listens on 9477 and has no flag to change it.
+*/}}
+{{- define "the0.queryPort" -}}
+9477
+{{- end }}
+
+{{/*
 Bot-controller query server URL, used by the API service
 */}}
 {{- define "the0.runtimeQueryUrl" -}}
-http://{{ include "the0.fullname" . }}-bot-controller:9477
+http://{{ include "the0.fullname" . }}-bot-controller:{{ include "the0.queryPort" . }}
 {{- end }}
 
 {{/*
@@ -155,14 +167,10 @@ MinIO endpoint (host only, no port) — used by the API service
 {{- end }}
 
 {{/*
-MinIO endpoint with port (host:port) — used by the bot-controller
+MinIO endpoint with port (host:port), used by the runtime (bot-controller and gc)
 */}}
 {{- define "the0.minioEndpointWithPort" -}}
-{{- if .Values.minio.enabled -}}
-{{ include "the0.fullname" . }}-minio:{{ .Values.minio.port }}
-{{- else -}}
-{{ .Values.minio.external.endpoint }}:{{ .Values.minio.external.port }}
-{{- end -}}
+{{ include "the0.minioEndpoint" . }}:{{ include "the0.minioPort" . }}
 {{- end }}
 
 {{/*
@@ -185,6 +193,14 @@ false
 {{- else -}}
 {{ .Values.minio.external.useSSL }}
 {{- end -}}
+{{- end }}
+
+{{/*
+Logs bucket, from the0Api.env.LOG_BUCKET because that is the value
+self-hosters already set.
+*/}}
+{{- define "the0.logsBucket" -}}
+{{ .Values.the0Api.env.LOG_BUCKET | default "bot-logs" }}
 {{- end }}
 
 {{/*

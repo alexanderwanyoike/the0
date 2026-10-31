@@ -72,6 +72,8 @@ spec:
               value: {{ include "the0.minioPort" . | quote }}
             - name: MINIO_USE_SSL
               value: {{ include "the0.minioUseSSL" . | quote }}
+            - name: LOG_BUCKET
+              value: {{ include "the0.logsBucket" . | quote }}
             - name: MINIO_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
@@ -88,7 +90,7 @@ spec:
                   name: {{ include "the0.secretName" . }}
                   key: jwt-secret
             {{- range $key, $value := .Values.the0Api.env }}
-            {{- if and (ne $key "JWT_SECRET") (ne $key "DATABASE_URL") (ne $key "MINIO_ACCESS_KEY") (ne $key "MINIO_SECRET_KEY") (ne $key "RUNTIME_QUERY_URL") }}
+            {{- if and (ne $key "JWT_SECRET") (ne $key "DATABASE_URL") (ne $key "MINIO_ACCESS_KEY") (ne $key "MINIO_SECRET_KEY") (ne $key "RUNTIME_QUERY_URL") (ne $key "LOG_BUCKET") }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}

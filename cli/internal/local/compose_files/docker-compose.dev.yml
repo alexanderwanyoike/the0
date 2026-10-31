@@ -40,7 +40,6 @@ services:
       NODE_ENV: development
       DATABASE_URL: postgresql://the0:the0_password@postgres:5432/the0_oss?sslmode=disable
       DATABASE_TYPE: postgres
-      NATS_URL: nats://nats:4222
       NATS_SUBJECT_PREFIX: the0
       MINIO_ENDPOINT: localhost
       MINIO_PORT: "9000"
@@ -50,12 +49,9 @@ services:
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       JWT_EXPIRES_IN: 24h
       STORAGE_PATH: /app/uploads/custom-bots
-      CUSTOM_BOTS_BUCKET: custom-bots
-      LOG_BUCKET: bot-logs
       BACKTEST_BUCKET: backtests
       BOT_API_URL: http://the0-api:3000
       PORT: 3000
-      API_BASE_URL: http://localhost:3000
       MIGRATIONS_PATH: /app/src/database/migrations
     ports:
       - "3000:3000"
