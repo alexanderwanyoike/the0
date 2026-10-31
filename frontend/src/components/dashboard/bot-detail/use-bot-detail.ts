@@ -6,7 +6,6 @@ import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { useDashboardBots } from "@/contexts/dashboard-bots-context";
 import { BotService, Bot as ApiBotType } from "@/lib/api/api-client";
-import { getErrorMessage } from "@/lib/axios";
 import { maskSensitiveConfig } from "@/lib/mask-config";
 import {
   IntervalValue,
@@ -133,7 +132,7 @@ export function useOwnedBot(botId: string) {
       console.error("Error updating bot enabled status:", error);
       toast({
         title: "Update Failed",
-        description: getErrorMessage(error),
+        description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
     } finally {
