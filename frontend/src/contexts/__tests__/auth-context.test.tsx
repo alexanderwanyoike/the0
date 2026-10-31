@@ -22,10 +22,6 @@ jest.mock("@/lib/auth-fetch", () => ({
   setAuthFetchService: jest.fn(),
 }));
 
-jest.mock("@/lib/api-client", () => ({
-  setApiClientService: jest.fn(),
-}));
-
 jest.mock("@/lib/sse/sse-auth", () => ({
   setSSEAuthService: jest.fn(),
 }));
@@ -61,15 +57,8 @@ const mockUser: AuthUser = {
 
 // Test component to access auth context
 function TestComponent() {
-  const {
-    user,
-    loading,
-    login,
-    logout,
-    refreshUser,
-    token,
-    authService,
-  } = useAuth();
+  const { user, loading, login, logout, refreshUser, token, authService } =
+    useAuth();
 
   return (
     <div>
@@ -168,8 +157,6 @@ describe("AuthContext", () => {
       const setAuthService = require("@/lib/axios-interceptor").setAuthService;
       const setAuthFetchService =
         require("@/lib/auth-fetch").setAuthFetchService;
-      const setApiClientService =
-        require("@/lib/api-client").setApiClientService;
       const setSSEAuthService = require("@/lib/sse/sse-auth").setSSEAuthService;
 
       mockAuthService.getToken.mockReturnValue(null);
@@ -183,7 +170,6 @@ describe("AuthContext", () => {
       await waitFor(() => {
         expect(setAuthService).toHaveBeenCalled();
         expect(setAuthFetchService).toHaveBeenCalled();
-        expect(setApiClientService).toHaveBeenCalled();
         expect(setSSEAuthService).toHaveBeenCalled();
       });
     });
