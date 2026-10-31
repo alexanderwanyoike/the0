@@ -3,10 +3,12 @@ package internal
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,13 +64,6 @@ type CustomBotData struct {
 	UpdatedAt     string             `json:"updatedAt"`
 }
 
-// CustomBotAPIResponse represents the full API response structure
-type CustomBotAPIResponse struct {
-	Success bool          `json:"success"`
-	Data    CustomBotData `json:"data"`
-	Message string        `json:"message"`
-}
-
 // BotInstance represents a deployed bot instance
 type BotInstance struct {
 	ID          string         `json:"id"`
@@ -81,9 +76,6 @@ type BotInstance struct {
 	CustomBotId string         `json:"customBotId"`
 }
 
-// BotListResponse represents the response for listing bot instances
-type BotListResponse []BotInstance
-
 // BotDeployRequest represents the request for deploying a bot instance
 type BotDeployRequest struct {
 	Name   string         `json:"name"`
@@ -94,13 +86,6 @@ type BotDeployRequest struct {
 type BotUpdateRequest struct {
 	Name   string         `json:"name"`
 	Config map[string]any `json:"config"`
-}
-
-// APIResponse represents a generic API response
-type APIResponse struct {
-	Success bool   `json:"success"`
-	Data    any    `json:"data,omitempty"`
-	Message string `json:"message"`
 }
 
 // CustomBotDeployRequest represents the new deploy request with file path
@@ -130,17 +115,13 @@ func GetAPIBaseURL() string {
 	return env.URL
 }
 
-// APIKeyValidationResponse represents the response from the API key validation endpoint
-type APIKeyValidationResponse struct {
-	Success bool `json:"success"`
-	Data    struct {
-		Valid      bool   `json:"valid"`
-		UserID     string `json:"userId"`
-		KeyID      string `json:"keyId"`
-		KeyName    string `json:"keyName"`
-		LastUsedAt string `json:"lastUsedAt"`
-	} `json:"data"`
-	Message string `json:"message"`
+// apiKeyValidation is what the API key validation endpoint reports
+type apiKeyValidation struct {
+	Valid      bool   `json:"valid"`
+	UserID     string `json:"userId"`
+	KeyID      string `json:"keyId"`
+	KeyName    string `json:"keyName"`
+	LastUsedAt string `json:"lastUsedAt"`
 }
 
 // LogEntry represents a single log entry
@@ -150,13 +131,6 @@ type LogEntry struct {
 	// Empty when the api sends null: the line has no timestamp of its own.
 	Timestamp string `json:"timestamp"`
 	Content   string `json:"content"`
-}
-
-// LogsResponse represents the API response for bot logs
-type LogsResponse struct {
-	Success bool       `json:"success"`
-	Data    []LogEntry `json:"data"`
-	Message string     `json:"message"`
 }
 
 // LogsParams represents parameters for the logs API call
@@ -169,83 +143,40 @@ type LogsParams struct {
 
 // TestAPIKey tests if an API key is valid
 func (c *APIClient) TestAPIKey(auth *Auth) error {
-	req, err := http.NewRequest("GET", c.BaseURL+"/auth/validate-api-key", nil)
+	body, err := c.send(auth, apiRequest{method: "GET", path: "/auth/validate-api-key"})
 	if err != nil {
 		return err
 	}
 
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
+	env, err := decode[envelope[apiKeyValidation]](body)
 	if err != nil {
-		return fmt.Errorf("network error: %v", err)
+		return err
 	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response body: %v", err)
+	if !env.Success {
+		return fmt.Errorf("API key validation failed: %s", env.Message)
 	}
-
-	if resp.StatusCode >= 400 {
-		return apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	var apiResponse APIKeyValidationResponse
-	if err := json.Unmarshal(body, &apiResponse); err != nil {
-		return fmt.Errorf("failed to parse API response: %v", err)
-	}
-
-	if !apiResponse.Success {
-		return fmt.Errorf("API key validation failed: %s", apiResponse.Message)
-	}
-
-	if !apiResponse.Data.Valid {
+	if !env.Data.Valid {
 		return fmt.Errorf("API key is invalid")
 	}
-
 	return nil
 }
 
 // CheckBotExists checks if a bot exists and validates ownership
 func (c *APIClient) CheckBotExists(config *BotConfig, auth *Auth) (bool, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/custom-bots/%s", c.BaseURL, config.Name), nil)
-	if err != nil {
-		return false, err
-	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 404 {
+	body, err := c.send(auth, apiRequest{method: "GET", path: "/custom-bots/" + config.Name})
+	if IsNotFound(err) {
 		// Bot doesn't exist, this is a new deployment
 		return false, nil
 	}
-
-	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return false, fmt.Errorf("failed to read response body: %v", err)
+		return false, err
 	}
 
-	if resp.StatusCode != 200 {
-		return false, apiErrorFromResponse(resp.StatusCode, body)
+	botData, err := unwrap[CustomBotData](body)
+	if err != nil {
+		return false, err
 	}
 
-	var apiResponse CustomBotAPIResponse
-	if err := json.Unmarshal(body, &apiResponse); err != nil {
-		return false, fmt.Errorf("failed to parse API response: %v", err)
-	}
-
-	if !apiResponse.Success {
-		return false, fmt.Errorf("API returned error: %s", apiResponse.Message)
-	}
-
-	botData := apiResponse.Data
 	// Check version for updates
 	currentVersion, err := semver.NewVersion(botData.LatestVersion)
 	if err != nil {
@@ -331,168 +262,61 @@ func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isU
 		return fmt.Errorf("failed to marshal config: %v", err)
 	}
 
-	// Create deploy request
 	deployRequest := CustomBotDeployRequest{
 		Config:   string(configJSON),
 		FilePath: filePath,
 	}
 
-	deployRequestJSON, err := json.Marshal(deployRequest)
-	if err != nil {
-		return fmt.Errorf("failed to marshal deploy request: %v", err)
-	}
-
-	// Create HTTP request
-	var endpoint string
-	var method string
-
+	method := "POST"
 	if isUpdate {
-		endpoint = fmt.Sprintf("%s/custom-bots/%s", c.BaseURL, config.Name)
 		method = "PUT"
-	} else {
-		endpoint = fmt.Sprintf("%s/custom-bots/%s", c.BaseURL, config.Name)
-		method = "POST"
 	}
 
-	req, err := http.NewRequest(method, endpoint, bytes.NewBuffer(deployRequestJSON))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+	if _, err := c.sendJSON(auth, method, "/custom-bots/"+config.Name, deployRequest); err != nil {
 		logger.StopSpinner()
-		// Try to read error message from response
-		body, _ := io.ReadAll(resp.Body)
-		return apiErrorFromResponse(resp.StatusCode, body)
+		return err
 	}
 
 	logger.StopSpinnerWithSuccess("Deployment successful")
 	return nil
 }
 
-// BotListAPIResponse represents the response structure for bot list API
-type BotListAPIResponse struct {
-	Success bool          `json:"success"`
-	Data    []BotInstance `json:"data"`
-	Message string        `json:"message"`
-}
-
 // ListBots retrieves the list of deployed bot instances
 func (c *APIClient) ListBots(auth *Auth) ([]BotInstance, error) {
-	req, err := http.NewRequest("GET", c.BaseURL+"/bot", nil)
+	body, err := c.send(auth, apiRequest{method: "GET", path: "/bot"})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, err
 	}
 
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	// Try to parse as wrapped response first
-	var apiResponse BotListAPIResponse
-	if err := json.Unmarshal(body, &apiResponse); err == nil {
-		if !apiResponse.Success {
-			return nil, fmt.Errorf("API returned error: %s", apiResponse.Message)
+	// The api answers with a bare array; older ones wrapped it in an envelope.
+	var env envelope[[]BotInstance]
+	if err := json.Unmarshal(body, &env); err == nil {
+		if !env.Success {
+			return nil, fmt.Errorf("API returned error: %s", env.Message)
 		}
-		return apiResponse.Data, nil
+		return env.Data, nil
 	}
-
-	// Fallback: try to parse as direct array (for backward compatibility)
-	var bots []BotInstance
-	if err := json.Unmarshal(body, &bots); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %v", err)
-	}
-
-	return bots, nil
+	return decode[[]BotInstance](body)
 }
 
 // DeployBotInstance deploys a new bot instance
 func (c *APIClient) DeployBotInstance(auth *Auth, request *BotDeployRequest) (*BotInstance, error) {
-	reqBody, err := json.Marshal(request)
+	body, err := c.sendJSON(auth, "POST", "/bot", request)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %v", err)
+		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", c.BaseURL+"/bot", bytes.NewBuffer(reqBody))
+	bot, err := decode[BotInstance](body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, err
 	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	if resp.StatusCode != 200 && resp.StatusCode != 201 {
-		return nil, apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	var botInstance BotInstance
-	if err := json.Unmarshal(body, &botInstance); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %v", err)
-	}
-
-	return &botInstance, nil
+	return &bot, nil
 }
 
 // UpdateBotInstance updates an existing bot instance
 func (c *APIClient) UpdateBotInstance(auth *Auth, botID string, request *BotUpdateRequest) error {
-	reqBody, err := json.Marshal(request)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request: %v", err)
-	}
-
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/bot/%s", c.BaseURL, botID), bytes.NewBuffer(reqBody))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	return nil
+	_, err := c.sendJSON(auth, "PUT", "/bot/"+botID, request)
+	return err
 }
 
 // UserBot represents a user-installed bot instance
@@ -503,31 +327,10 @@ type UserBot struct {
 	AcquiredAt    string         `json:"acquiredAt"`
 }
 
-// UserBotListResponse represents the response for listing user bots
-type UserBotListResponse struct {
-	Success bool      `json:"success"`
-	Data    []UserBot `json:"data"`
-	Message string    `json:"message"`
-}
-
-// CustomBotListResponse represents the response for listing custom bots
-type CustomBotListResponse struct {
-	Success bool            `json:"success"`
-	Data    []CustomBotData `json:"data"`
-	Message string          `json:"message"`
-}
-
 // VersionWithInstances represents a version with its instance count
 type VersionWithInstances struct {
 	CustomBotVersion
 	InstanceCount int `json:"instanceCount"`
-}
-
-// VersionsWithInstancesResponse represents the response for listing versions with instance counts
-type VersionsWithInstancesResponse struct {
-	Success bool                   `json:"success"`
-	Data    []VersionWithInstances `json:"data"`
-	Message string                 `json:"message"`
 }
 
 // BotDeleteResponse represents the response from deleting a bot instance
@@ -544,118 +347,38 @@ type OrphanedVersionInfo struct {
 
 // DeleteBotInstance deletes a bot instance and returns orphan info if applicable
 func (c *APIClient) DeleteBotInstance(auth *Auth, botID string) (*BotDeleteResponse, error) {
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/bot/%s", c.BaseURL, botID), nil)
+	body, err := c.send(auth, apiRequest{method: "DELETE", path: "/bot/" + botID})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, err
 	}
 
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 && resp.StatusCode != 204 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	// Parse response body for orphan info
-	body, err := io.ReadAll(resp.Body)
-	if err != nil || len(body) == 0 {
-		return &BotDeleteResponse{}, nil
-	}
-
+	// The orphan info is a hint; a body without it still means the bot is gone.
 	var deleteResponse BotDeleteResponse
-	if err := json.Unmarshal(body, &deleteResponse); err != nil {
+	if len(body) == 0 || json.Unmarshal(body, &deleteResponse) != nil {
 		return &BotDeleteResponse{}, nil
 	}
-
 	return &deleteResponse, nil
 }
 
 // GetCustomBotVersionsWithInstances retrieves versions with instance counts
 func (c *APIClient) GetCustomBotVersionsWithInstances(auth *Auth, name string) ([]VersionWithInstances, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/custom-bots/%s/versions", c.BaseURL, name), nil)
+	body, err := c.send(auth, apiRequest{method: "GET", path: "/custom-bots/" + name + "/versions"})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, err
 	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	var apiResponse VersionsWithInstancesResponse
-	if err := json.Unmarshal(body, &apiResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %v", err)
-	}
-
-	if !apiResponse.Success {
-		return nil, fmt.Errorf("API error: %s", apiResponse.Message)
-	}
-
-	return apiResponse.Data, nil
+	return unwrap[[]VersionWithInstances](body)
 }
 
 // DeleteCustomBotVersion deletes a specific version of a custom bot
 func (c *APIClient) DeleteCustomBotVersion(auth *Auth, name string, version string) error {
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/custom-bots/%s/%s", c.BaseURL, name, version), nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	return nil
+	_, err := c.send(auth, apiRequest{method: "DELETE", path: "/custom-bots/" + name + "/" + version})
+	return err
 }
 
 // DeleteCustomBot deletes all versions of a custom bot
 func (c *APIClient) DeleteCustomBot(auth *Auth, name string) error {
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/custom-bots/%s", c.BaseURL, name), nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	return nil
+	_, err := c.send(auth, apiRequest{method: "DELETE", path: "/custom-bots/" + name})
+	return err
 }
 
 // FindBotByNameOrID finds a bot by either name or ID
@@ -676,243 +399,106 @@ func (c *APIClient) FindBotByNameOrID(auth *Auth, identifier string) (*BotInstan
 
 // ListUserBots retrieves the list of user-installed bots
 func (c *APIClient) ListUserBots(auth *Auth) ([]UserBot, error) {
-	req, err := http.NewRequest("GET", c.BaseURL+"/user-bots", nil)
+	body, err := c.send(auth, apiRequest{method: "GET", path: "/user-bots"})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, err
 	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	var apiResponse UserBotListResponse
-	if err := json.Unmarshal(body, &apiResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %v", err)
-	}
-
-	if !apiResponse.Success {
-		return nil, fmt.Errorf("API returned error: %s", apiResponse.Message)
-	}
-
-	return apiResponse.Data, nil
+	return unwrap[[]UserBot](body)
 }
 
 // ListCustomBots retrieves the list of user's custom bots
 func (c *APIClient) ListCustomBots(auth *Auth) ([]CustomBotData, error) {
-	req, err := http.NewRequest("GET", c.BaseURL+"/custom-bots", nil)
+	body, err := c.send(auth, apiRequest{method: "GET", path: "/custom-bots"})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, err
 	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	var apiResponse CustomBotListResponse
-	if err := json.Unmarshal(body, &apiResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %v", err)
-	}
-
-	if !apiResponse.Success {
-		return nil, fmt.Errorf("API returned error: %s", apiResponse.Message)
-	}
-
-	return apiResponse.Data, nil
+	return unwrap[[]CustomBotData](body)
 }
 
 // GetCustomBot retrieves a specific custom bot by name
 func (c *APIClient) GetCustomBot(auth *Auth, customBotName string) (*CustomBotData, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/custom-bots/%s", c.BaseURL, customBotName), nil)
+	body, err := c.send(auth, apiRequest{method: "GET", path: "/custom-bots/" + customBotName})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, err
 	}
 
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
+	customBot, err := unwrap[CustomBotData](body)
 	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	var apiResponse CustomBotAPIResponse
-	if err := json.Unmarshal(body, &apiResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %v", err)
-	}
-
-	if !apiResponse.Success {
-		return nil, fmt.Errorf("API returned error: %s", apiResponse.Message)
-	}
-
-	return &apiResponse.Data, nil
+	return &customBot, nil
 }
 
 // GetBotLogs retrieves logs for a specific bot
 func (c *APIClient) GetBotLogs(auth *Auth, botID string, params *LogsParams) ([]LogEntry, error) {
-	// Build URL with query parameters
-	url := fmt.Sprintf("%s/logs/%s", c.BaseURL, botID)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-
-	// Add query parameters
+	query := url.Values{}
 	if params != nil {
-		q := req.URL.Query()
 		if params.Date != "" {
-			q.Add("date", params.Date)
+			query.Add("date", params.Date)
 		}
 		if params.DateRange != "" {
-			q.Add("dateRange", params.DateRange)
+			query.Add("dateRange", params.DateRange)
 		}
 		if params.Limit > 0 {
-			q.Add("limit", fmt.Sprintf("%d", params.Limit))
+			query.Add("limit", fmt.Sprintf("%d", params.Limit))
 		}
 		if params.Sort != "" {
-			q.Add("sort", params.Sort)
+			query.Add("sort", params.Sort)
 		}
-		req.URL.RawQuery = q.Encode()
 	}
 
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
+	body, err := c.send(auth, apiRequest{method: "GET", path: "/logs/" + botID, query: query})
 	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	var apiResponse LogsResponse
-	if err := json.Unmarshal(body, &apiResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %v", err)
-	}
-
-	if !apiResponse.Success {
-		return nil, fmt.Errorf("API returned error: %s", apiResponse.Message)
-	}
-
-	return apiResponse.Data, nil
+	return unwrap[[]LogEntry](body)
 }
 
 // UploadFileDirect uploads a file directly to the API using multipart form data
 func (c *APIClient) UploadFileDirect(botName string, version string, filePath string, auth *Auth) (string, error) {
-	// Open the file
 	file, err := os.Open(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open file: %v", err)
 	}
 	defer file.Close()
 
-	// Create a buffer to write our multipart form
 	var requestBody bytes.Buffer
 	writer := multipart.NewWriter(&requestBody)
 
-	// Add version field
-	err = writer.WriteField("version", version)
-	if err != nil {
+	if err := writer.WriteField("version", version); err != nil {
 		return "", fmt.Errorf("failed to write version field: %v", err)
 	}
 
-	// Create the file field
 	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 	if err != nil {
 		return "", fmt.Errorf("failed to create form file: %v", err)
 	}
 
-	// Copy file content to the form
-	_, err = io.Copy(part, file)
-	if err != nil {
+	if _, err := io.Copy(part, file); err != nil {
 		return "", fmt.Errorf("failed to copy file content: %v", err)
 	}
 
-	// Close the writer to finalize the multipart message
-	err = writer.Close()
-	if err != nil {
+	if err := writer.Close(); err != nil {
 		return "", fmt.Errorf("failed to close writer: %v", err)
 	}
 
-	// Create POST request with multipart form data
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/custom-bots/%s/upload", c.BaseURL, botName), &requestBody)
+	body, err := c.send(auth, apiRequest{
+		method:      "POST",
+		path:        "/custom-bots/" + botName + "/upload",
+		body:        requestBody.Bytes(),
+		contentType: writer.FormDataContentType(),
+		timeout:     30 * time.Minute,
+	})
 	if err != nil {
-		return "", fmt.Errorf("failed to create upload request: %v", err)
+		return "", err
 	}
 
-	// Set required headers
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	// Use a longer timeout for large file uploads
-	client := &http.Client{
-		Timeout: 30 * time.Minute, // 30 minutes for large files
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("upload failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return "", apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	// Parse the response as a flat structure instead of wrapped
+	// The upload route answers flat, not in an envelope.
 	var uploadResponse struct {
 		Success  bool   `json:"success"`
 		FilePath string `json:"filePath"`
 		Message  string `json:"message"`
 	}
-
 	if err := json.Unmarshal(body, &uploadResponse); err != nil {
 		return "", fmt.Errorf("failed to parse upload response: %v", err)
 	}
@@ -921,7 +507,6 @@ func (c *APIClient) UploadFileDirect(botName string, version string, filePath st
 		return "", fmt.Errorf("upload failed: %s", uploadResponse.Message)
 	}
 
-	// Extract file path directly from response
 	if uploadResponse.FilePath == "" {
 		return "", fmt.Errorf("file path not found in response")
 	}
@@ -935,152 +520,54 @@ type BotStateKey struct {
 	Size int64  `json:"size"`
 }
 
-// BotStateListResponse represents the response from listing state keys
-type BotStateListResponse struct {
-	Success bool          `json:"success"`
-	Data    []BotStateKey `json:"data"`
-	Message string        `json:"message"`
-}
-
-// BotStateValueResponse represents the response from getting a state value
-type BotStateValueResponse struct {
-	Success bool   `json:"success"`
-	Data    any    `json:"data"`
-	Message string `json:"message"`
-}
-
-// BotStateDeleteResponse represents the response from deleting a state key
-type BotStateDeleteResponse struct {
-	Success bool `json:"success"`
-	Data    struct {
-		Deleted bool `json:"deleted"`
-	} `json:"data"`
-	Message string `json:"message"`
-}
-
-// BotStateClearResponse represents the response from clearing all state
-type BotStateClearResponse struct {
-	Success bool `json:"success"`
-	Data    struct {
-		Cleared bool `json:"cleared"`
-	} `json:"data"`
-	Message string `json:"message"`
-}
-
 // ListBotState lists all state keys for a bot
 func (c *APIClient) ListBotState(auth *Auth, botID string) ([]BotStateKey, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/bots/%s/state", c.BaseURL, botID), nil)
+	body, err := c.send(auth, apiRequest{method: "GET", path: "/bots/" + botID + "/state"})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, err
 	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != 200 {
-		return nil, apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	var response BotStateListResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %v", err)
-	}
-
-	return response.Data, nil
+	return unwrap[[]BotStateKey](body)
 }
 
 // GetBotStateKey gets a specific state value for a bot
 func (c *APIClient) GetBotStateKey(auth *Auth, botID string, key string) (any, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/bots/%s/state/%s", c.BaseURL, botID, key), nil)
+	body, err := c.send(auth, apiRequest{method: "GET", path: "/bots/" + botID + "/state/" + key})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, err
 	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != 200 {
-		return nil, apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	var response BotStateValueResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %v", err)
-	}
-
-	return response.Data, nil
+	return unwrap[any](body)
 }
 
 // DeleteBotStateKey deletes a specific state key for a bot
 func (c *APIClient) DeleteBotStateKey(auth *Auth, botID string, key string) (bool, error) {
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/bots/%s/state/%s", c.BaseURL, botID, key), nil)
+	body, err := c.send(auth, apiRequest{method: "DELETE", path: "/bots/" + botID + "/state/" + key})
 	if err != nil {
-		return false, fmt.Errorf("failed to create request: %v", err)
+		return false, err
 	}
 
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
+	data, err := unwrap[struct {
+		Deleted bool `json:"deleted"`
+	}](body)
 	if err != nil {
-		return false, fmt.Errorf("network error: %v", err)
+		return false, err
 	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != 200 {
-		return false, apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	var response BotStateDeleteResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return false, fmt.Errorf("failed to parse response: %v", err)
-	}
-
-	return response.Data.Deleted, nil
+	return data.Deleted, nil
 }
 
 // ClearBotState clears all state for a bot
 func (c *APIClient) ClearBotState(auth *Auth, botID string) (bool, error) {
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/bots/%s/state", c.BaseURL, botID), nil)
+	body, err := c.send(auth, apiRequest{method: "DELETE", path: "/bots/" + botID + "/state"})
 	if err != nil {
-		return false, fmt.Errorf("failed to create request: %v", err)
+		return false, err
 	}
 
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
+	data, err := unwrap[struct {
+		Cleared bool `json:"cleared"`
+	}](body)
 	if err != nil {
-		return false, fmt.Errorf("network error: %v", err)
+		return false, err
 	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != 200 {
-		return false, apiErrorFromResponse(resp.StatusCode, body)
-	}
-
-	var response BotStateClearResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return false, fmt.Errorf("failed to parse response: %v", err)
-	}
-
-	return response.Data.Cleared, nil
+	return data.Cleared, nil
 }
 
 // BotQueryRequest represents a request to execute a query against a bot
@@ -1104,40 +591,28 @@ func (c *APIClient) ExecuteBotQuery(auth *Auth, botID string, request *BotQueryR
 		return nil, fmt.Errorf("failed to marshal request: %v", err)
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/query/%s", c.BaseURL, botID), bytes.NewBuffer(reqBody))
+	body, err := c.send(auth, apiRequest{
+		method:      "POST",
+		path:        "/query/" + botID,
+		body:        reqBody,
+		contentType: "application/json",
+		// The bot gets the whole timeout; the extra covers the round trip.
+		timeout: time.Duration(request.TimeoutSec+10) * time.Second,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	// Use longer timeout for query execution
-	client := &http.Client{
-		Timeout: time.Duration(request.TimeoutSec+10) * time.Second, // Add buffer for network
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		apiErr := apiErrorFromResponse(resp.StatusCode, body)
-		if nested := nestedQueryError(apiErr.Message); nested != "" {
-			apiErr.Message = nested
+		var apiErr *APIError
+		if errors.As(err, &apiErr) {
+			if nested := nestedQueryError(apiErr.Message); nested != "" {
+				apiErr.Message = nested
+			}
 		}
-		return nil, apiErr
+		return nil, err
 	}
 
-	var response BotQueryResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %v", err)
+	response, err := decode[BotQueryResponse](body)
+	if err != nil {
+		return nil, err
 	}
-
 	return &response, nil
 }
 
