@@ -1,16 +1,11 @@
 package internal
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/user"
 	"path/filepath"
-	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
 	"github.com/fatih/color"
 )
 
@@ -88,7 +83,7 @@ func (v *NodeVendor) Vendor(vm *VendorManager) error {
 	hasTypeScript := v.hasTypeScriptFiles(vm.projectPath)
 
 	// Step 1: Pull Node image if needed
-	if err := v.pullImage(vm); err != nil {
+	if err := vm.runner.EnsureImage(nodeImageFor(vm.runtime)); err != nil {
 		return fmt.Errorf("failed to pull Node image: %v", err)
 	}
 
@@ -118,7 +113,7 @@ func (v *NodeVendor) Vendor(vm *VendorManager) error {
 		v.restoreNodeModulesBackup(vm.projectPath)
 		return fmt.Errorf("failed to run Node vendoring container: %v", err)
 	}
-	defer vm.cleanupContainer(containerID)
+	defer vm.runner.Remove(containerID)
 
 	// Step 4: Verify vendored files
 	if err := vm.verifyVendoredFiles(nodeModulesPath); err != nil {
@@ -146,56 +141,8 @@ func (v *NodeVendor) hasTypeScriptFiles(projectPath string) bool {
 	return len(files) > 0
 }
 
-// pullImage pulls the Node.js image if it doesn't exist locally
-func (v *NodeVendor) pullImage(vm *VendorManager) error {
-	ctx := context.Background()
-	nodeImage := nodeImageFor(vm.runtime)
-
-	// Check if image exists locally
-	images, err := vm.dockerClient.ImageList(ctx, image.ListOptions{})
-	if err != nil {
-		return err
-	}
-
-	imageExists := false
-	for _, img := range images {
-		for _, tag := range img.RepoTags {
-			if tag == nodeImage {
-				imageExists = true
-				break
-			}
-		}
-		if imageExists {
-			break
-		}
-	}
-
-	if imageExists {
-		return nil
-	}
-
-	blue := color.New(color.FgBlue)
-	blue.Printf("Pulling Docker image: %s...\n", nodeImage)
-
-	reader, err := vm.dockerClient.ImagePull(ctx, nodeImage, image.PullOptions{})
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-
-	// Read pull output (but don't display it to keep output clean)
-	io.Copy(io.Discard, reader)
-
-	return nil
-}
-
 // runContainer creates and runs a container for Node.js vendoring
 func (v *NodeVendor) runContainer(vm *VendorManager, hasTypeScript bool) (string, error) {
-	ctx := context.Background()
-
-	// Generate unique container name
-	containerName := fmt.Sprintf("%snode-%d", vendorContainerName, time.Now().Unix())
-
 	// Get absolute project path for mounting
 	absProjectPath, err := filepath.Abs(vm.projectPath)
 	if err != nil {
@@ -205,96 +152,19 @@ func (v *NodeVendor) runContainer(vm *VendorManager, hasTypeScript bool) (string
 	// Build install command
 	installCmd := v.getInstallCommand(hasTypeScript)
 
-	config := &container.Config{
-		Image: nodeImageFor(vm.runtime),
-		Cmd: []string{
-			"sh", "-c",
-			installCmd,
-		},
+	return vm.runner.Run(BuildStep{
+		NamePrefix: "node-",
+		Image:      nodeImageFor(vm.runtime),
+		Cmd:        []string{"sh", "-c", installCmd},
 		WorkingDir: "/app",
 		User:       v.getUserConfig(),
 		Env:        getNodeBuildEnvVars(),
-	}
-
-	// Mount entire project directory so builds have access to source files
-	hostConfig := &container.HostConfig{
-		Binds: []string{
-			fmt.Sprintf("%s:/app", absProjectPath),
-		},
-		AutoRemove: false, // We'll remove manually after copying files
-	}
-
-	resp, err := vm.dockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
-	if err != nil {
-		return "", err
-	}
-
-	if err := vm.dockerClient.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		return "", err
-	}
-
-	// Stream logs in real-time while container is running
-	logReader, err := vm.dockerClient.ContainerLogs(ctx, resp.ID, container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Follow:     true,
-		Timestamps: false,
+		// The whole project is mounted so builds see the source files.
+		Binds:           []string{fmt.Sprintf("%s:/app", absProjectPath)},
+		LogColor:        color.New(color.FgGreen),
+		FailureHeadline: "JavaScript dependency installation",
+		FailedCommand:   "npm install",
 	})
-	if err != nil {
-		return resp.ID, fmt.Errorf("failed to get container logs: %v", err)
-	}
-
-	// Stream logs in a goroutine
-	logDone := make(chan struct{})
-	go func() {
-		defer close(logDone)
-		defer logReader.Close()
-
-		green := color.New(color.FgGreen)
-		buffer := make([]byte, 1024)
-		for {
-			n, err := logReader.Read(buffer)
-			if err != nil {
-				if err != io.EOF {
-					green.Printf("Log read error: %v\n", err)
-				}
-				break
-			}
-
-			if n > 0 {
-				// Clean Docker log headers and display output
-				output := vm.cleanDockerLogOutput(buffer[:n])
-				if output != "" {
-					green.Printf("  %s", output)
-				}
-			}
-		}
-	}()
-
-	// Wait for container to finish
-	statusCh, errCh := vm.dockerClient.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
-	select {
-	case err := <-errCh:
-		if err != nil {
-			return resp.ID, err
-		}
-	case status := <-statusCh:
-		// Wait for logs to finish streaming
-		<-logDone
-
-		if status.StatusCode != 0 {
-			// Get full container logs for error details
-			logs, _ := vm.getContainerLogs(resp.ID)
-			red := color.New(color.FgRed)
-			red.Printf("JavaScript dependency installation failed with exit code %d\n", status.StatusCode)
-			if logs != "" {
-				red.Printf("Full error log:\n%s\n", logs)
-			}
-			return resp.ID, fmt.Errorf("npm install failed with exit code %d", status.StatusCode)
-		}
-	}
-
-	return resp.ID, nil
 }
 
 // getInstallCommand returns the npm install command
