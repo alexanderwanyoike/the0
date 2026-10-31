@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { PinoLogger } from "nestjs-pino";
+import * as semver from "semver";
 import { CustomBotRepository } from "./custom-bot.repository";
 import { StorageService } from "@/custom-bot/storage.service";
 import { validateCustomBotConfigPayload } from "./custom-bot.schema";
@@ -194,21 +195,19 @@ export class CustomBotService {
       );
     }
 
-    const result = await this.customBotRepository.createNewGlobalVersion(
+    const result = await this.customBotRepository.create({
       userId,
-      {
-        name: finalConfig.name,
-        version: finalConfig.version,
-        config: finalConfig,
-        filePath,
-        status: "active",
-      },
-    );
+      name: finalConfig.name,
+      version: finalConfig.version,
+      config: finalConfig,
+      filePath,
+      status: "active",
+    });
     if (!result.success) {
       return Failure(result.error);
     }
 
-    return this.customBotRepository.getSpecificGlobalVersion(
+    return this.customBotRepository.findGlobalByKeyAndVersion(
       config.name,
       config.version,
     );
@@ -311,7 +310,7 @@ export class CustomBotService {
     }
 
     const latestVersion = latestResult.data.version;
-    if (!this.customBotRepository.isVersionNewer(latestVersion, version)) {
+    if (!semver.gt(version, latestVersion)) {
       return Failure(
         appError(
           "validation",
@@ -370,7 +369,7 @@ export class CustomBotService {
     name: string,
     version: string,
   ): Promise<Result<CustomBot, AppError>> {
-    return await this.customBotRepository.getSpecificGlobalVersion(
+    return await this.customBotRepository.findGlobalByKeyAndVersion(
       name,
       version,
     );
@@ -435,7 +434,7 @@ export class CustomBotService {
     }
 
     const versionResult =
-      await this.customBotRepository.getSpecificGlobalVersion(name, version);
+      await this.customBotRepository.findGlobalByKeyAndVersion(name, version);
     if (!versionResult.success) {
       return Failure(versionResult.error);
     }

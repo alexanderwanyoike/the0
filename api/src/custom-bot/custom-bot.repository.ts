@@ -11,7 +11,6 @@ import { appError, AppError } from "@/common/app-error";
 import { Result, Ok, Failure, errorMessage } from "@/common/result";
 import { isForeignKeyViolation } from "@/common/database-errors";
 import { eq, and, desc, inArray, type SQL } from "drizzle-orm";
-import * as semver from "semver";
 
 const logger = pino({ name: "CustomBotRepository" });
 
@@ -110,27 +109,6 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     } catch (error: unknown) {
       return Failure(READ_FAILED);
     }
-  }
-
-  async getSpecificGlobalVersion(
-    name: string,
-    version: string,
-  ): Promise<Result<CustomBot, AppError>> {
-    return this.findGlobalByKeyAndVersion(name, version);
-  }
-
-  async createNewGlobalVersion(
-    userId: string,
-    botData: Partial<CustomBot>,
-  ): Promise<Result<CustomBot, AppError>> {
-    return this.create({
-      ...botData,
-      userId,
-    });
-  }
-
-  isVersionNewer(currentVersion: string, newVersion: string): boolean {
-    return semver.gt(newVersion, currentVersion);
   }
 
   async checkUserOwnership(

@@ -64,7 +64,7 @@ describe("Custom Bot API Integration Tests", () => {
       .useValue({
         globalBotExists: jest.fn().mockResolvedValue(Ok(false)),
         globalVersionExists: jest.fn().mockResolvedValue(Ok(false)),
-        createNewGlobalVersion: jest.fn().mockResolvedValue(
+        create: jest.fn().mockResolvedValue(
           Ok({
             id: "mock-bot-id",
             name: "mock-bot",
@@ -76,9 +76,8 @@ describe("Custom Bot API Integration Tests", () => {
           }),
         ),
         getAllGlobalVersions: jest.fn().mockResolvedValue(Ok([])),
-        getSpecificGlobalVersion: jest.fn().mockResolvedValue(Ok(null)),
+        findGlobalByKeyAndVersion: jest.fn().mockResolvedValue(Ok(null)),
         getGlobalLatestVersion: jest.fn().mockResolvedValue(Ok(null)),
-        isVersionNewer: jest.fn().mockResolvedValue(Ok(true)),
         checkUserOwnership: jest.fn().mockResolvedValue(Ok(true)),
         getAllUserVersions: jest.fn().mockResolvedValue(Ok([])),
       })
@@ -155,8 +154,10 @@ describe("Custom Bot API Integration Tests", () => {
       storageService.fileExists.mockResolvedValue(Ok(true));
       storageService.validateZipStructure.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
-      repository.createNewGlobalVersion.mockResolvedValue(Ok(mockCreatedBot));
-      repository.getSpecificGlobalVersion.mockResolvedValue(Ok(mockCreatedBot));
+      repository.create.mockResolvedValue(Ok(mockCreatedBot));
+      repository.findGlobalByKeyAndVersion.mockResolvedValue(
+        Ok(mockCreatedBot),
+      );
 
       const response = await request(app.getHttpServer())
         .post("/custom-bots/integration-test-bot")
@@ -361,10 +362,11 @@ describe("Custom Bot API Integration Tests", () => {
       repository.globalBotExists.mockResolvedValue(Ok(true));
       repository.checkUserOwnership.mockResolvedValue(Ok(true));
       repository.getGlobalLatestVersion.mockResolvedValue(Ok(mockExistingBot));
-      repository.isVersionNewer.mockReturnValue(true);
       repository.globalVersionExists.mockResolvedValue(Ok(false));
-      repository.createNewGlobalVersion.mockResolvedValue(Ok(mockUpdatedBot));
-      repository.getSpecificGlobalVersion.mockResolvedValue(Ok(mockUpdatedBot));
+      repository.create.mockResolvedValue(Ok(mockUpdatedBot));
+      repository.findGlobalByKeyAndVersion.mockResolvedValue(
+        Ok(mockUpdatedBot),
+      );
 
       const response = await request(app.getHttpServer())
         .put("/custom-bots/integration-test-bot")
@@ -436,7 +438,6 @@ describe("Custom Bot API Integration Tests", () => {
       repository.globalBotExists.mockResolvedValue(Ok(true));
       repository.checkUserOwnership.mockResolvedValue(Ok(true));
       repository.getGlobalLatestVersion.mockResolvedValue(Ok(mockExistingBot));
-      repository.isVersionNewer.mockReturnValue(false);
 
       const response = await request(app.getHttpServer())
         .put("/custom-bots/integration-test-bot")
@@ -469,7 +470,6 @@ describe("Custom Bot API Integration Tests", () => {
       repository.globalBotExists.mockResolvedValue(Ok(true));
       repository.checkUserOwnership.mockResolvedValue(Ok(true));
       repository.getGlobalLatestVersion.mockResolvedValue(Ok(mockExistingBot));
-      repository.isVersionNewer.mockReturnValue(true);
       repository.globalVersionExists.mockResolvedValue(Ok(true)); // Version exists
 
       const response = await request(app.getHttpServer())
@@ -558,7 +558,7 @@ describe("Custom Bot API Integration Tests", () => {
         updatedAt: new Date(),
       };
 
-      repository.getSpecificGlobalVersion.mockResolvedValue(Ok(mockBot));
+      repository.findGlobalByKeyAndVersion.mockResolvedValue(Ok(mockBot));
 
       const response = await request(app.getHttpServer())
         .get("/custom-bots/integration-test-bot/1.0.0")
@@ -570,7 +570,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should return 404 when specific version not found", async () => {
-      repository.getSpecificGlobalVersion.mockResolvedValue(
+      repository.findGlobalByKeyAndVersion.mockResolvedValue(
         Failure(appError("not_found", "Version not found")),
       );
 
@@ -614,10 +614,8 @@ describe("Custom Bot API Integration Tests", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       } as unknown as CustomBot;
-      repository.createNewGlobalVersion.mockResolvedValueOnce(
-        Ok(mockCreatedBot),
-      );
-      repository.getSpecificGlobalVersion.mockResolvedValueOnce(
+      repository.create.mockResolvedValueOnce(Ok(mockCreatedBot));
+      repository.findGlobalByKeyAndVersion.mockResolvedValueOnce(
         Ok(mockCreatedBot),
       );
 
@@ -655,9 +653,8 @@ describe("Custom Bot API Integration Tests", () => {
           updatedAt: new Date(),
         }),
       );
-      repository.isVersionNewer.mockReturnValue(true);
       repository.globalVersionExists.mockResolvedValueOnce(Ok(false));
-      repository.createNewGlobalVersion.mockResolvedValueOnce(
+      repository.create.mockResolvedValueOnce(
         Ok({
           id: "e2e-v1.1-id",
           name: botName,
@@ -670,7 +667,7 @@ describe("Custom Bot API Integration Tests", () => {
           updatedAt: new Date(),
         }),
       );
-      repository.getSpecificGlobalVersion.mockResolvedValueOnce(
+      repository.findGlobalByKeyAndVersion.mockResolvedValueOnce(
         Ok({
           id: "e2e-v1.1-id",
           name: botName,
@@ -738,7 +735,7 @@ describe("Custom Bot API Integration Tests", () => {
       expect(getAllResponse.body.data.latestVersion).toBe("1.1.0");
 
       // Step 4: Retrieve specific version
-      repository.getSpecificGlobalVersion.mockResolvedValueOnce(
+      repository.findGlobalByKeyAndVersion.mockResolvedValueOnce(
         Ok({
           id: "e2e-v1-id",
           name: botName,
