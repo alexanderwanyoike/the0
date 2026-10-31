@@ -58,17 +58,19 @@ var (
 		NatsURL:                 roundTripNATSURL,
 	}
 	podConfig = podgen.PodGeneratorConfig{
-		Namespace:               "the0",
-		MinIOEndpoint:           "minio:9000",
-		MinIOAccessKey:          "access",
-		MinIOSecretKey:          "secret",
-		MinIOUseSSL:             true,
-		MinIOBucket:             "acme-code",
-		MinIOStateBucket:        "acme-state",
-		MinIOLogsBucket:         "acme-logs",
-		MinIOQueryResultsBucket: "acme-results",
-		NATSURL:                 roundTripNATSURL,
-		RuntimeImage:            roundTripImage,
+		Namespace: "the0",
+		Storage: launch.Storage{
+			Endpoint:           "minio:9000",
+			AccessKey:          "access",
+			SecretKey:          "secret",
+			UseSSL:             true,
+			CodeBucket:         "acme-code",
+			StateBucket:        "acme-state",
+			LogsBucket:         "acme-logs",
+			QueryResultsBucket: "acme-results",
+		},
+		NATSURL:      roundTripNATSURL,
+		RuntimeImage: roundTripImage,
 	}
 )
 

@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/launch"
 	"runtime/internal/model"
 )
 
@@ -120,11 +121,13 @@ func createTestPod(botID string, phase corev1.PodPhase) corev1.Pod {
 
 func testControllerConfig() BotControllerConfig {
 	return BotControllerConfig{
-		Namespace:      "the0",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
+		Namespace: "the0",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
 	}
 }
 
@@ -188,10 +191,12 @@ func TestBotController_Reconcile_NoActionForHealthyMatchingPod(t *testing.T) {
 	generator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
 	})
 	expectedPod, err := generator.GeneratePod(bot)
 	require.NoError(t, err)
@@ -282,10 +287,12 @@ func TestBotController_Reconcile_RecreatesFailedPod(t *testing.T) {
 	generator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
 	})
 	expectedPod, _ := generator.GeneratePod(bot)
 
@@ -644,10 +651,12 @@ func TestBotController_Reconcile_MixedStates(t *testing.T) {
 	generator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
 	})
 	expectedPod2, _ := generator.GeneratePod(bot2)
 
@@ -723,10 +732,12 @@ func TestBotController_Reconcile_ReplacesPodWhenNATSURLAdded(t *testing.T) {
 	oldGenerator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
 	})
 	oldPod, err := oldGenerator.GeneratePod(bot)
 	require.NoError(t, err)
@@ -753,11 +764,13 @@ func TestBotController_Reconcile_ReplacesPodWhenRuntimeImageChanges(t *testing.T
 	oldGenerator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
-		RuntimeImage:   "ghcr.io/the0/runtime:1.14.8",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
+		RuntimeImage: "ghcr.io/the0/runtime:1.14.8",
 	})
 	oldPod, err := oldGenerator.GeneratePod(bot)
 	require.NoError(t, err)
@@ -782,9 +795,9 @@ func TestBotController_Reconcile_ReplacesPodWhenStorageSettingsChange(t *testing
 		name   string
 		change func(*BotControllerConfig)
 	}{
-		{"storage endpoint", func(c *BotControllerConfig) { c.MinIOEndpoint = "storage.example:443" }},
-		{"code bucket", func(c *BotControllerConfig) { c.MinIOBucket = "team-code" }},
-		{"logs bucket", func(c *BotControllerConfig) { c.MinIOLogsBucket = "team-logs" }},
+		{"storage endpoint", func(c *BotControllerConfig) { c.Storage.Endpoint = "storage.example:443" }},
+		{"code bucket", func(c *BotControllerConfig) { c.Storage.CodeBucket = "team-code" }},
+		{"logs bucket", func(c *BotControllerConfig) { c.Storage.LogsBucket = "team-logs" }},
 	}
 
 	for _, tc := range cases {

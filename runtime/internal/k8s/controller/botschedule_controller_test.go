@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/launch"
 	"runtime/internal/model"
 )
 
@@ -896,10 +897,12 @@ func TestBotScheduleController_Reconcile_CronJobReadsStorageCredentialsFromTheSe
 
 	controller := NewBotScheduleController(
 		BotScheduleControllerConfig{
-			Namespace:          "the0",
-			ControllerName:     "test-controller",
-			MinIOAccessKey:     "access-key",
-			MinIOSecretKey:     "secret-key",
+			Namespace:      "the0",
+			ControllerName: "test-controller",
+			Storage: launch.Storage{
+				AccessKey: "access-key",
+				SecretKey: "secret-key",
+			},
 			StorageCredentials: testStorageCredentialsSecret("the0-the0-secrets"),
 		},
 		&MockDesiredSchedules{Running: []model.BotSchedule{schedule}},
@@ -920,8 +923,10 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobWhenStorageCredentialsCha
 		return BotScheduleControllerConfig{
 			Namespace:      "the0",
 			ControllerName: "test-controller",
-			MinIOAccessKey: "access-key",
-			MinIOSecretKey: secretKey,
+			Storage: launch.Storage{
+				AccessKey: "access-key",
+				SecretKey: secretKey,
+			},
 		}
 	}
 	fromSecret := func(name string) BotScheduleControllerConfig {
@@ -987,10 +992,12 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobWhenStorageSettingsChange
 	base := BotScheduleControllerConfig{
 		Namespace:      "the0",
 		ControllerName: "test-controller",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "access-key",
-		MinIOSecretKey: "secret-key",
-		MinIOBucket:    "custom-bots",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
 	}
 	cases := []struct {
 		name   string
@@ -998,9 +1005,9 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobWhenStorageSettingsChange
 		env    string
 		want   string
 	}{
-		{"storage endpoint", func(c *BotScheduleControllerConfig) { c.MinIOEndpoint = "storage.example:443" }, "MINIO_ENDPOINT", "storage.example:443"},
-		{"code bucket", func(c *BotScheduleControllerConfig) { c.MinIOBucket = "team-code" }, "MINIO_CODE_BUCKET", "team-code"},
-		{"logs bucket", func(c *BotScheduleControllerConfig) { c.MinIOLogsBucket = "team-logs" }, "MINIO_LOGS_BUCKET", "team-logs"},
+		{"storage endpoint", func(c *BotScheduleControllerConfig) { c.Storage.Endpoint = "storage.example:443" }, "MINIO_ENDPOINT", "storage.example:443"},
+		{"code bucket", func(c *BotScheduleControllerConfig) { c.Storage.CodeBucket = "team-code" }, "MINIO_CODE_BUCKET", "team-code"},
+		{"logs bucket", func(c *BotScheduleControllerConfig) { c.Storage.LogsBucket = "team-logs" }, "MINIO_LOGS_BUCKET", "team-logs"},
 	}
 
 	for _, tc := range cases {

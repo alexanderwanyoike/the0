@@ -16,6 +16,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/launch"
 	"runtime/internal/model"
 	"runtime/internal/util"
 )
@@ -47,14 +48,9 @@ type BotControllerConfig struct {
 	// ControllerName identifies this controller for the managed-by label.
 	ControllerName string
 
-	// MinIO configuration for downloading bot code
-	MinIOEndpoint           string
-	MinIOAccessKey          string
-	MinIOSecretKey          string
-	MinIOBucket             string
-	MinIOLogsBucket         string
-	MinIOQueryResultsBucket string
-	MinIOUseSSL             bool
+	// Storage is the MinIO bot pods download code from and save state,
+	// logs and query results to.
+	Storage launch.Storage
 
 	StorageCredentials podgen.StorageCredentialsSecret
 
@@ -101,19 +97,13 @@ func NewBotController(
 	}
 
 	podGenConfig := podgen.PodGeneratorConfig{
-		Namespace:               config.Namespace,
-		ControllerName:          config.ControllerName,
-		MinIOEndpoint:           config.MinIOEndpoint,
-		MinIOAccessKey:          config.MinIOAccessKey,
-		MinIOSecretKey:          config.MinIOSecretKey,
-		MinIOBucket:             config.MinIOBucket,
-		MinIOLogsBucket:         config.MinIOLogsBucket,
-		MinIOQueryResultsBucket: config.MinIOQueryResultsBucket,
-		MinIOUseSSL:             config.MinIOUseSSL,
-		StorageCredentials:      config.StorageCredentials,
-		NATSURL:                 config.NATSURL,
-		RuntimeImage:            config.RuntimeImage,
-		RuntimeImagePullPolicy:  corev1.PullPolicy(config.RuntimeImagePullPolicy),
+		Namespace:              config.Namespace,
+		ControllerName:         config.ControllerName,
+		Storage:                config.Storage,
+		StorageCredentials:     config.StorageCredentials,
+		NATSURL:                config.NATSURL,
+		RuntimeImage:           config.RuntimeImage,
+		RuntimeImagePullPolicy: corev1.PullPolicy(config.RuntimeImagePullPolicy),
 	}
 
 	return &BotController{

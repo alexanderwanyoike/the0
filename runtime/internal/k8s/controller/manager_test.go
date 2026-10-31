@@ -9,15 +9,18 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/launch"
 	"runtime/internal/model"
 )
 
 func TestManagerConfig_EveryPodGeneratorReadsStorageCredentialsFromTheSecret(t *testing.T) {
 	config := ManagerConfig{
-		Namespace:          "the0",
-		MinIOEndpoint:      "minio:9000",
-		MinIOAccessKey:     "access-key",
-		MinIOSecretKey:     "secret-key",
+		Namespace: "the0",
+		Storage: launch.Storage{
+			Endpoint:  "minio:9000",
+			AccessKey: "access-key",
+			SecretKey: "secret-key",
+		},
 		StorageCredentials: testStorageCredentialsSecret("the0-the0-secrets"),
 		RuntimeImage:       "the0/runtime:latest",
 	}
@@ -37,14 +40,16 @@ func TestManagerConfig_EveryPodGeneratorReadsStorageCredentialsFromTheSecret(t *
 
 func TestManagerConfig_EveryPodAndTheQueryHandlerUseTheControllersBuckets(t *testing.T) {
 	config := ManagerConfig{
-		Namespace:               "the0",
-		MinIOEndpoint:           "minio:9000",
-		MinIOAccessKey:          "access-key",
-		MinIOSecretKey:          "secret-key",
-		MinIOBucket:             "team-code",
-		MinIOLogsBucket:         "team-logs",
-		MinIOQueryResultsBucket: "team-results",
-		RuntimeImage:            "the0/runtime:latest",
+		Namespace: "the0",
+		Storage: launch.Storage{
+			Endpoint:           "minio:9000",
+			AccessKey:          "access-key",
+			SecretKey:          "secret-key",
+			CodeBucket:         "team-code",
+			LogsBucket:         "team-logs",
+			QueryResultsBucket: "team-results",
+		},
+		RuntimeImage: "the0/runtime:latest",
 	}
 	ctx := context.Background()
 

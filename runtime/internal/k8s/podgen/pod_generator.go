@@ -54,15 +54,10 @@ type PodGeneratorConfig struct {
 	// ControllerName identifies this controller for the managed-by label.
 	ControllerName string
 
-	// MinIO configuration for downloading bot code
-	MinIOEndpoint           string
-	MinIOAccessKey          string
-	MinIOSecretKey          string
-	MinIOBucket             string
-	MinIOStateBucket        string
-	MinIOLogsBucket         string
-	MinIOQueryResultsBucket string
-	MinIOUseSSL             bool
+	// Storage is the MinIO bot pods download code from and save state, logs
+	// and query results to. An empty StateBucket defaults to
+	// launch.DefaultStateBucket.
+	Storage launch.Storage
 
 	StorageCredentials StorageCredentialsSecret
 
@@ -100,8 +95,8 @@ func NewPodGenerator(config PodGeneratorConfig) *PodGenerator {
 	if config.Namespace == "" {
 		config.Namespace = "the0"
 	}
-	if config.MinIOStateBucket == "" {
-		config.MinIOStateBucket = launch.DefaultStateBucket
+	if config.Storage.StateBucket == "" {
+		config.Storage.StateBucket = launch.DefaultStateBucket
 	}
 	if config.RuntimeImage == "" {
 		config.RuntimeImage = "runtime:latest"
@@ -281,16 +276,7 @@ func (g *PodGenerator) launchOf(bot model.Bot, cfg *botConfig) (launch.Settings,
 		StatePath:  constants.DefaultStatePath,
 		LogsPath:   constants.DefaultLogsPath,
 		StateDir:   launch.DefaultStateDir,
-		Storage: launch.Storage{
-			Endpoint:           g.config.MinIOEndpoint,
-			AccessKey:          g.config.MinIOAccessKey,
-			SecretKey:          g.config.MinIOSecretKey,
-			UseSSL:             g.config.MinIOUseSSL,
-			CodeBucket:         g.config.MinIOBucket,
-			StateBucket:        g.config.MinIOStateBucket,
-			LogsBucket:         g.config.MinIOLogsBucket,
-			QueryResultsBucket: g.config.MinIOQueryResultsBucket,
-		},
+		Storage:    g.config.Storage,
 	}, nil
 }
 

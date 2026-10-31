@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/launch"
 	"runtime/internal/model"
 	"runtime/internal/query"
 	"runtime/internal/util"
@@ -122,12 +123,14 @@ func TestK8sQueryHandler_ScheduledQueryWithoutQueryEntrypoint(t *testing.T) {
 	handler := &K8sQueryHandler{
 		namespace: "the0",
 		podGenerator: podgen.NewPodGenerator(podgen.PodGeneratorConfig{
-			Namespace:      "the0",
-			MinIOEndpoint:  "minio:9000",
-			MinIOAccessKey: "key",
-			MinIOSecretKey: "secret",
-			MinIOBucket:    "bots",
-			RuntimeImage:   "the0/runtime:latest",
+			Namespace: "the0",
+			Storage: launch.Storage{
+				Endpoint:   "minio:9000",
+				AccessKey:  "key",
+				SecretKey:  "secret",
+				CodeBucket: "bots",
+			},
+			RuntimeImage: "the0/runtime:latest",
 		}),
 		logger: &util.DefaultLogger{},
 	}
