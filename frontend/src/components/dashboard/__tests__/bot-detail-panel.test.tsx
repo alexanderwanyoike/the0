@@ -349,6 +349,7 @@ describe("BotDetailPanel", () => {
         expect(mockToast).toHaveBeenCalledWith(
           expect.objectContaining({
             title: "Update Failed",
+            description: "nope",
             variant: "destructive",
           }),
         );
