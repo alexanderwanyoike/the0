@@ -3,7 +3,6 @@ package internal
 import (
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 
 	"github.com/fatih/color"
@@ -177,11 +176,8 @@ func (v *NodeVendor) getInstallCommand(hasTypeScript bool) string {
 
 // getUserConfig returns uid:gid string for container User config
 func (v *NodeVendor) getUserConfig() string {
-	currentUser, err := user.Current()
-	if err == nil {
-		return fmt.Sprintf("%s:%s", currentUser.Uid, currentUser.Gid)
-	}
-	return "1000:1000"
+	uid, gid := hostUserIDs()
+	return fmt.Sprintf("%s:%s", uid, gid)
 }
 
 // backupExistingNodeModules creates a backup of existing node_modules directory

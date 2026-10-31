@@ -3,7 +3,6 @@ package internal
 import (
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 
 	"github.com/fatih/color"
@@ -129,17 +128,7 @@ func (v *PythonVendor) runContainer(vm *VendorManager) error {
 
 // getInstallCommand returns the pip install command with proper ownership
 func (v *PythonVendor) getInstallCommand() string {
-	// Get current user info for ownership
-	currentUser, err := user.Current()
-	var uid, gid string
-	if err == nil {
-		uid = currentUser.Uid
-		gid = currentUser.Gid
-	} else {
-		// Fallback to common non-root user
-		uid = "1000"
-		gid = "1000"
-	}
+	uid, gid := hostUserIDs()
 
 	// Install git if GITHUB_TOKEN is set (needed for private repo dependencies)
 	// The python:3.11-slim image doesn't include git by default
