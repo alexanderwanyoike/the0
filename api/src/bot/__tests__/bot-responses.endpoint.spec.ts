@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { PinoLogger } from "nestjs-pino";
+import { eq } from "drizzle-orm";
 import request from "supertest";
 import { BotController } from "../bot.controller";
 import { BotRepository } from "../bot.repository";
@@ -180,28 +181,28 @@ describe("/bot responses", () => {
       });
     });
 
-    it("answers an update with 400 Bot not found", async () => {
+    it("answers an update with 404 Bot not found", async () => {
       const res = await api()
         .put("/bot/missing")
         .set(asOwner)
         .send({ config: botConfig() });
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(404);
       expect(res.body).toEqual({
-        statusCode: 400,
+        statusCode: 404,
         message: "Bot not found",
-        error: "Bad Request",
+        error: "Not Found",
       });
     });
 
-    it("answers a delete with 400 Bot not found", async () => {
+    it("answers a delete with 404 Bot not found", async () => {
       const res = await api().delete("/bot/missing").set(asOwner);
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(404);
       expect(res.body).toEqual({
-        statusCode: 400,
+        statusCode: 404,
         message: "Bot not found",
-        error: "Bad Request",
+        error: "Not Found",
       });
     });
   });
@@ -230,6 +231,101 @@ describe("/bot responses", () => {
         "Major version upgrade (1.0.0 -> 2.0.0) requires delete and redeploy. " +
           "In-place updates are only supported for minor/patch bumps to preserve state compatibility.",
       );
+    });
+  });
+
+  describe("refuse a Custom bot version deleted while the bot is saved", () => {
+    const deleteVersionOnceResolved = (id: string) => {
+      const customBots = app.get(CustomBotService);
+      const resolve = customBots.getGlobalSpecificVersion.bind(customBots);
+      jest
+        .spyOn(customBots, "getGlobalSpecificVersion")
+        .mockImplementation(async (name, version) => {
+          const resolved = await resolve(name, version);
+          await db().delete(customBotsTable).where(eq(customBotsTable.id, id));
+          return resolved;
+        });
+    };
+
+    const expectCleanRefusal = (res: request.Response) => {
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({
+        statusCode: 400,
+        message: "Custom bot version no longer exists",
+        error: "Bad Request",
+      });
+    };
+
+    it("refuses the deploy without the driver's message or the config", async () => {
+      deleteVersionOnceResolved("cb-1");
+
+      const res = await api()
+        .post("/bot")
+        .set(asOwner)
+        .send({ name: "SMA", config: botConfig() });
+
+      expectCleanRefusal(res);
+      expect(await db().select().from(botsTable)).toEqual([]);
+    });
+
+    it("refuses the update without the driver's message or the config", async () => {
+      const id = await deployedBot();
+      await db()
+        .insert(customBotsTable)
+        .values({
+          id: "cb-2",
+          userId: TEST_OWNER_ID,
+          name: "sma-bot",
+          version: "1.1.0",
+          config: { ...CUSTOM_BOT_CONFIG, version: "1.1.0" } as never,
+          filePath: `${TEST_OWNER_ID}/sma-bot/1.1.0`,
+        });
+      deleteVersionOnceResolved("cb-2");
+
+      const res = await api()
+        .put(`/bot/${id}`)
+        .set(asOwner)
+        .send({ config: botConfig({ version: "1.1.0" }) });
+
+      expectCleanRefusal(res);
+    });
+  });
+
+  describe("answer a database failure with 500 and no driver detail", () => {
+    const failingDatabase = () => new Error("connection lost to 10.0.0.5");
+
+    it.each([
+      { request: "a list", send: () => api().get("/bot").set(asOwner) },
+      { request: "a read", send: () => api().get("/bot/bot-1").set(asOwner) },
+    ])("answers $request", async ({ send }) => {
+      jest.spyOn(db(), "select").mockImplementation(() => {
+        throw failingDatabase();
+      });
+
+      const res = await send();
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({
+        statusCode: 500,
+        message: "Failed to read from the database",
+        error: "Internal Server Error",
+      });
+    });
+
+    it("answers a deploy", async () => {
+      jest.spyOn(db(), "transaction").mockRejectedValue(failingDatabase());
+
+      const res = await api()
+        .post("/bot")
+        .set(asOwner)
+        .send({ name: "SMA", config: botConfig() });
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({
+        statusCode: 500,
+        message: "Failed to write to the database",
+        error: "Internal Server Error",
+      });
     });
   });
 
