@@ -172,6 +172,19 @@ func QueryParams(params map[string]interface{}) (string, error) {
 	return string(data), nil
 }
 
+// BotConfig is how a launch sends a bot's config: as JSON object text, which
+// is {} when the bot has none.
+func BotConfig(config map[string]interface{}) (string, error) {
+	if config == nil {
+		return "{}", nil
+	}
+	data, err := json.Marshal(config)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal config: %w", err)
+	}
+	return string(data), nil
+}
+
 // Var is one environment variable.
 type Var struct {
 	Name  string

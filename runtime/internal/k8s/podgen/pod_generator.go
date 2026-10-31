@@ -267,16 +267,16 @@ func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryPa
 // launchOf is the launch of bot that every container of its pods starts
 // from, before the pod gives it a mode.
 func (g *PodGenerator) launchOf(bot model.Bot, cfg *botConfig) (launch.Settings, error) {
-	configJSON, err := json.Marshal(bot.Config)
+	botConfig, err := launch.BotConfig(bot.Config)
 	if err != nil {
-		return launch.Settings{}, fmt.Errorf("failed to marshal config: %w", err)
+		return launch.Settings{}, err
 	}
 	return launch.Settings{
 		BotID:      bot.ID,
 		CodeFile:   cfg.filePath,
 		Runtime:    cfg.runtime,
 		Entrypoint: cfg.entrypoint,
-		BotConfig:  string(configJSON),
+		BotConfig:  botConfig,
 		CodePath:   constants.DefaultCodePath,
 		StatePath:  constants.DefaultStatePath,
 		LogsPath:   constants.DefaultLogsPath,
