@@ -62,13 +62,9 @@ func NewServer(config ServerConfig) *Server {
 
 // Start begins serving HTTP requests.
 func (s *Server) Start() error {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/query", s.handleQuery)
-	mux.HandleFunc("/health", s.handleHealth)
-
 	s.server = &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.port),
-		Handler:      mux,
+		Handler:      s.Handler(),
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 60 * time.Second,
 	}
@@ -82,6 +78,14 @@ func (s *Server) Start() error {
 	}()
 
 	return nil
+}
+
+// Handler routes the server's endpoints.
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/query", s.handleQuery)
+	mux.HandleFunc("/health", s.handleHealth)
+	return mux
 }
 
 // Stop gracefully shuts down the server.

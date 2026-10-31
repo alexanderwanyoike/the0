@@ -1,0 +1,36 @@
+{
+  "logs": [
+    {
+      "botId": "q3n8v1x7k2m9p4r6t0w5y8z1",
+      "at": "2026-10-31T23:59:59.123456789Z",
+      "date": "20261031",
+      "key": "logs/q3n8v1x7k2m9p4r6t0w5y8z1/20261031.log"
+    },
+    {
+      "botId": "q3n8v1x7k2m9p4r6t0w5y8z1",
+      "at": "2026-11-01T00:30:00+02:00",
+      "date": "20261031",
+      "key": "logs/q3n8v1x7k2m9p4r6t0w5y8z1/20261031.log"
+    },
+    {
+      "botId": "h5j9l3n7p1r5t9v3x7z1b5d9",
+      "at": "2026-01-02T03:04:05Z",
+      "date": "20260102",
+      "key": "logs/h5j9l3n7p1r5t9v3x7z1b5d9/20260102.log"
+    }
+  ],
+  "state": [
+    {
+      "botId": "q3n8v1x7k2m9p4r6t0w5y8z1",
+      "key": "q3n8v1x7k2m9p4r6t0w5y8z1/state.tar.gz"
+    },
+    {
+      "botId": "h5j9l3n7p1r5t9v3x7z1b5d9",
+      "key": "h5j9l3n7p1r5t9v3x7z1b5d9/state.tar.gz"
+    },
+    {
+      "botId": "w2y6a0c4e8g2i6k0m4o8q2s6",
+      "key": "w2y6a0c4e8g2i6k0m4o8q2s6/state.tar.gz"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "subject": "the0.bot.deleted",
+  "payload": {
+    "id": "q3n8v1x7k2m9p4r6t0w5y8z1",
+    "config": {
+      "name": "Grid BTC",
+      "type": "realtime/grid-trader",
+      "version": "1.1.0",
+      "symbol": "ETH/USD",
+      "hasFrontend": false
+    }
+  }
+}

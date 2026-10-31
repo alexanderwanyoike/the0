@@ -1,0 +1,35 @@
+{
+  "botId": "q3n8v1x7k2m9p4r6t0w5y8z1",
+  "subject": "the0.bot.logs.q3n8v1x7k2m9p4r6t0w5y8z1",
+  "chunk": {
+    "at": "2026-10-31T23:59:59.123456789Z",
+    "raw": "starting grid on BTC/USD\n{\"level\":\"info\",\"message\":\"bought 0.1 BTC\",\"timestamp\":\"2026-10-31T23:59:58.000Z\"}\n\n  {\"_metric\":\"pnl\",\"order_id\":12345678901234567890,\"value\":12.5}  \n{\"_key\":\"mine\",\"message\":\"a bot that sets its own key\"}\n",
+    "formatted": "{\"_key\":\"1793491199123456789-0\",\"message\":\"starting grid on BTC/USD\",\"timestamp\":\"2026-10-31T23:59:59.123Z\"}\n{\"_key\":\"1793491199123456789-1\",\"level\":\"info\",\"message\":\"bought 0.1 BTC\",\"timestamp\":\"2026-10-31T23:59:58.000Z\"}\n{\"_key\":\"1793491199123456789-2\",\"_metric\":\"pnl\",\"order_id\":12345678901234567890,\"timestamp\":\"2026-10-31T23:59:59.123Z\",\"value\":12.5}\n{\"_key\":\"1793491199123456789-3\",\"message\":\"a bot that sets its own key\",\"timestamp\":\"2026-10-31T23:59:59.123Z\"}\n"
+  },
+  "entries": [
+    {
+      "key": "1793491199123456789-0",
+      "date": "20261031",
+      "timestamp": "2026-10-31T23:59:59.123Z",
+      "content": "{\"_key\":\"1793491199123456789-0\",\"message\":\"starting grid on BTC/USD\",\"timestamp\":\"2026-10-31T23:59:59.123Z\"}"
+    },
+    {
+      "key": "1793491199123456789-1",
+      "date": "20261031",
+      "timestamp": "2026-10-31T23:59:58.000Z",
+      "content": "{\"_key\":\"1793491199123456789-1\",\"level\":\"info\",\"message\":\"bought 0.1 BTC\",\"timestamp\":\"2026-10-31T23:59:58.000Z\"}"
+    },
+    {
+      "key": "1793491199123456789-2",
+      "date": "20261031",
+      "timestamp": "2026-10-31T23:59:59.123Z",
+      "content": "{\"_key\":\"1793491199123456789-2\",\"_metric\":\"pnl\",\"order_id\":12345678901234567890,\"timestamp\":\"2026-10-31T23:59:59.123Z\",\"value\":12.5}"
+    },
+    {
+      "key": "1793491199123456789-3",
+      "date": "20261031",
+      "timestamp": "2026-10-31T23:59:59.123Z",
+      "content": "{\"_key\":\"1793491199123456789-3\",\"message\":\"a bot that sets its own key\",\"timestamp\":\"2026-10-31T23:59:59.123Z\"}"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "subject": "the0.bot-schedule.created",
+  "payload": {
+    "id": "h5j9l3n7p1r5t9v3x7z1b5d9",
+    "config": {
+      "name": "SMA AAPL",
+      "type": "scheduled/sma-crossover",
+      "version": "1.2.0",
+      "schedule": "0 14 * * 1-5",
+      "symbol": "AAPL",
+      "customBotId": "f2h6j0l4n8p2r6t0v4x8z2b6"
+    },
+    "custom": {
+      "config": {
+        "name": "sma-crossover",
+        "description": "SMA crossover strategy",
+        "version": "1.2.0",
+        "type": "scheduled",
+        "runtime": "python3.11",
+        "author": "alex",
+        "entrypoints": {
+          "bot": "main.py"
+        },
+        "schema": {
+          "bot": {
+            "type": "object",
+            "properties": {
+              "symbol": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "symbol"
+            ]
+          }
+        },
+        "readme": "# sma-crossover",
+        "metadata": {
+          "tags": [
+            "example"
+          ]
+        },
+        "hasFrontend": false
+      },
+      "createdAt": "2026-10-01T09:30:00.000Z",
+      "updatedAt": "2026-10-02T10:45:00.000Z",
+      "filePath": "u4b8c2d6f0h3j7k1m5n9p2r6/sma-crossover/sma-crossover-1.2.0.zip",
+      "version": "1.2.0"
+    }
+  }
+}
