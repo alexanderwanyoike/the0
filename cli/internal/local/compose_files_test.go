@@ -45,8 +45,6 @@ var baseComposeFiles = map[string][]byte{
 	"docker-compose.prebuilt.yml": embeddedComposePrebuiltFile,
 }
 
-var runtimeServices = []string{"bot-runner", "bot-scheduler", "gc", "query-server"}
-
 // The api and the runtime read these settings under different names (the
 // MinIO endpoint also in a different shape), so the compose files must hand
 // both sides the same value.
@@ -55,14 +53,19 @@ func TestComposeFiles_RuntimeServicesReadTheApisSettings(t *testing.T) {
 		setting string
 		api     func(env map[string]string) string
 		runtime string
+		readers []string
 	}{
-		{"NATS URL", func(env map[string]string) string { return env["NATS_URLS"] }, "NATS_URL"},
+		{"NATS URL", func(env map[string]string) string { return env["NATS_URLS"] }, "NATS_URL",
+			[]string{"bot-runner", "bot-scheduler"}},
 		{"MinIO endpoint", func(env map[string]string) string {
 			return env["MINIO_ENDPOINT"] + ":" + env["MINIO_PORT"]
-		}, "MINIO_ENDPOINT"},
-		{"MinIO SSL", func(env map[string]string) string { return env["MINIO_USE_SSL"] }, "MINIO_USE_SSL"},
-		{"logs bucket", func(env map[string]string) string { return env["LOG_BUCKET"] }, "MINIO_LOGS_BUCKET"},
-		{"code bucket", func(env map[string]string) string { return env["CUSTOM_BOTS_BUCKET"] }, "MINIO_CODE_BUCKET"},
+		}, "MINIO_ENDPOINT", []string{"bot-runner", "bot-scheduler", "gc", "query-server"}},
+		{"MinIO SSL", func(env map[string]string) string { return env["MINIO_USE_SSL"] }, "MINIO_USE_SSL",
+			[]string{"bot-runner", "bot-scheduler", "gc", "query-server"}},
+		{"logs bucket", func(env map[string]string) string { return env["LOG_BUCKET"] }, "MINIO_LOGS_BUCKET",
+			[]string{"bot-runner", "bot-scheduler", "gc"}},
+		{"code bucket", func(env map[string]string) string { return env["CUSTOM_BOTS_BUCKET"] }, "MINIO_CODE_BUCKET",
+			[]string{"bot-runner", "bot-scheduler", "query-server"}},
 	}
 
 	for name, file := range baseComposeFiles {
@@ -70,19 +73,15 @@ func TestComposeFiles_RuntimeServicesReadTheApisSettings(t *testing.T) {
 		api := services["the0-api"].Environment
 		for _, pair := range pairs {
 			want := pair.api(api)
-			readers := 0
-			for _, svc := range runtimeServices {
+			for _, svc := range pair.readers {
 				got, ok := services[svc].Environment[pair.runtime]
 				if !ok {
+					t.Errorf("%s: %s does not set %s", name, svc, pair.runtime)
 					continue
 				}
-				readers++
 				if got != want {
 					t.Errorf("%s: %s %s = %q, the api's %s is %q", name, svc, pair.runtime, got, pair.setting, want)
 				}
-			}
-			if readers == 0 {
-				t.Errorf("%s: no runtime service sets %s", name, pair.runtime)
 			}
 		}
 	}
