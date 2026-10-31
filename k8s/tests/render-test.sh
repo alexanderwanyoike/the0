@@ -134,6 +134,17 @@ for release in the0 the0-the0 trading; do
   done
 done
 
+for release in the0 the0-the0 trading; do
+  helm template "$release" "$CHART_DIR" --show-only templates/bot-controller.yaml > "$rendering"
+  container_port=$(awk '/- name: query$/ { getline; if ($1 == "containerPort:") { print $2; exit } }' "$rendering")
+  service_port=$(awk '/^kind: Service$/ { svc = 1 } svc && /- port: / { port = $3 } svc && /targetPort: query$/ { print port; exit }' "$rendering")
+  query_url=$(api_env "$release" RUNTIME_QUERY_URL)
+  check_agrees "bot-controller Service port matches the query containerPort (release $release)" \
+    "$container_port" "$service_port"
+  check_agrees "api RUNTIME_QUERY_URL dials the query containerPort (release $release)" \
+    "$container_port" "${query_url##*:}"
+done
+
 check "Artifact Hub annotations are valid and quoted" \
   "ok" "$(python3 "$CHART_DIR/tests/check-annotations.py" "$CHART_DIR/Chart.yaml")"
 
