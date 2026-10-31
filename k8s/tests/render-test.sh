@@ -68,16 +68,16 @@ check "api RUNTIME_QUERY_URL is set once when overridden" \
 # The api and the runtime read the same settings under different names, and
 # the MinIO endpoint in a different shape. Each case below sets the values a
 # self-hoster would, and every container must still agree with the api.
+in_template='/^# Source: / { in_t = ($3 == t) }'
+
 rendered_env() {
-  awk -v t="the0/templates/$2" -v n="$3" '
-    /^# Source: / { in_t = ($3 == t) }
+  awk -v t="the0/templates/$2" -v n="$3" "$in_template"'
     in_t && $0 ~ "^ *- name: " n "$" { getline; sub(/^ *value: /, ""); gsub(/"/, ""); print }
   ' "$1"
 }
 
 rendered_arg() {
-  awk -v t="the0/templates/$2" -v f="--$3=" '
-    /^# Source: / { in_t = ($3 == t) }
+  awk -v t="the0/templates/$2" -v f="--$3=" "$in_template"'
     in_t && index($0, f) { sub(/.*--[^=]*=/, ""); sub(/"$/, ""); print; exit }
   ' "$1"
 }
