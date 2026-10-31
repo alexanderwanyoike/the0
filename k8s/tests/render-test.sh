@@ -65,6 +65,70 @@ check "api RUNTIME_QUERY_URL honours an explicit override" \
 check "api RUNTIME_QUERY_URL is set once when overridden" \
   "$override" "$(api_env the0 RUNTIME_QUERY_URL --set the0Api.env.RUNTIME_QUERY_URL="$override" | paste -sd ' ')"
 
+# The api and the runtime read the same settings under different names, and
+# the MinIO endpoint in a different shape. Each case below sets the values a
+# self-hoster would, and every container must still agree with the api.
+rendered_env() {
+  awk -v t="the0/templates/$2" -v n="$3" '
+    /^# Source: / { in_t = ($3 == t) }
+    in_t && $0 ~ "^ *- name: " n "$" { getline; sub(/^ *value: /, ""); gsub(/"/, ""); print }
+  ' "$1"
+}
+
+rendered_arg() {
+  awk -v t="the0/templates/$2" -v f="--$3=" '
+    /^# Source: / { in_t = ($3 == t) }
+    in_t && index($0, f) { sub(/.*--[^=]*=/, ""); sub(/"$/, ""); print; exit }
+  ' "$1"
+}
+
+# An empty api value means the setting vanished from both sides, which check
+# alone would accept.
+check_agrees() {
+  if [[ -z "$2" ]]; then
+    echo "FAIL $1: the api value is empty"
+    failures=$((failures + 1))
+  else
+    check "$@"
+  fi
+}
+
+rendering=$(mktemp)
+trap 'rm -f "$rendering"' EXIT
+
+shared_value_cases=(
+  "defaults|"
+  "in-cluster ports|--set nats.port=4333 --set minio.port=9100"
+  "external NATS URL and S3|--set global.existingSecret=s --set nats.enabled=false --set nats.external.url=nats://nats.example:4222 --set minio.enabled=false --set minio.external.endpoint=s3.example.com --set minio.external.port=8443 --set minio.external.useSSL=false"
+  "external NATS host and port|--set global.existingSecret=s --set nats.enabled=false --set nats.external.host=nats.example --set nats.external.port=4333"
+)
+
+for release in the0 the0-the0 trading; do
+  for shared_case in "${shared_value_cases[@]}"; do
+    label="${shared_case%%|*} (release $release)"
+    read -ra overrides <<< "${shared_case#*|}"
+    helm template "$release" "$CHART_DIR" "${overrides[@]}" > "$rendering"
+
+    api_nats=$(rendered_env "$rendering" the0-api.yaml NATS_URLS)
+    check_agrees "controller NATS_URL matches api NATS_URLS: $label" \
+      "$api_nats" "$(rendered_env "$rendering" bot-controller.yaml NATS_URL)"
+
+    api_minio="$(rendered_env "$rendering" the0-api.yaml MINIO_ENDPOINT):$(rendered_env "$rendering" the0-api.yaml MINIO_PORT)"
+    check_agrees "controller MINIO_ENDPOINT matches api MINIO_ENDPOINT:MINIO_PORT: $label" \
+      "$api_minio" "$(rendered_env "$rendering" bot-controller.yaml MINIO_ENDPOINT)"
+    check_agrees "controller --minio-endpoint matches api MINIO_ENDPOINT:MINIO_PORT: $label" \
+      "$api_minio" "$(rendered_arg "$rendering" bot-controller.yaml minio-endpoint)"
+    check_agrees "gc MINIO_ENDPOINT matches api MINIO_ENDPOINT:MINIO_PORT: $label" \
+      "$api_minio" "$(rendered_env "$rendering" gc-cronjob.yaml MINIO_ENDPOINT)"
+
+    api_ssl=$(rendered_env "$rendering" the0-api.yaml MINIO_USE_SSL)
+    check_agrees "controller MINIO_USE_SSL matches the api: $label" \
+      "$api_ssl" "$(rendered_env "$rendering" bot-controller.yaml MINIO_USE_SSL)"
+    check_agrees "gc MINIO_USE_SSL matches the api: $label" \
+      "$api_ssl" "$(rendered_env "$rendering" gc-cronjob.yaml MINIO_USE_SSL)"
+  done
+done
+
 check "Artifact Hub annotations are valid and quoted" \
   "ok" "$(python3 "$CHART_DIR/tests/check-annotations.py" "$CHART_DIR/Chart.yaml")"
 
