@@ -50,7 +50,8 @@
     "react-virtuoso": "^4.18.3",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.2.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "the0-react": "^0.2.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
@@ -64,6 +65,7 @@
     "@types/react-dom": "19.1.2",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/tailwindcss": "^3.1.0",
+    "esbuild": "^0.24.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "15.5.28",
     "fallow": "3.31.0",
