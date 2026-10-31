@@ -30,8 +30,8 @@ func (m *MockConfigLoader) LoadConfig() (*DockerRunnerConfig, error) {
 		MinIOCodeBucket:        "custom-bots",
 		MinioLogsBucket:        "bot-logs",
 		MinioStateBucket:       "bot-state",
-		MaxStateSizeBytes:      8 * 1024 * 1024 * 1024, // 8GB
-		MaxStateFileSizeBytes:  10 * 1024 * 1024,       // 10MB
+		MaxStateSizeMB:         8192, // 8GB
+		MaxStateFileSizeMB:     10,   // 10MB
 		TempDir:                "/tmp",
 		MemoryLimitMB:          512 * 1024 * 1024, // 512MB
 		CPUShares:              512,
@@ -50,8 +50,8 @@ func NewMockConfig() *DockerRunnerConfig {
 		MinIOCodeBucket:        "custom-bots",
 		MinioLogsBucket:        "bot-logs",
 		MinioStateBucket:       "bot-state",
-		MaxStateSizeBytes:      8 * 1024 * 1024 * 1024, // 8GB
-		MaxStateFileSizeBytes:  10 * 1024 * 1024,       // 10MB
+		MaxStateSizeMB:         8192, // 8GB
+		MaxStateFileSizeMB:     10,   // 10MB
 		TempDir:                "/tmp",
 		MemoryLimitMB:          512 * 1024 * 1024, // 512MB
 		CPUShares:              512,

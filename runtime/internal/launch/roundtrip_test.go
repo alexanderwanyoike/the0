@@ -53,8 +53,8 @@ var (
 		MinioStateBucket:        "acme-state",
 		MinioLogsBucket:         "acme-logs",
 		MinIOQueryResultsBucket: "acme-results",
-		MaxStateSizeBytes:       4096 * 1024 * 1024,
-		MaxStateFileSizeBytes:   20 * 1024 * 1024,
+		MaxStateSizeMB:          4096,
+		MaxStateFileSizeMB:      20,
 		NatsURL:                 roundTripNATSURL,
 	}
 	podConfig = podgen.PodGeneratorConfig{
