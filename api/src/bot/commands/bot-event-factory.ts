@@ -8,7 +8,7 @@ import { BotConfig } from "@/database/schema/bots";
 import { BOT_TOPICS, SCHEDULED_BOT_TOPICS } from "../bot.constants";
 import { BotEvent } from "../bot-event-outbox";
 import { Bot } from "../entities/bot.entity";
-import { customBotNameOf } from "./custom-bot-name";
+import { parseBotType } from "../bot-type";
 
 type BotTopics = { CREATED: string; UPDATED: string; DELETED: string };
 
@@ -54,15 +54,15 @@ export class BotEventFactory {
       return Ok(deletedOnEverySubject(bot.id, payload));
     }
 
-    const name = customBotNameOf(configType);
-    if (!name.success) {
-      this.logger.warn({ type: configType }, name.error.message);
-      return Failure(name.error);
+    const botType = parseBotType(configType);
+    if (!botType.success) {
+      this.logger.warn({ type: configType }, botType.error.message);
+      return Failure(botType.error);
     }
 
     const customBotResult =
       await this.customBotService.getGlobalSpecificVersion(
-        name.data,
+        botType.data.customBotName,
         configVersion,
       );
     if (!customBotResult.success) {

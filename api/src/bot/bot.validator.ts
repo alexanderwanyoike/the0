@@ -4,7 +4,7 @@ import Ajv from "ajv";
 import addFormats from "ajv-formats";
 import { isValidCron } from "cron-validator";
 import { CustomBot } from "@/custom-bot/custom-bot.types";
-import { BOT_TYPE_PATTERN } from "@/bot/bot.constants";
+import { parseBotType } from "@/bot/bot-type";
 import { BotConfig } from "@/database/schema/bots";
 
 /** JSON Schema object shape used for bot config validation */
@@ -27,13 +27,12 @@ export class BotValidator {
       return Failure(["No type provided"]);
     }
 
-    if (!BOT_TYPE_PATTERN.test(type)) {
-      return Failure(["Invalid bot type format. Expected format: type/name"]);
+    const botType = parseBotType(type);
+    if (!botType.success) {
+      return Failure([botType.error.message]);
     }
 
-    const [botType] = type.split("/");
-
-    if (botType === "scheduled") {
+    if (botType.data.kind === "scheduled") {
       if (!config.schedule) {
         return Failure(["No schedule provided"]);
       }
