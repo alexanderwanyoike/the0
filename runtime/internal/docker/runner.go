@@ -4,7 +4,6 @@ package docker
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"runtime/internal/launch"
 	"runtime/internal/model"
@@ -245,11 +244,9 @@ const bytesPerMB = 1024 * 1024
 // launchSettings is the launch a runner with config gives the container it
 // starts for executable.
 func launchSettings(config *DockerRunnerConfig, executable model.Executable) launch.Settings {
-	botConfig := "{}"
-	if executable.Config != nil {
-		if data, err := json.Marshal(executable.Config); err == nil {
-			botConfig = string(data)
-		}
+	botConfig, err := launch.BotConfig(executable.Config)
+	if err != nil {
+		botConfig = "{}"
 	}
 	settings := launch.Settings{
 		BotID:           executable.ID,
