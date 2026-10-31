@@ -13,26 +13,13 @@ import {
   ApiParam,
   ApiBody,
 } from "@nestjs/swagger";
-import { IsString, IsOptional, IsObject, IsNumber } from "class-validator";
 import { BotQueryService } from "./bot-query.service";
+import { ExecuteQueryDto } from "./dto/execute-query.dto";
 import { Actor } from "@/auth/actor";
 import { CurrentActor } from "@/auth/actor.decorators";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { toHttpException } from "@/common/http-error";
 import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
-
-class ExecuteQueryDto {
-  @IsString()
-  query_path: string;
-
-  @IsOptional()
-  @IsObject()
-  params?: Record<string, unknown>;
-
-  @IsOptional()
-  @IsNumber()
-  timeout_sec?: number;
-}
 
 @ApiTags("bot-query")
 @ApiJwtOrApiKeyAuth()
