@@ -312,6 +312,24 @@ describe("/bot responses", () => {
       });
     });
 
+    it("answers a deploy whose Catalogue lookup fails", async () => {
+      jest.spyOn(db(), "select").mockImplementation(() => {
+        throw failingDatabase();
+      });
+
+      const res = await api()
+        .post("/bot")
+        .set(asOwner)
+        .send({ name: "SMA", config: botConfig() });
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({
+        statusCode: 500,
+        message: "Failed to read from the database",
+        error: "Internal Server Error",
+      });
+    });
+
     it("answers a deploy", async () => {
       jest.spyOn(db(), "transaction").mockRejectedValue(failingDatabase());
 

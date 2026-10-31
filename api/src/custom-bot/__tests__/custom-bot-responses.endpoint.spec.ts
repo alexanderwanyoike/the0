@@ -8,7 +8,8 @@ import { CustomBotService } from "../custom-bot.service";
 import { StorageService } from "../storage.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { AuthService } from "@/auth/auth.service";
-import { Ok } from "@/common/result";
+import { appError } from "@/common/app-error";
+import { Failure, Ok } from "@/common/result";
 import { botsTable } from "@/database/schema/bots";
 import { usersTable } from "@/database/schema/users";
 import { mockBotConfig } from "@/test/mock-bot";
@@ -124,7 +125,11 @@ describe("/custom-bots responses", () => {
     status: number,
     message: string,
   ) => {
-    const error = { 400: "Bad Request", 404: "Not Found" }[status];
+    const error = {
+      400: "Bad Request",
+      404: "Not Found",
+      500: "Internal Server Error",
+    }[status];
     expect({ status: res.status, body: res.body }).toEqual({
       status,
       body: { statusCode: status, message, error },
@@ -229,12 +234,12 @@ describe("/custom-bots responses", () => {
       );
     });
 
-    it("refuses a Custom bot missing from the Catalogue with 400", async () => {
+    it("refuses a Custom bot missing from the Catalogue with 404", async () => {
       const res = await publish("put", UPLOADER, customBotConfig());
 
       expectRefusal(
         res,
-        400,
+        404,
         "Custom bot does not exist. Create it first using POST.",
       );
     });
@@ -357,12 +362,54 @@ describe("/custom-bots responses", () => {
         path: "/custom-bots/nope",
         message: "Bot not found",
       },
-    ])("refuses $target with 400", async ({ path, message }) => {
+    ])("refuses $target with 404", async ({ path, message }) => {
       await uploaded();
 
       const res = await api().delete(path).set(as(UPLOADER));
 
-      expectRefusal(res, 400, message);
+      expectRefusal(res, 404, message);
+    });
+  });
+
+  describe("answer a storage or database failure with 500", () => {
+    const failingDatabase = () => {
+      jest.spyOn(db(), "select").mockImplementation(() => {
+        throw new Error("connection lost to 10.0.0.5");
+      });
+    };
+
+    it.each([
+      { request: "the user's Custom bots", path: "/custom-bots" },
+      { request: "a Custom bot's versions", path: "/custom-bots/sma-bot" },
+      { request: "one version", path: "/custom-bots/sma-bot/1.0.0" },
+      {
+        request: "the versions with instance counts",
+        path: "/custom-bots/sma-bot/versions",
+      },
+      {
+        request: "a frontend bundle",
+        path: "/custom-bots/by-id/cb-1/frontend",
+      },
+    ])("answers a read of $request", async ({ path }) => {
+      failingDatabase();
+
+      const res = await api().get(path).set(as(UPLOADER));
+
+      expectRefusal(res, 500, "Failed to read from the database");
+    });
+
+    it("answers a deploy whose file check fails", async () => {
+      storage.fileExists.mockResolvedValue(
+        Failure(appError("internal", "Error checking file existence: down")),
+      );
+
+      const res = await publish("post", UPLOADER, customBotConfig());
+
+      expectRefusal(
+        res,
+        500,
+        "File validation failed: Error checking file existence: down",
+      );
     });
   });
 });
