@@ -238,6 +238,10 @@ func ContainerConfig(
 	return builder.Build()
 }
 
+// bytesPerMB converts the runner's state limits, which LoadConfigFromEnv reads
+// in whole MB, back to the MB the launch carries.
+const bytesPerMB = 1024 * 1024
+
 // launchSettings is the launch a runner with config gives the container it
 // starts for executable.
 func launchSettings(config *DockerRunnerConfig, executable model.Executable) launch.Settings {
@@ -264,6 +268,8 @@ func launchSettings(config *DockerRunnerConfig, executable model.Executable) lau
 			StateBucket:        config.MinioStateBucket,
 			LogsBucket:         config.MinioLogsBucket,
 			QueryResultsBucket: config.MinIOQueryResultsBucket,
+			MaxStateSizeMB:     config.MaxStateSizeBytes / bytesPerMB,
+			MaxStateFileSizeMB: config.MaxStateFileSizeBytes / bytesPerMB,
 		},
 	}
 
