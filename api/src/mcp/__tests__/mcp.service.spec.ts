@@ -1004,5 +1004,94 @@ describe("McpService", () => {
         expect(result.content[0].text).toContain("Unknown tool: unknown_tool");
       });
     });
+
+    describe("tool errors", () => {
+      it.each([
+        {
+          failure: "a bot the caller cannot see",
+          tool: "bot_get",
+          args: { bot_id: "bot-456" },
+          text: "Error: Not found",
+        },
+        {
+          failure: "deleting a bot the caller cannot see",
+          tool: "bot_delete",
+          args: { bot_id: "bot-456" },
+          text: "Error: Bot not found",
+        },
+        {
+          failure: "a deploy without a name",
+          tool: "bot_deploy",
+          args: { config: { type: "scheduled/test-bot", version: "1.0.0" } },
+          text: "Error: Config must include a 'name' field",
+        },
+        {
+          failure: "a deploy of a Custom bot missing from the Catalogue",
+          tool: "bot_deploy",
+          args: {
+            config: {
+              name: "x",
+              type: "scheduled/unknown-bot",
+              version: "1.0.0",
+            },
+          },
+          text: "Error: Bot type 'scheduled/unknown-bot' not found",
+        },
+        {
+          failure: "an update without a config",
+          tool: "bot_update",
+          args: { bot_id: "bot-123" },
+          text: "Error: Cannot destructure property 'type' of 'config' as it is undefined.",
+        },
+        {
+          failure: "a state list without a bot_id",
+          tool: "bot_state_list",
+          args: {},
+          text: "Error: bot_id is required",
+        },
+        {
+          failure: "a state read without a key",
+          tool: "bot_state_get",
+          args: { bot_id: "bot-123" },
+          text: "Error: key is required",
+        },
+        {
+          failure: "a query without a path",
+          tool: "bot_query",
+          args: { bot_id: "bot-123" },
+          text: "Error: query_path is required",
+        },
+        {
+          failure: "an unknown tool",
+          tool: "unknown_tool",
+          args: {},
+          text: "Unknown tool: unknown_tool",
+        },
+      ])("reports $failure as text", async ({ tool, args, text }) => {
+        const result = await service.handleToolCall(tool, args, actor);
+
+        expect(result).toEqual({
+          content: [{ type: "text", text }],
+          isError: true,
+        });
+      });
+
+      it("reports a Custom bot missing from the Catalogue as text", async () => {
+        customBotService.getGlobalLatestVersion.mockResolvedValue(
+          Failure(appError("not_found", "Not found")),
+        );
+
+        const result = await service.handleToolCall(
+          "custom_bot_get",
+          { name: "nope" },
+          actor,
+        );
+
+        expect(result).toEqual({
+          content: [{ type: "text", text: "Error: Not found" }],
+          isError: true,
+        });
+      });
+    });
   });
 });
