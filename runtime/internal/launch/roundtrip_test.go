@@ -53,6 +53,8 @@ var (
 		MinioStateBucket:        "acme-state",
 		MinioLogsBucket:         "acme-logs",
 		MinIOQueryResultsBucket: "acme-results",
+		MaxStateSizeBytes:       4096 * 1024 * 1024,
+		MaxStateFileSizeBytes:   20 * 1024 * 1024,
 		NatsURL:                 roundTripNATSURL,
 	}
 	podConfig = podgen.PodGeneratorConfig{
@@ -102,13 +104,15 @@ func launchOf(mode launch.Mode, botType string) launch.Settings {
 	return s
 }
 
-// inDocker is a launch as the Docker runner sends it, with every bucket the
-// runner is configured with.
+// inDocker is a launch as the Docker runner sends it, with every bucket and
+// state limit the runner is configured with.
 func inDocker(s launch.Settings) launch.Settings {
 	s.Storage.CodeBucket = "acme-code"
 	s.Storage.StateBucket = "acme-state"
 	s.Storage.LogsBucket = "acme-logs"
 	s.Storage.QueryResultsBucket = "acme-results"
+	s.Storage.MaxStateSizeMB = 4096
+	s.Storage.MaxStateFileSizeMB = 20
 	return s
 }
 
