@@ -88,7 +88,6 @@ func (p *NATSPublisher) Publish(botID string, content string) error {
 	return p.conn.Publish(logSubject(botID), []byte(content))
 }
 
-// logSubject is the subject a bot's log chunks are published on.
 func logSubject(botID string) string {
 	return fmt.Sprintf("the0.bot.logs.%s", sanitizeBotID(botID))
 }
