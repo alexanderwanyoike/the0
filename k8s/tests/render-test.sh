@@ -164,7 +164,7 @@ code_bucket_cases=(
 for code_case in "${code_bucket_cases[@]}"; do
   IFS='|' read -r label expected overrides_text <<< "$code_case"
   read -ra overrides <<< "$overrides_text"
-  helm template the0-the0 "$CHART_DIR" "${overrides[@]}" > "$rendering"
+  helm template the0-the0 "$CHART_DIR" ${overrides[@]+"${overrides[@]}"} > "$rendering"
   check "api CUSTOM_BOTS_BUCKET is the code bucket: $label" \
     "$expected" "$(rendered_env "$rendering" the0-api.yaml CUSTOM_BOTS_BUCKET | paste -sd ' ')"
   check "controller --minio-bucket is the code bucket: $label" \
