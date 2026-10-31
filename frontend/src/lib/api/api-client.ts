@@ -1,6 +1,5 @@
-import axios from "@/lib/axios-interceptor";
-import { Result, Ok, Failure } from "@/lib/result";
-import { getErrorMessage, getErrorStatusCode } from "@/lib/axios";
+import { ApiError, apiRequest } from "@/lib/auth-fetch";
+import { Ok, Result } from "@/lib/result";
 
 export interface BotSchema {
   properties: Record<string, any>;
@@ -16,74 +15,37 @@ export interface Bot {
   updatedAt: string;
 }
 
-export type BotServiceError = {
-  message: string;
-  statusCode: number;
-};
+export type BotServiceError = ApiError;
+
+const TIMEOUT_MS = 120_000;
 
 export class BotService {
-  public static async getBot(
-    id: string,
-  ): Promise<Result<Bot, BotServiceError>> {
-    try {
-      const response = await axios.get(`/api/bot/${id}`, {
-        timeout: 120000,
-      });
-      return Ok(response.data);
-    } catch (error: any) {
-      return this.handleError(error);
-    }
+  public static getBot(id: string): Promise<Result<Bot, BotServiceError>> {
+    return apiRequest(`/api/bot/${id}`, { timeoutMs: TIMEOUT_MS });
   }
 
-  public static async updateBot(
+  public static updateBot(
     id: string,
     config: Record<any, any>,
   ): Promise<Result<Bot, BotServiceError>> {
-    try {
-      const response = await axios.put(
-        `/api/bot/${id}`,
-        {
-          name: config.name,
-          config,
-        },
-        {
-          timeout: 120000,
-        },
-      );
-      return Ok(response.data);
-    } catch (error: any) {
-      return this.handleError(error);
-    }
+    return apiRequest(`/api/bot/${id}`, {
+      method: "PUT",
+      body: { name: config.name, config },
+      timeoutMs: TIMEOUT_MS,
+    });
   }
 
-  public static async getBots(): Promise<Result<Bot[], BotServiceError>> {
-    try {
-      const response = await axios.get("/api/bot", {
-        timeout: 120000,
-      });
-      return Ok(response.data);
-    } catch (error: any) {
-      return this.handleError(error);
-    }
+  public static getBots(): Promise<Result<Bot[], BotServiceError>> {
+    return apiRequest("/api/bot", { timeoutMs: TIMEOUT_MS });
   }
 
   public static async deleteBot(
     id: string,
   ): Promise<Result<null, BotServiceError>> {
-    try {
-      await axios.delete(`/api/bot/${id}`, {
-        timeout: 120000,
-      });
-      return Ok(null);
-    } catch (error: any) {
-      return this.handleError(error);
-    }
-  }
-
-  private static handleError(error: any): Result<any, BotServiceError> {
-    return Failure({
-      message: getErrorMessage(error),
-      statusCode: getErrorStatusCode(error),
+    const result = await apiRequest(`/api/bot/${id}`, {
+      method: "DELETE",
+      timeoutMs: TIMEOUT_MS,
     });
+    return result.success ? Ok(null) : result;
   }
 }
