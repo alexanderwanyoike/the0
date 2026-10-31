@@ -6,10 +6,12 @@ on:
     tags: [ 'v*' ]
     paths:
       - 'api/**'
+      - 'contracts/**'
       - '.github/workflows/api.yml'
   pull_request:
     paths:
       - 'api/**'
+      - 'contracts/**'
       - '.github/workflows/api.yml'
   workflow_dispatch:
 
