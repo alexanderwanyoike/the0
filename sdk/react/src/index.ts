@@ -6,6 +6,9 @@
  */
 
 import { useContext, createContext } from "react";
+import { THE0_GLOBALS } from "./contract";
+
+export { THE0_GLOBALS } from "./contract";
 
 // ============================================================================
 // Types
@@ -80,14 +83,18 @@ declare global {
 
 // Get or create the shared context
 function getSharedContext(): React.Context<The0EventsContextValue | null> {
-  if (typeof window !== "undefined" && window.__THE0_EVENTS_CONTEXT__) {
-    return window.__THE0_EVENTS_CONTEXT__;
+  const existing =
+    typeof window !== "undefined"
+      ? window[THE0_GLOBALS.eventsContext]
+      : undefined;
+  if (existing) {
+    return existing;
   }
 
   const context = createContext<The0EventsContextValue | null>(null);
 
   if (typeof window !== "undefined") {
-    window.__THE0_EVENTS_CONTEXT__ = context;
+    window[THE0_GLOBALS.eventsContext] = context;
   }
 
   return context;
