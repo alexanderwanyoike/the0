@@ -11,17 +11,11 @@ import (
 	"runtime/internal/contracts"
 )
 
-type storageKey struct {
-	BotID string `json:"botId"`
-	Key   string `json:"key"`
-}
+type storageKey = contracts.StorageKey
 
 func loadStorageKeys(t *testing.T) (logs, state []storageKey) {
 	t.Helper()
-	var keys struct {
-		Logs  []storageKey `json:"logs"`
-		State []storageKey `json:"state"`
-	}
+	var keys contracts.StorageKeys
 	contracts.Load(t, "storage-keys.json", &keys)
 	require.NotEmpty(t, keys.Logs)
 	require.NotEmpty(t, keys.State)

@@ -13,10 +13,7 @@ import (
 // The api subscribes to a bot's logs by its ID as is, so a valid ID must
 // reach the subject unchanged.
 func TestContracts_ValidBotIDsNameTheirLogSubjectUnchanged(t *testing.T) {
-	var ids struct {
-		Valid   []string `json:"valid"`
-		Invalid []string `json:"invalid"`
-	}
+	var ids contracts.BotIDs
 	contracts.Load(t, "bot-ids.json", &ids)
 
 	for _, id := range ids.Valid {
@@ -28,10 +25,7 @@ func TestContracts_ValidBotIDsNameTheirLogSubjectUnchanged(t *testing.T) {
 }
 
 func TestContracts_PublishesLogsOnTheSubjectTheApiSubscribesTo(t *testing.T) {
-	var contract struct {
-		BotID   string `json:"botId"`
-		Subject string `json:"subject"`
-	}
+	var contract contracts.LogLines
 	contracts.Load(t, "log-lines.json", &contract)
 
 	assert.Equal(t, contract.Subject, logSubject(contract.BotID))
@@ -56,9 +50,7 @@ func subjectMatches(pattern, subject string) bool {
 func TestContracts_PublishesLogsOnASubjectTheLogStreamHolds(t *testing.T) {
 	var streams map[string][]string
 	contracts.Load(t, "events/streams.json", &streams)
-	var ids struct {
-		Valid []string `json:"valid"`
-	}
+	var ids contracts.BotIDs
 	contracts.Load(t, "bot-ids.json", &ids)
 	require.NotEmpty(t, streams["THE0_BOT_LOGS"])
 

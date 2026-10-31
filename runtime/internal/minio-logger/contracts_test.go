@@ -11,13 +11,7 @@ import (
 )
 
 func TestContracts_FormatsAChunkAsTheApiReadsIt(t *testing.T) {
-	var contract struct {
-		Chunk struct {
-			At        string `json:"at"`
-			Raw       string `json:"raw"`
-			Formatted string `json:"formatted"`
-		} `json:"chunk"`
-	}
+	var contract contracts.LogLines
 	contracts.Load(t, "log-lines.json", &contract)
 	at, err := time.Parse(time.RFC3339Nano, contract.Chunk.At)
 	require.NoError(t, err)
@@ -26,13 +20,7 @@ func TestContracts_FormatsAChunkAsTheApiReadsIt(t *testing.T) {
 }
 
 func TestContracts_WritesEachDaysLogsWhereTheApiReadsThem(t *testing.T) {
-	var keys struct {
-		Logs []struct {
-			BotID string `json:"botId"`
-			At    string `json:"at"`
-			Key   string `json:"key"`
-		} `json:"logs"`
-	}
+	var keys contracts.StorageKeys
 	contracts.Load(t, "storage-keys.json", &keys)
 	require.NotEmpty(t, keys.Logs)
 

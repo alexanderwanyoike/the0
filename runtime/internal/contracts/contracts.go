@@ -48,3 +48,35 @@ func Load(t testing.TB, name string, v any) {
 		t.Fatalf("contracts: %s: %v", name, err)
 	}
 }
+
+// BotIDs is bot-ids.json.
+type BotIDs struct {
+	Valid   []string `json:"valid"`
+	Invalid []string `json:"invalid"`
+}
+
+// LogLines is log-lines.json without the api's entries.
+type LogLines struct {
+	BotID   string `json:"botId"`
+	Subject string `json:"subject"`
+	Chunk   struct {
+		At        string `json:"at"`
+		Raw       string `json:"raw"`
+		Formatted string `json:"formatted"`
+	} `json:"chunk"`
+}
+
+// StorageKey is one example of storage-keys.json; only log keys have At and
+// Date.
+type StorageKey struct {
+	BotID string `json:"botId"`
+	At    string `json:"at"`
+	Date  string `json:"date"`
+	Key   string `json:"key"`
+}
+
+// StorageKeys is storage-keys.json.
+type StorageKeys struct {
+	Logs  []StorageKey `json:"logs"`
+	State []StorageKey `json:"state"`
+}

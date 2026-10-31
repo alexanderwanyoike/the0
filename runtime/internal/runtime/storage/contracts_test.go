@@ -10,12 +10,7 @@ import (
 )
 
 func TestContracts_WritesStateWhereTheApiReadsIt(t *testing.T) {
-	var keys struct {
-		State []struct {
-			BotID string `json:"botId"`
-			Key   string `json:"key"`
-		} `json:"state"`
-	}
+	var keys contracts.StorageKeys
 	contracts.Load(t, "storage-keys.json", &keys)
 	require.NotEmpty(t, keys.State)
 
