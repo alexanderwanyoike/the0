@@ -1067,7 +1067,10 @@ describe("McpService", () => {
           failure: "a query without a path",
           tool: "bot_query",
           args: { bot_id: "bot-123" },
-          error: ["validation", "query_path must be a string"],
+          error: [
+            "validation",
+            "query_path should not be empty, query_path must be a string",
+          ],
         },
         {
           failure: "an unknown tool",
@@ -1155,6 +1158,11 @@ describe("McpService", () => {
             },
             message:
               "timeout_sec must be a number conforming to the specified constraints",
+          },
+          {
+            tool: "bot_query",
+            args: { bot_id: "bot-123", query_path: "" },
+            message: "query_path should not be empty",
           },
           {
             tool: "custom_bot_get",

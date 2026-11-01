@@ -888,6 +888,9 @@ describe("Bot commands", () => {
     });
 
     it("should handle removal failures", async () => {
+      jest
+        .spyOn(repository, "findOne")
+        .mockResolvedValue(Ok(mockBot({ id: "test-id", userId: uid })));
       jest.spyOn(repository, "removeWithEvents").mockResolvedValue({
         success: false,
         error: appError("not_found", "Bot not found"),

@@ -294,6 +294,23 @@ describe("/bot responses", () => {
   describe("answer a database failure with 500 and no driver detail", () => {
     const failingDatabase = () => new Error("connection lost to 10.0.0.5");
 
+    // An update resolves its Custom bot before the ownership read, so only
+    // reads of the one table may fail.
+    const failReadsOf = (table: unknown) => {
+      const select = db().select.bind(db());
+      jest.spyOn(db(), "select").mockImplementation(((...args: never[]) => {
+        const builder = select(...args) as unknown as {
+          from: (from: unknown) => unknown;
+        };
+        const from = builder.from.bind(builder);
+        builder.from = (target) => {
+          if (target === table) throw failingDatabase();
+          return from(target);
+        };
+        return builder;
+      }) as never);
+    };
+
     it.each([
       { request: "a list", send: () => api().get("/bot").set(asOwner) },
       { request: "a read", send: () => api().get("/bot/bot-1").set(asOwner) },
@@ -321,6 +338,29 @@ describe("/bot responses", () => {
         .post("/bot")
         .set(asOwner)
         .send({ name: "SMA", config: botConfig() });
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({
+        statusCode: 500,
+        message: "Failed to read from the database",
+        error: "Internal Server Error",
+      });
+    });
+
+    it.each([
+      {
+        request: "an update",
+        send: () =>
+          api().put("/bot/bot-1").set(asOwner).send({ config: botConfig() }),
+      },
+      {
+        request: "a delete",
+        send: () => api().delete("/bot/bot-1").set(asOwner),
+      },
+    ])("answers $request whose ownership read fails", async ({ send }) => {
+      failReadsOf(botsTable);
+
+      const res = await send();
 
       expect(res.status).toBe(500);
       expect(res.body).toEqual({

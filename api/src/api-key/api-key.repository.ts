@@ -101,7 +101,11 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
       // First check if the API key exists and belongs to the user
       const existingKey = await this.findOne(userId, id);
       if (!existingKey.success) {
-        return Failure(appError("not_found", "API key not found"));
+        return Failure(
+          existingKey.error.code === "not_found"
+            ? appError("not_found", "API key not found")
+            : existingKey.error,
+        );
       }
 
       await this.db
