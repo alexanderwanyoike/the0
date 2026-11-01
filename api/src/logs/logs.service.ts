@@ -2,7 +2,7 @@ import { Injectable, Scope, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { botAccessError, BotService } from "@/bot/bot.service";
-import { appError, AppError } from "@/common/app-error";
+import { appError, AppError, invalid } from "@/common/app-error";
 import {
   Result,
   Ok,
@@ -54,9 +54,6 @@ interface FilePosition {
 
 // 15 digits stay within Number.MAX_SAFE_INTEGER, far past any daily file.
 const POSITION_KEY = /^(\d{8}):(\d{1,15})$/;
-
-const invalid = <T>(message: string): Result<T, AppError> =>
-  Failure(appError("validation", message));
 
 const dayLogPath = (botId: string, date: string): string =>
   `logs/${botId}/${date}.log`;
