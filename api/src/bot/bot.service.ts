@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { BotRepository } from "./bot.repository";
 import { Bot } from "./entities/bot.entity";
-import { AppError } from "@/common/app-error";
+import { appError, AppError } from "@/common/app-error";
 import { Result } from "@/common/result";
 import { Actor } from "@/auth/actor";
 
@@ -22,3 +22,13 @@ export class BotService {
     return this.botRepository.findOne(userId, id);
   }
 }
+
+/**
+ * A bot lookup that found nothing becomes the refusal readers of a Bot's
+ * logs, state and queries see, which never says whether the bot exists.
+ * Any other failure is passed on, so an outage is not reported as a refusal.
+ */
+export const botAccessError = (error: AppError): AppError =>
+  error.code === "not_found"
+    ? appError("not_found", "Bot not found or access denied")
+    : error;

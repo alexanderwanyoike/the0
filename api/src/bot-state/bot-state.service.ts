@@ -2,7 +2,7 @@ import { Injectable, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { Actor } from "@/auth/actor";
-import { BotService } from "@/bot/bot.service";
+import { botAccessError, BotService } from "@/bot/bot.service";
 import { appError, AppError } from "@/common/app-error";
 import { Result, Ok, Failure, hasErrorCode } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
@@ -98,7 +98,7 @@ export class BotStateService {
     // Verify bot ownership
     const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
-      return Failure(appError("not_found", "Bot not found or access denied"));
+      return Failure(botAccessError(botResult.error));
     }
 
     try {
@@ -185,7 +185,7 @@ export class BotStateService {
 
     const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
-      return appError("not_found", "Bot not found or access denied");
+      return botAccessError(botResult.error);
     }
 
     return null;
@@ -253,7 +253,7 @@ export class BotStateService {
     // Verify bot ownership
     const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
-      return Failure(appError("not_found", "Bot not found or access denied"));
+      return Failure(botAccessError(botResult.error));
     }
 
     // Validate bot ID to prevent path traversal
@@ -332,7 +332,7 @@ export class BotStateService {
     // Verify bot ownership
     const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
-      return Failure(appError("not_found", "Bot not found or access denied"));
+      return Failure(botAccessError(botResult.error));
     }
 
     try {

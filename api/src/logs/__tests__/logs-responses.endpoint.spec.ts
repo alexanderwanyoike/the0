@@ -124,6 +124,7 @@ describe("/logs responses", () => {
 
   describe("answer a failed ownership lookup as the failure it is", () => {
     it("answers a read with 500", async () => {
+      minio.getObject.mockClear();
       const res = await api()
         .get(`/logs/${UNREADABLE_BOT}?date=20260101`)
         .set(AS_OWNER);

@@ -57,11 +57,17 @@ export class LogStreamService {
     };
     req.on("close", cleanup);
 
-    const shouldContinue =
-      options.history === false
-        ? await this.checkAccess(res, botId, userId)
-        : await this.sendHistoricalLogs(res, botId, userId);
-    if (!shouldContinue) return;
+    const access = await this.logsService.checkAccess(botId, userId);
+    if (!access.success) {
+      this.endWithError(res, access.error);
+      return;
+    }
+    if (
+      options.history !== false &&
+      !(await this.sendHistoricalLogs(res, botId, userId))
+    ) {
+      return;
+    }
     // Some proxies send the response head only with the first body chunk,
     // which a stream without history might not write until the keepalive.
     res.write(": connected\n\n");
@@ -79,15 +85,6 @@ export class LogStreamService {
     }
 
     keepalive = this.startKeepalive(res, botId);
-  }
-
-  private async checkAccess(
-    res: Response,
-    botId: string,
-    userId: string,
-  ): Promise<boolean> {
-    const access = await this.logsService.checkAccess(botId, userId);
-    return access.success || !this.endOnAccessError(res, access.error);
   }
 
   private async sendHistoricalLogs(
@@ -110,19 +107,20 @@ export class LogStreamService {
       res.write(sseEvent("history", historyResult.data.entries));
       return true;
     }
-    if (this.endOnAccessError(res, historyResult.error)) return false;
+    // Access was checked first, so only a bot deleted since then lands here.
+    if (historyResult.error.code === "not_found") {
+      this.endWithError(res, historyResult.error);
+      return false;
+    }
     res.write(sseEvent("warning", { message: "History unavailable" }));
     return true;
   }
 
-  /** @returns true when the error refused access and the stream was ended. */
-  private endOnAccessError(res: Response, error: AppError | null): boolean {
-    if (error?.code === "not_found") {
-      res.write(sseEvent("error", { message: ACCESS_DENIED_MESSAGE }));
-      res.end();
-      return true;
-    }
-    return false;
+  private endWithError(res: Response, error: AppError): void {
+    const message =
+      error.code === "not_found" ? ACCESS_DENIED_MESSAGE : error.message;
+    res.write(sseEvent("error", { message }));
+    res.end();
   }
 
   private startKeepalive(

@@ -1,7 +1,7 @@
 import { Injectable, Scope, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
-import { BotService } from "@/bot/bot.service";
+import { botAccessError, BotService } from "@/bot/bot.service";
 import { appError, AppError } from "@/common/app-error";
 import {
   Result,
@@ -92,7 +92,7 @@ export class LogsService {
   ): Promise<Result<true, AppError>> {
     const botResult = await this.botService.findOneByUserId(userId, botId);
     if (!botResult.success) {
-      return Failure(appError("not_found", "Bot not found or access denied"));
+      return Failure(botAccessError(botResult.error));
     }
     return Ok(true);
   }
