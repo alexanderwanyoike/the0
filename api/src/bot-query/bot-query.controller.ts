@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Post,
-  Param,
-  Body,
-  UseGuards,
-  BadRequestException,
-} from "@nestjs/common";
+import { Controller, Post, Param, Body, UseGuards } from "@nestjs/common";
 import {
   ApiTags,
   ApiOperation,
@@ -69,10 +62,6 @@ export class BotQueryController {
     @Param("botId") botId: string,
     @Body() body: ExecuteQueryDto,
   ) {
-    if (!body.query_path) {
-      throw new BadRequestException("query_path is required");
-    }
-
     // Ensure query_path starts with /
     const queryPath = body.query_path.startsWith("/")
       ? body.query_path
