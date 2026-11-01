@@ -15,8 +15,8 @@ import (
 var VERSION string
 
 var (
-	verbose       bool
-	envOverride   string
+	verbose     bool
+	envOverride string
 )
 
 func main() {

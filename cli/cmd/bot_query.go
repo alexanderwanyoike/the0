@@ -66,7 +66,7 @@ func executeBotQuery(botID, queryPath, paramsJSON string, timeout int, raw bool)
 	}
 
 	// Execute query
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 	request := &internal.BotQueryRequest{
 		QueryPath:  queryPath,
 		Params:     params,
@@ -75,28 +75,9 @@ func executeBotQuery(botID, queryPath, paramsJSON string, timeout int, raw bool)
 
 	result, err := apiClient.ExecuteBotQuery(auth, botID, request)
 	if err != nil {
-		// Retry with new auth if needed
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-
-			// Retry query
-			result, err = apiClient.ExecuteBotQuery(auth, botID, request)
-			if err != nil {
-				logger.StopSpinnerWithError("Query failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Query failed")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Query failed", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	logger.StopSpinner()

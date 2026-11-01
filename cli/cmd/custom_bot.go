@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -112,34 +113,13 @@ func deployBot(cmd *cobra.Command, args []string) {
 	logger.UpdateSpinner("Checking bot status")
 
 	// Step 4: Check if bot exists and validate ownership
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 	isUpdate, err := apiClient.CheckBotExists(config, auth)
 	if err != nil {
-		// If auth error, try to get new token and retry
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				internal.CleanupVendoring(".")
-				os.Exit(1)
-			}
-
-			// Retry with new key
-			isUpdate, err = apiClient.CheckBotExists(config, auth)
-			if err != nil {
-				logger.StopSpinnerWithError("Bot validation failed")
-				logger.Error("%v", err)
-				internal.CleanupVendoring(".")
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Bot validation failed")
-			logger.Error("%v", err)
-			internal.CleanupVendoring(".")
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Bot validation failed", err))
+		logger.Error("%v", err)
+		internal.CleanupVendoring(".")
+		os.Exit(1)
 	}
 
 	if isUpdate {
@@ -162,29 +142,15 @@ func deployBot(cmd *cobra.Command, args []string) {
 
 	// Step 6: Deploy to API with multipart upload (DeployBot handles its own spinner)
 	if err := apiClient.DeployBot(config, auth, zipPath, isUpdate); err != nil {
-		// If auth error, try to get new token and retry
-		if internal.IsAuthError(err) {
-			logger.StartSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				internal.CleanupVendoring(".")
-				os.Exit(1)
-			}
-			logger.StopSpinner()
-
-			// Retry deployment with new key
-			if err := apiClient.DeployBot(config, auth, zipPath, isUpdate); err != nil {
-				logger.Error("Deployment failed: %v", err)
-				internal.CleanupVendoring(".")
-				os.Exit(1)
-			}
+		var reloginErr *internal.ReloginError
+		if errors.As(err, &reloginErr) {
+			logger.StopSpinnerWithError("Authentication failed")
+			logger.Error("%v", reloginErr)
 		} else {
 			logger.Error("Deployment failed: %v", err)
-			internal.CleanupVendoring(".")
-			os.Exit(1)
 		}
+		internal.CleanupVendoring(".")
+		os.Exit(1)
 	}
 
 	logger.Print("'%s' v%s deployed successfully", config.Name, config.Version)
@@ -221,31 +187,12 @@ func listCustomBots(cmd *cobra.Command, args []string) {
 	}
 
 	// List custom bots
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 	customBots, err := apiClient.ListCustomBots(auth)
 	if err != nil {
-		// Retry with new auth if needed
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-
-			// Retry listing
-			customBots, err = apiClient.ListCustomBots(auth)
-			if err != nil {
-				logger.StopSpinnerWithError("Failed to list custom bots")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Failed to list custom bots")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Failed to list custom bots", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	logger.StopSpinner()
@@ -318,31 +265,12 @@ func getCustomBotSchema(cmd *cobra.Command, args []string) {
 	}
 
 	// Get custom bot details
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 	customBot, err := apiClient.GetCustomBot(auth, customBotName)
 	if err != nil {
-		// Retry with new auth if needed
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-
-			// Retry fetching
-			customBot, err = apiClient.GetCustomBot(auth, customBotName)
-			if err != nil {
-				logger.StopSpinnerWithError("Failed to get custom bot")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Failed to get custom bot")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Failed to get custom bot", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	logger.StopSpinner()
@@ -407,29 +335,12 @@ func getCustomBotVersions(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 	versions, err := apiClient.GetCustomBotVersionsWithInstances(auth, botName)
 	if err != nil {
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-
-			versions, err = apiClient.GetCustomBotVersionsWithInstances(auth, botName)
-			if err != nil {
-				logger.StopSpinnerWithError("Failed to fetch versions")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Failed to fetch versions")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Failed to fetch versions", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	logger.StopSpinner()
@@ -522,7 +433,7 @@ func deleteCustomBot(cmd *cobra.Command, args []string, version string, skipConf
 		os.Exit(1)
 	}
 
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 
 	if version != "" {
 		err = apiClient.DeleteCustomBotVersion(auth, botName, version)
@@ -531,31 +442,9 @@ func deleteCustomBot(cmd *cobra.Command, args []string, version string, skipConf
 	}
 
 	if err != nil {
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-
-			if version != "" {
-				err = apiClient.DeleteCustomBotVersion(auth, botName, version)
-			} else {
-				err = apiClient.DeleteCustomBot(auth, botName)
-			}
-
-			if err != nil {
-				logger.StopSpinnerWithError("Deletion failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Deletion failed")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Deletion failed", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	logger.StopSpinner()
