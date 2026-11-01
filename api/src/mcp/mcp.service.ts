@@ -21,8 +21,8 @@ import { LogsService } from "@/logs/logs.service";
 import { utcDay } from "@/logs/log-entry";
 import { BotStateService } from "@/bot-state/bot-state.service";
 import { BotQueryService } from "@/bot-query/bot-query.service";
-import { appError, AppError } from "@/common/app-error";
-import { Failure, Ok, Result } from "@/common/result";
+import { appError, AppError, invalid } from "@/common/app-error";
+import { Ok, Result } from "@/common/result";
 import {
   McpToolResult,
   toMcpToolError,
@@ -414,9 +414,6 @@ export class McpService {
 }
 
 type ToolResult = Result<unknown, AppError>;
-
-const invalid = (message: string): ToolResult =>
-  Failure(appError("validation", message));
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
