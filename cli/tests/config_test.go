@@ -87,6 +87,61 @@ func TestValidateBotConfig(t *testing.T) {
 			errorType: "name validation",
 		},
 		{
+			name: "invalid name with a leading hyphen",
+			config: &internal.BotConfig{
+				Name:    "-test-bot",
+				Version: "1.0.0",
+				Type:    "scheduled",
+			},
+			files:     []string{},
+			wantErr:   true,
+			errorType: "name validation",
+		},
+		{
+			name: "invalid name with a trailing hyphen",
+			config: &internal.BotConfig{
+				Name:    "test-bot-",
+				Version: "1.0.0",
+				Type:    "scheduled",
+			},
+			files:     []string{},
+			wantErr:   true,
+			errorType: "name validation",
+		},
+		{
+			name: "invalid name with a doubled hyphen",
+			config: &internal.BotConfig{
+				Name:    "test--bot",
+				Version: "1.0.0",
+				Type:    "scheduled",
+			},
+			files:     []string{},
+			wantErr:   true,
+			errorType: "name validation",
+		},
+		{
+			name: "valid name of letters and digits only",
+			config: &internal.BotConfig{
+				Name:    "bot2",
+				Version: "1.0.0",
+				Type:    "scheduled",
+				Entrypoints: struct {
+					Bot   string `yaml:"bot" json:"bot"`
+					Query string `yaml:"query,omitempty" json:"query,omitempty"`
+				}{
+					Bot: "main.py",
+				},
+				Schema: struct {
+					Bot string `yaml:"bot" json:"bot"`
+				}{
+					Bot: "bot-schema.json",
+				},
+				Readme: "README.md",
+			},
+			files:   []string{"main.py", "bot-schema.json", "README.md"},
+			wantErr: false,
+		},
+		{
 			name: "invalid version",
 			config: &internal.BotConfig{
 				Name:    "test-bot",
@@ -263,7 +318,7 @@ func TestValidateBotConfig(t *testing.T) {
 			if tt.wantErr && err != nil {
 				switch tt.errorType {
 				case "name validation":
-					if !strings.Contains(err.Error(), "name must contain only lowercase") {
+					if !strings.Contains(err.Error(), "bot name must be lowercase letters and numbers, with single hyphens between them") {
 						t.Errorf("Expected name validation error, got: %v", err)
 					}
 				case "version validation":
