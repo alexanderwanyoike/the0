@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Post,
-  Param,
-  Body,
-  UseGuards,
-  BadRequestException,
-} from "@nestjs/common";
+import { Controller, Post, Param, Body, UseGuards } from "@nestjs/common";
 import {
   ApiTags,
   ApiOperation,
@@ -13,26 +6,13 @@ import {
   ApiParam,
   ApiBody,
 } from "@nestjs/swagger";
-import { IsString, IsOptional, IsObject, IsNumber } from "class-validator";
 import { BotQueryService } from "./bot-query.service";
+import { ExecuteQueryDto } from "./dto/execute-query.dto";
 import { Actor } from "@/auth/actor";
 import { CurrentActor } from "@/auth/actor.decorators";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { toHttpException } from "@/common/http-error";
 import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
-
-class ExecuteQueryDto {
-  @IsString()
-  query_path: string;
-
-  @IsOptional()
-  @IsObject()
-  params?: Record<string, unknown>;
-
-  @IsOptional()
-  @IsNumber()
-  timeout_sec?: number;
-}
 
 @ApiTags("bot-query")
 @ApiJwtOrApiKeyAuth()
@@ -82,10 +62,6 @@ export class BotQueryController {
     @Param("botId") botId: string,
     @Body() body: ExecuteQueryDto,
   ) {
-    if (!body.query_path) {
-      throw new BadRequestException("query_path is required");
-    }
-
     // Ensure query_path starts with /
     const queryPath = body.query_path.startsWith("/")
       ? body.query_path

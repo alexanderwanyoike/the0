@@ -1,18 +1,17 @@
 import { Injectable } from "@nestjs/common";
 import { PinoLogger } from "nestjs-pino";
+import { ClassConstructor } from "class-transformer";
+import { MCP_TOOL_NAMES } from "./mcp.types";
 import {
-  MCP_TOOL_NAMES,
-  BotDeployInput,
-  BotUpdateInput,
-  BotDeleteInput,
-  BotGetInput,
-  BotStateListInput,
-  BotStateGetInput,
-  BotQueryInput,
-  LogsGetInput,
-  CustomBotGetInput,
-  CustomBotSchemaInput,
-} from "./mcp.types";
+  BotArguments,
+  BotQueryArguments,
+  BotStateKeyArguments,
+  BotUpdateArguments,
+  CustomBotArguments,
+  validateArguments,
+} from "./mcp.arguments";
+import { CreateBotDto } from "@/bot/dto/create-bot.dto";
+import { GetLogsQueryDto } from "@/logs/dto/get-logs-query.dto";
 import { Actor } from "@/auth/actor";
 import { BotService } from "@/bot/bot.service";
 import { DeleteBot, DeployBot, UpdateBot } from "@/bot/commands/bot-commands";
@@ -22,6 +21,13 @@ import { LogsService } from "@/logs/logs.service";
 import { utcDay } from "@/logs/log-entry";
 import { BotStateService } from "@/bot-state/bot-state.service";
 import { BotQueryService } from "@/bot-query/bot-query.service";
+import { appError, AppError, invalid } from "@/common/app-error";
+import { Ok, Result } from "@/common/result";
+import {
+  McpToolResult,
+  toMcpToolError,
+  toMcpToolResult,
+} from "./mcp-tool-result";
 
 const LEVEL_PREFIX =
   /^(?:\[[^\]]*\]\s*)?(DEBUG|INFO|WARN(?:ING)?|ERROR|CRITICAL|FATAL):/i;
@@ -81,170 +87,125 @@ export class McpService {
     name: string,
     args: Record<string, unknown>,
     actor: Actor,
-  ): Promise<{
-    content: Array<{ type: string; text: string }>;
-    isError?: boolean;
-  }> {
+  ): Promise<McpToolResult> {
     try {
-      let result: unknown;
-
-      switch (name) {
-        case MCP_TOOL_NAMES.AUTH_STATUS:
-          result = { valid: true, message: "Credentials are valid" };
-          break;
-
-        case MCP_TOOL_NAMES.BOT_LIST:
-          result = await this.handleBotList(actor);
-          break;
-
-        case MCP_TOOL_NAMES.BOT_GET:
-          result = await this.handleBotGet(
-            args as unknown as BotGetInput,
-            actor,
-          );
-          break;
-
-        case MCP_TOOL_NAMES.BOT_DEPLOY:
-          result = await this.handleBotDeploy(
-            args as unknown as BotDeployInput,
-            actor,
-          );
-          break;
-
-        case MCP_TOOL_NAMES.BOT_UPDATE:
-          result = await this.handleBotUpdate(
-            args as unknown as BotUpdateInput,
-            actor,
-          );
-          break;
-
-        case MCP_TOOL_NAMES.BOT_DELETE:
-          result = await this.handleBotDelete(
-            args as unknown as BotDeleteInput,
-            actor,
-          );
-          break;
-
-        case MCP_TOOL_NAMES.LOGS_GET:
-          result = await this.handleLogsGet(
-            args as unknown as LogsGetInput,
-            actor,
-          );
-          break;
-
-        case MCP_TOOL_NAMES.LOGS_SUMMARY:
-          result = await this.handleLogsSummary(
-            args as unknown as { bot_id: string },
-            actor,
-          );
-          break;
-
-        case MCP_TOOL_NAMES.BOT_STATE_LIST:
-          result = await this.handleBotStateList(
-            args as unknown as BotStateListInput,
-            actor,
-          );
-          break;
-
-        case MCP_TOOL_NAMES.BOT_STATE_GET:
-          result = await this.handleBotStateGet(
-            args as unknown as BotStateGetInput,
-            actor,
-          );
-          break;
-
-        case MCP_TOOL_NAMES.BOT_QUERY:
-          result = await this.handleBotQuery(
-            args as unknown as BotQueryInput,
-            actor,
-          );
-          break;
-
-        case MCP_TOOL_NAMES.CUSTOM_BOT_LIST:
-          result = await this.handleCustomBotList();
-          break;
-
-        case MCP_TOOL_NAMES.CUSTOM_BOT_GET:
-          result = await this.handleCustomBotGet(
-            args as unknown as CustomBotGetInput,
-          );
-          break;
-
-        case MCP_TOOL_NAMES.CUSTOM_BOT_SCHEMA:
-          result = await this.handleCustomBotSchema(
-            args as unknown as CustomBotSchemaInput,
-          );
-          break;
-
-        default:
-          return {
-            content: [{ type: "text", text: `Unknown tool: ${name}` }],
-            isError: true,
-          };
-      }
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
+      const result = await this.runTool(name, args, actor);
+      return result.success
+        ? toMcpToolResult(result.data)
+        : toMcpToolError(result.error);
     } catch (error) {
       this.logger.error({ error, tool: name }, "MCP tool execution failed");
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
-          },
-        ],
-        isError: true,
-      };
+      return toMcpToolError(appError("internal", "Tool execution failed"));
     }
+  }
+
+  private runTool(
+    name: string,
+    args: Record<string, unknown>,
+    actor: Actor,
+  ): Promise<ToolResult> {
+    switch (name) {
+      case MCP_TOOL_NAMES.AUTH_STATUS:
+        return Promise.resolve(
+          Ok({ valid: true, message: "Credentials are valid" }),
+        );
+      case MCP_TOOL_NAMES.BOT_LIST:
+        return this.handleBotList(actor);
+      case MCP_TOOL_NAMES.BOT_GET:
+        return this.withArguments(BotArguments, args, (input) =>
+          this.handleBotGet(input, actor),
+        );
+      case MCP_TOOL_NAMES.BOT_DEPLOY:
+        return this.handleBotDeploy(args, actor);
+      case MCP_TOOL_NAMES.BOT_UPDATE:
+        return this.withArguments(BotUpdateArguments, args, (input) =>
+          this.handleBotUpdate(input, actor),
+        );
+      case MCP_TOOL_NAMES.BOT_DELETE:
+        return this.withArguments(BotArguments, args, (input) =>
+          this.handleBotDelete(input, actor),
+        );
+      case MCP_TOOL_NAMES.LOGS_GET:
+        return this.withArguments(BotArguments, args, (bot) =>
+          this.handleLogsGet(bot, args, actor),
+        );
+      case MCP_TOOL_NAMES.LOGS_SUMMARY:
+        return this.withArguments(BotArguments, args, (input) =>
+          this.handleLogsSummary(input, actor),
+        );
+      case MCP_TOOL_NAMES.BOT_STATE_LIST:
+        return this.withArguments(BotArguments, args, (input) =>
+          this.handleBotStateList(input, actor),
+        );
+      case MCP_TOOL_NAMES.BOT_STATE_GET:
+        return this.withArguments(BotStateKeyArguments, args, (input) =>
+          this.handleBotStateGet(input, actor),
+        );
+      case MCP_TOOL_NAMES.BOT_QUERY:
+        return this.withArguments(BotQueryArguments, args, (input) =>
+          this.handleBotQuery(input, actor),
+        );
+      case MCP_TOOL_NAMES.CUSTOM_BOT_LIST:
+        return this.handleCustomBotList();
+      case MCP_TOOL_NAMES.CUSTOM_BOT_GET:
+        return this.withArguments(CustomBotArguments, args, (input) =>
+          this.handleCustomBotGet(input),
+        );
+      case MCP_TOOL_NAMES.CUSTOM_BOT_SCHEMA:
+        return this.withArguments(CustomBotArguments, args, (input) =>
+          this.handleCustomBotSchema(input),
+        );
+      default:
+        return Promise.resolve(invalid(`Unknown tool: ${name}`));
+    }
+  }
+
+  private async withArguments<T extends object>(
+    dto: ClassConstructor<T>,
+    args: object,
+    run: (input: T) => Promise<ToolResult>,
+  ): Promise<ToolResult> {
+    const input = await validateArguments(dto, args);
+    return input.success ? run(input.data) : input;
   }
 
   // Bot Handlers
-  private async handleBotList(actor: Actor) {
+  private async handleBotList(actor: Actor): Promise<ToolResult> {
     const result = await this.botService.findAll(actor);
-    if (!result.success) {
-      throw new Error(result.error.message || "Failed to list bots");
-    }
+    if (!result.success) return result;
     // Return summary fields only to reduce context size
-    return (result.data || []).map((bot) => ({
-      id: bot.id,
-      name: bot.name,
-      type: bot.config?.type || "unknown",
-      version: bot.config?.version || "unknown",
-      createdAt: bot.createdAt,
-      updatedAt: bot.updatedAt,
-    }));
+    return Ok(
+      result.data.map((bot) => ({
+        id: bot.id,
+        name: bot.name,
+        type: bot.config?.type || "unknown",
+        version: bot.config?.version || "unknown",
+        createdAt: bot.createdAt,
+        updatedAt: bot.updatedAt,
+      })),
+    );
   }
 
-  private async handleBotGet(input: BotGetInput, actor: Actor) {
-    const result = await this.botService.findOne(actor, input.bot_id);
-    if (!result.success) {
-      throw new Error(result.error.message || "Bot not found");
-    }
-    return result.data;
+  private handleBotGet(input: BotArguments, actor: Actor): Promise<ToolResult> {
+    return this.botService.findOne(actor, input.bot_id);
   }
 
-  private async handleBotDeploy(input: BotDeployInput, actor: Actor) {
-    // REST gets CreateBotDto's required name from the global ValidationPipe,
-    // which tool arguments never pass through; DeployBot validates the rest.
-    const name = input.config?.name;
-    if (!name) {
-      throw new Error("Config must include a 'name' field");
-    }
+  private async handleBotDeploy(
+    args: Record<string, unknown>,
+    actor: Actor,
+  ): Promise<ToolResult> {
+    // The tool takes the name inside the config, where REST takes it beside.
+    const bot = await validateArguments(CreateBotDto, {
+      name: isRecord(args.config) ? args.config.name : undefined,
+      config: args.config,
+    });
+    if (!bot.success) return bot;
 
     const result = await this.commandBus.execute(
-      new DeployBot(actor, { name, config: input.config }),
+      new DeployBot(actor, { ...bot.data }),
     );
-    if (!result.success) {
-      throw new Error(result.error.message || "Failed to deploy bot");
-    }
-    return {
+    if (!result.success) return result;
+    return Ok({
       message: "Bot deployed successfully",
       bot: {
         id: result.data.id,
@@ -252,64 +213,85 @@ export class McpService {
         type: result.data.config?.type,
         version: result.data.config?.version,
       },
-    };
+    });
   }
 
-  private async handleBotUpdate(input: BotUpdateInput, actor: Actor) {
+  private async handleBotUpdate(
+    input: BotUpdateArguments,
+    actor: Actor,
+  ): Promise<ToolResult> {
     const result = await this.commandBus.execute(
       new UpdateBot(actor, input.bot_id, {
         config: input.config,
         ...(input.name && { name: input.name }),
       }),
     );
-    if (!result.success) {
-      throw new Error(result.error.message || "Failed to update bot");
-    }
-    return {
+    if (!result.success) return result;
+    return Ok({
       message: "Bot updated successfully",
       bot: {
         id: result.data.id,
         name: result.data.name,
       },
-    };
+    });
   }
 
-  private async handleBotDelete(input: BotDeleteInput, actor: Actor) {
+  private async handleBotDelete(
+    input: BotArguments,
+    actor: Actor,
+  ): Promise<ToolResult> {
     const result = await this.commandBus.execute(
       new DeleteBot(actor, input.bot_id),
     );
-    if (!result.success) {
-      throw new Error(result.error.message || "Failed to delete bot");
-    }
-    return { message: "Bot deleted successfully", bot_id: input.bot_id };
+    if (!result.success) return result;
+    return Ok({ message: "Bot deleted successfully", bot_id: input.bot_id });
   }
 
   // Logs Handlers
-  private async handleLogsGet(input: LogsGetInput, actor: Actor) {
+  private async handleLogsGet(
+    bot: BotArguments,
+    args: Record<string, unknown>,
+    actor: Actor,
+  ): Promise<ToolResult> {
+    // An absent key must stay absent: the DTO's number transform turns an
+    // explicit undefined into NaN.
+    const query = await validateArguments(
+      GetLogsQueryDto,
+      Object.fromEntries(
+        Object.entries({
+          date: args.date,
+          dateRange: args.date_range,
+          limit: args.limit,
+        }).filter(([, value]) => value !== undefined),
+      ),
+    );
+    if (!query.success) return query;
+
     // Cap limit to prevent context overflow
-    const limit = Math.min(input.limit || 100, 500);
+    const limit = Math.min(query.data.limit || 100, 500);
     const result = await this.logsService.getLogs(
-      input.bot_id,
+      bot.bot_id,
       {
-        date: input.date,
-        dateRange: input.date_range,
+        date: query.data.date,
+        dateRange: query.data.dateRange,
         limit,
         offset: 0,
       },
       actor.userId,
     );
-    if (!result.success) {
-      throw new Error(result.error.message || "Failed to get logs");
-    }
-    const entries = result.data?.entries || [];
-    return {
-      bot_id: input.bot_id,
+    if (!result.success) return result;
+    const entries = result.data.entries;
+    return Ok({
+      bot_id: bot.bot_id,
       count: entries.length,
       logs: entries,
-    };
+    });
   }
 
-  private async handleLogsSummary(input: { bot_id: string }, actor: Actor) {
+  private async handleLogsSummary(
+    input: BotArguments,
+    actor: Actor,
+  ): Promise<ToolResult> {
     const result = await this.logsService.getLogs(
       input.bot_id,
       {
@@ -319,14 +301,12 @@ export class McpService {
       },
       actor.userId,
     );
-    if (!result.success) {
-      throw new Error(result.error.message || "Failed to get logs for summary");
-    }
+    if (!result.success) return result;
 
-    const logs = result.data?.entries || [];
+    const logs = result.data.entries;
     const errorCount = logs.filter((log) => isErrorLine(log.content)).length;
 
-    return {
+    return Ok({
       bot_id: input.bot_id,
       total_entries: logs.length,
       error_count: errorCount,
@@ -335,96 +315,69 @@ export class McpService {
         end: logs.length > 0 ? logs[0].date : null,
       },
       last_entry: logs.length > 0 ? logs[0] : null,
-    };
+    });
   }
 
   // Bot State Handlers
-  private async handleBotStateList(input: BotStateListInput, actor: Actor) {
-    if (!input.bot_id) {
-      throw new Error("bot_id is required");
-    }
+  private async handleBotStateList(
+    input: BotArguments,
+    actor: Actor,
+  ): Promise<ToolResult> {
     const result = await this.botStateService.listKeys(actor, input.bot_id);
-    if (!result.success) {
-      throw new Error(result.error?.message || "Failed to list state keys");
-    }
-    return { bot_id: input.bot_id, keys: result.data };
+    if (!result.success) return result;
+    return Ok({ bot_id: input.bot_id, keys: result.data });
   }
 
-  private async handleBotStateGet(input: BotStateGetInput, actor: Actor) {
-    if (!input.bot_id) {
-      throw new Error("bot_id is required");
-    }
-    if (!input.key) {
-      throw new Error("key is required");
-    }
+  private async handleBotStateGet(
+    input: BotStateKeyArguments,
+    actor: Actor,
+  ): Promise<ToolResult> {
     const result = await this.botStateService.getKey(
       actor,
       input.bot_id,
       input.key,
     );
-    if (!result.success) {
-      throw new Error(result.error?.message || "Failed to get state value");
-    }
-    return { bot_id: input.bot_id, key: input.key, value: result.data };
+    if (!result.success) return result;
+    return Ok({ bot_id: input.bot_id, key: input.key, value: result.data });
   }
 
   // Bot Query Handlers
-  private async handleBotQuery(input: BotQueryInput, actor: Actor) {
-    if (!input.bot_id) {
-      throw new Error("bot_id is required");
-    }
-    if (!input.query_path) {
-      throw new Error("query_path is required");
-    }
-    const result = await this.botQueryService.executeQuery(
-      actor,
-      input.bot_id,
-      {
-        queryPath: input.query_path,
-        params: input.params,
-        timeoutSec: input.timeout_sec,
-      },
-    );
-    if (!result.success) {
-      throw new Error(result.error?.message || "Failed to execute query");
-    }
-    return result.data;
+  private async handleBotQuery(
+    input: BotQueryArguments,
+    actor: Actor,
+  ): Promise<ToolResult> {
+    return this.botQueryService.executeQuery(actor, input.bot_id, {
+      queryPath: input.query_path,
+      params: input.params,
+      timeoutSec: input.timeout_sec,
+    });
   }
 
   // Custom Bot Handlers
-  private async handleCustomBotList() {
+  private async handleCustomBotList(): Promise<ToolResult> {
     const result = await this.customBotService.getAllGlobalCustomBots();
-    if (!result.success) {
-      throw new Error(result.error.message || "Failed to list custom bots");
-    }
+    if (!result.success) return result;
     // Return summary fields only
-    return (result.data || []).map((bot) => ({
-      name: bot.name,
-      latestVersion: bot.latestVersion,
-      type: bot.versions?.[0]?.config?.type || "unknown",
-      description: bot.versions?.[0]?.config?.description || "",
-      author: bot.versions?.[0]?.config?.author || "unknown",
-      createdAt: bot.createdAt,
-    }));
+    return Ok(
+      result.data.map((bot) => ({
+        name: bot.name,
+        latestVersion: bot.latestVersion,
+        type: bot.versions?.[0]?.config?.type || "unknown",
+        description: bot.versions?.[0]?.config?.description || "",
+        author: bot.versions?.[0]?.config?.author || "unknown",
+        createdAt: bot.createdAt,
+      })),
+    );
   }
 
-  private async handleCustomBotGet(input: CustomBotGetInput) {
-    let result;
-    if (input.version) {
-      result = await this.customBotService.getGlobalSpecificVersion(
-        input.name,
-        input.version,
-      );
-    } else {
-      result = await this.customBotService.getGlobalLatestVersion(input.name);
-    }
-
-    if (!result.success) {
-      throw new Error(result.error.message || "Custom bot not found");
-    }
+  private async handleCustomBotGet(
+    input: CustomBotArguments,
+  ): Promise<ToolResult> {
+    const result = await this.findCustomBot(input);
+    if (!result.success) return result;
 
     const bot = result.data;
-    return {
+    return Ok({
       name: bot.name,
       version: bot.version,
       description: bot.config?.description,
@@ -434,28 +387,33 @@ export class McpService {
       entrypoints: bot.config?.entrypoints,
       createdAt: bot.createdAt,
       updatedAt: bot.updatedAt,
-    };
+    });
   }
 
-  private async handleCustomBotSchema(input: CustomBotSchemaInput) {
-    let result;
-    if (input.version) {
-      result = await this.customBotService.getGlobalSpecificVersion(
-        input.name,
-        input.version,
-      );
-    } else {
-      result = await this.customBotService.getGlobalLatestVersion(input.name);
-    }
+  private async handleCustomBotSchema(
+    input: CustomBotArguments,
+  ): Promise<ToolResult> {
+    const result = await this.findCustomBot(input);
+    if (!result.success) return result;
 
-    if (!result.success) {
-      throw new Error(result.error.message || "Custom bot not found");
-    }
-
-    return {
+    return Ok({
       name: result.data.name,
       version: result.data.version,
       schema: result.data.config?.schema?.bot || {},
-    };
+    });
+  }
+
+  private findCustomBot(input: CustomBotArguments) {
+    return input.version
+      ? this.customBotService.getGlobalSpecificVersion(
+          input.name,
+          input.version,
+        )
+      : this.customBotService.getGlobalLatestVersion(input.name);
   }
 }
+
+type ToolResult = Result<unknown, AppError>;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;

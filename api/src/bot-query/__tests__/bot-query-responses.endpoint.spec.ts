@@ -132,13 +132,31 @@ describe("/query responses", () => {
     expectAnswer(await query(), 500, "Query failed: socket hang up");
   });
 
-  it("refuses a request without a query path through the DTO", async () => {
-    const res = await request(app.getHttpServer())
-      .post(`/query/${OWNED_BOT}`)
-      .set(AS_OWNER)
-      .send({});
+  it.each([
+    {
+      problem: "without a query path",
+      body: {},
+      messages: [
+        "query_path should not be empty",
+        "query_path must be a string",
+      ],
+    },
+    {
+      problem: "with an empty query path",
+      body: { query_path: "" },
+      messages: ["query_path should not be empty"],
+    },
+  ])(
+    "refuses a request $problem through the DTO",
+    async ({ body, messages }) => {
+      const res = await request(app.getHttpServer())
+        .post(`/query/${OWNED_BOT}`)
+        .set(AS_OWNER)
+        .send(body);
 
-    expect(res.status).toBe(400);
-    expect(res.body.message).toEqual(["query_path must be a string"]);
-  });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toEqual(messages);
+      expect(runtime).not.toHaveBeenCalled();
+    },
+  );
 });
