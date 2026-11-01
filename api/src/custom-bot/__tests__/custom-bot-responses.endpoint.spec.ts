@@ -431,23 +431,54 @@ describe("/custom-bots responses", () => {
       expectRefusal(res, 500, "Failed to read from the database");
     });
 
+    const driverError = new Error("connect ECONNREFUSED 10.0.0.7:9000");
+
+    // Routes the named calls through the real StorageService over a MinIO
+    // client that cannot be reached, so the response shows what the service
+    // makes of the driver's error.
+    const unreachableStorage = (...methods: (keyof typeof storage)[]) => {
+      const minio = {
+        bucketExists: jest.fn().mockResolvedValue(true),
+        statObject: jest.fn().mockRejectedValue(driverError),
+        getObject: jest.fn().mockRejectedValue(driverError),
+        putObject: jest.fn().mockRejectedValue(driverError),
+      };
+      const logger = createMockLogger();
+      const real = new StorageService(
+        minio as any,
+        { get: (): undefined => undefined } as any,
+        logger as any,
+      );
+      for (const method of methods) {
+        storage[method].mockImplementation((...args: unknown[]) =>
+          (real[method] as (...a: unknown[]) => unknown)(...args),
+        );
+      }
+      return logger;
+    };
+
+    const expectDriverErrorLogged = (
+      logger: ReturnType<typeof createMockLogger>,
+    ) =>
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: driverError }),
+        expect.any(String),
+      );
+
     it("answers a frontend bundle the storage fails to read", async () => {
       const id = await uploadedWithFrontend();
-      storage.getBotFrontendStream.mockResolvedValue(
-        Failure(appError("internal", "Error retrieving frontend bundle: down")),
-      );
+      const logger = unreachableStorage("getBotFrontendStream");
 
       const res = await api()
         .get(`/custom-bots/by-id/${id}/frontend`)
         .set(as(UPLOADER));
 
-      expectRefusal(res, 500, "Error retrieving frontend bundle: down");
+      expectRefusal(res, 500, "Failed to read from storage");
+      expectDriverErrorLogged(logger);
     });
 
     it("answers an upload the storage refuses", async () => {
-      storage.uploadBotFile.mockResolvedValue(
-        Failure(appError("internal", "Error uploading file: down")),
-      );
+      const logger = unreachableStorage("uploadBotFile");
 
       const res = await api()
         .post("/custom-bots/sma-bot/upload")
@@ -455,21 +486,34 @@ describe("/custom-bots responses", () => {
         .field("version", "1.0.0")
         .attach("file", Buffer.from("PK"), "sma-bot.zip");
 
-      expectRefusal(res, 500, "Upload failed: Error uploading file: down");
+      expectRefusal(res, 500, "Upload failed: Failed to write to storage");
+      expectDriverErrorLogged(logger);
     });
 
     it("answers a deploy whose file check fails", async () => {
-      storage.fileExists.mockResolvedValue(
-        Failure(appError("internal", "Error checking file existence: down")),
-      );
+      const logger = unreachableStorage("fileExists");
 
       const res = await publish("post", UPLOADER, customBotConfig());
 
       expectRefusal(
         res,
         500,
-        "File validation failed: Error checking file existence: down",
+        "File validation failed: Failed to read from storage",
       );
+      expectDriverErrorLogged(logger);
+    });
+
+    it("answers a deploy whose ZIP read fails", async () => {
+      const logger = unreachableStorage("validateZipStructure");
+
+      const res = await publish("post", UPLOADER, customBotConfig());
+
+      expectRefusal(
+        res,
+        500,
+        "ZIP validation failed: Failed to read from storage",
+      );
+      expectDriverErrorLogged(logger);
     });
   });
 });
