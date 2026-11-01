@@ -2,7 +2,13 @@ import { INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { BotQueryController } from "../bot-query.controller";
 import { BotQueryService } from "../bot-query.service";
-import { AS_OWNER, errorBody, frontDoor, OWNED_BOT } from "@/test/front-door";
+import {
+  AS_OWNER,
+  errorBody,
+  frontDoor,
+  OWNED_BOT,
+  UNREADABLE_BOT,
+} from "@/test/front-door";
 
 describe("/query responses", () => {
   let app: INestApplication;
@@ -62,6 +68,15 @@ describe("/query responses", () => {
     const res = await query("someone-elses");
 
     expectAnswer(res, 404, "Bot not found or access denied");
+    expect(runtime).not.toHaveBeenCalled();
+  });
+
+  it("answers a failed ownership lookup with 500", async () => {
+    expectAnswer(
+      await query(UNREADABLE_BOT),
+      500,
+      "Failed to read from the database",
+    );
     expect(runtime).not.toHaveBeenCalled();
   });
 

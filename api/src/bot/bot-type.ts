@@ -1,7 +1,6 @@
 import { appError, AppError } from "@/common/app-error";
 import { Failure, Ok, Result } from "@/common/result";
 
-/** A Bot's `type`, such as "scheduled/sma-bot", read as its two parts. */
 export interface BotType {
   kind: string;
   customBotName: string;

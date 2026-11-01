@@ -1,20 +1,6 @@
 /**
  * MCP Types for the0 API
  */
-import { BotConfig } from "@/database/schema/bots";
-
-// Tool input schemas
-export interface BotDeployInput {
-  config: BotConfig;
-}
-
-export interface LogsGetInput {
-  bot_id: string;
-  date?: string;
-  date_range?: string;
-  limit?: number;
-}
-
 interface McpToolDefinition {
   name: McpToolName;
   description: string;

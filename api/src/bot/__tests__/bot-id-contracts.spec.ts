@@ -41,7 +41,7 @@ describe("bot ID contracts", () => {
       botService = {
         findOne: jest
           .fn()
-          .mockResolvedValue(Failure(appError("internal", "none"))),
+          .mockResolvedValue(Failure(appError("not_found", "Not found"))),
       };
       service = new BotStateService(
         {} as Minio.Client,
