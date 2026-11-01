@@ -1,7 +1,8 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { StorageService } from "../storage.service";
-import { Ok, Failure } from "@/common/result";
+import { Ok, Failure, Result } from "@/common/result";
+import { AppError } from "@/common/app-error";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
 import AdmZip from "adm-zip";
@@ -12,6 +13,22 @@ describe("StorageService", () => {
   let service: StorageService;
   let configService: jest.Mocked<ConfigService>;
   let mockMinioClient: jest.Mocked<Minio.Client>;
+  let logger: ReturnType<typeof createMockLogger>;
+
+  const expectLoggedFailure = (
+    result: Result<unknown, AppError>,
+    message: string,
+    driverMessage: string,
+  ) => {
+    expect(result.error).toEqual({ code: "internal", message });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        err: expect.objectContaining({ message: driverMessage }),
+      }),
+      message,
+    );
+    expect(message).not.toContain(driverMessage);
+  };
 
   // Sample ZIP file buffer for testing
   const createSampleZipBuffer = () => {
@@ -67,6 +84,7 @@ describe("StorageService", () => {
 
     service = module.get<StorageService>(StorageService);
     configService = module.get(ConfigService);
+    logger = module.get(PinoLogger);
   });
 
   afterEach(() => {
@@ -111,8 +129,11 @@ describe("StorageService", () => {
 
       const result = await service.ensureBucket();
 
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain("Bucket creation failed");
+      expectLoggedFailure(
+        result,
+        "Failed to write to storage",
+        "Bucket creation failed",
+      );
     });
   });
 
@@ -149,8 +170,11 @@ describe("StorageService", () => {
 
       const result = await service.fileExists("test/file.zip");
 
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain("Network error");
+      expectLoggedFailure(
+        result,
+        "Failed to read from storage",
+        "Network error",
+      );
     });
   });
 
@@ -254,8 +278,11 @@ describe("StorageService", () => {
         "test-bot",
       );
 
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain("Upload failed");
+      expectLoggedFailure(
+        result,
+        "Failed to write to storage",
+        "Upload failed",
+      );
     });
   });
 
@@ -284,8 +311,11 @@ describe("StorageService", () => {
 
       const result = await service.downloadFile("user123/nonexistent.zip");
 
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain("File not found");
+      expectLoggedFailure(
+        result,
+        "Failed to read from storage",
+        "File not found",
+      );
     });
   });
 
@@ -309,8 +339,11 @@ describe("StorageService", () => {
 
       const result = await service.deleteFile("user123/test-bot/1.0.0");
 
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain("Deletion failed");
+      expectLoggedFailure(
+        result,
+        "Failed to write to storage",
+        "Deletion failed",
+      );
     });
   });
 
@@ -338,8 +371,11 @@ describe("StorageService", () => {
 
       const result = await service.getFileInfo("user123/nonexistent.zip");
 
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain("File not found");
+      expectLoggedFailure(
+        result,
+        "Failed to read from storage",
+        "File not found",
+      );
     });
   });
 
@@ -386,8 +422,11 @@ describe("StorageService", () => {
         "user123/test-bot/1.0.0/frontend.js",
       );
 
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain("Network error");
+      expectLoggedFailure(
+        result,
+        "Failed to read from storage",
+        "Network error",
+      );
     });
   });
 
@@ -487,9 +526,10 @@ describe("StorageService", () => {
         "1.0.0",
       );
 
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain(
-        "Error extracting frontend bundle",
+      expectLoggedFailure(
+        result,
+        "Failed to extract the frontend bundle",
+        "File not found",
       );
     });
   });
@@ -563,8 +603,11 @@ describe("StorageService", () => {
         "some/prefix/",
       );
 
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain("Bucket not found");
+      expectLoggedFailure(
+        result,
+        "Failed to write to storage",
+        "Bucket not found",
+      );
     });
 
     it("should handle errors during object removal", async () => {
@@ -583,8 +626,11 @@ describe("StorageService", () => {
         "logs/bot-123/",
       );
 
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain("Permission denied");
+      expectLoggedFailure(
+        result,
+        "Failed to write to storage",
+        "Permission denied",
+      );
     });
   });
 });
