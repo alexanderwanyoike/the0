@@ -1,5 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { appError } from "@/common/app-error";
+import { appError, READ_FAILED } from "@/common/app-error";
 import { INestApplication, ValidationPipe } from "@nestjs/common";
 import request from "supertest";
 
@@ -215,6 +215,36 @@ describe("ApiKeyController (e2e)", () => {
         expect(res.body.message).toBe("API key not found");
       });
   });
+
+  it.each([
+    {
+      lookup: "finds no key",
+      failure: appError("not_found", "Not found"),
+      status: 404,
+      message: "API key not found",
+    },
+    {
+      lookup: "fails at the database",
+      failure: READ_FAILED,
+      status: 500,
+      message: "Failed to read from the database",
+    },
+  ])(
+    "/api-keys/:id (DELETE) should answer $status when the lookup $lookup",
+    async ({ failure, status, message }) => {
+      mockRepository.deleteApiKey.mockImplementationOnce(
+        ApiKeyRepository.prototype.deleteApiKey,
+      );
+      mockRepository.findOne.mockResolvedValueOnce(Failure(failure));
+
+      return request(app.getHttpServer())
+        .delete("/api-keys/test-key-id")
+        .expect(status)
+        .expect((res) => {
+          expect(res.body.message).toBe(message);
+        });
+    },
+  );
 
   it("/api-keys/stats/summary (GET) should return statistics", async () => {
     const apiKeys = [mockApiKey, { ...mockApiKey, id: "test-key-id-2" }];
