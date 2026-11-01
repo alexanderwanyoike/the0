@@ -225,7 +225,7 @@ describe("Bot commands", () => {
         .fn()
         .mockResolvedValue({
           success: false,
-          error: "Not found",
+          error: appError("not_found", "Not found"),
           data: null,
         });
 
@@ -799,7 +799,7 @@ describe("Bot commands", () => {
       it("should store the update event when the Actor uploaded no copy of the custom bot", async () => {
         mockCustomBotService.getUserSpecificVersion = jest
           .fn()
-          .mockResolvedValue(Failure("not found"));
+          .mockResolvedValue(Failure(appError("internal", "not found")));
 
         const result = await update(actor, "test-id", updateData);
 
@@ -1022,7 +1022,7 @@ describe("Bot commands", () => {
       it("should announce the delete on both subjects when the custom bot version is gone", async () => {
         mockCustomBotService.getGlobalSpecificVersion = jest
           .fn()
-          .mockResolvedValue(Failure("not found"));
+          .mockResolvedValue(Failure(appError("internal", "not found")));
 
         const result = await remove(actor, "test-id");
 
@@ -1078,7 +1078,7 @@ describe("Bot commands", () => {
 
       it("should warn and continue when the orphan check fails", async () => {
         (mockCustomBotService.checkOrphaned as jest.Mock).mockResolvedValue(
-          Failure("lookup failed"),
+          Failure(appError("internal", "lookup failed")),
         );
 
         const result = await remove(actor, "test-id");
@@ -1088,7 +1088,7 @@ describe("Bot commands", () => {
           {
             botId: "test-id",
             customBotId: "cb-123",
-            error: "lookup failed",
+            error: appError("internal", "lookup failed"),
           },
           "Failed to check if custom bot version is orphaned",
         );

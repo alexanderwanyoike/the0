@@ -44,7 +44,9 @@ export class BotConfigResolver {
     const customBotResult =
       await this.customBotService.getGlobalSpecificVersion(name.data, version);
     if (!customBotResult.success) {
-      return invalid(`Bot type '${type}' not found`);
+      return customBotResult.error.code === "not_found"
+        ? invalid(`Bot type '${type}' not found`)
+        : Failure(customBotResult.error);
     }
 
     const customBot = customBotResult.data;

@@ -1,4 +1,9 @@
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  InternalServerErrorException,
+  NotFoundException,
+} from "@nestjs/common";
+import { appError, AppError } from "@/common/app-error";
 import { CustomBotController } from "../custom-bot.controller";
 import {
   CustomBot,
@@ -73,15 +78,13 @@ describe("CustomBotController", () => {
         name: "test-bot",
         version: "1.0.0",
         config: validConfig,
-        filePath:
-          "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
+        filePath: "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
         userId: "user123",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       // Mock GCS file validation
@@ -117,8 +120,7 @@ describe("CustomBotController", () => {
     });
 
     it("should throw BadRequestException when file does not exist at filePath", async () => {
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       // Mock GCS file validation to return file not found
@@ -133,26 +135,24 @@ describe("CustomBotController", () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it("should throw BadRequestException when GCS validation fails", async () => {
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+    it("should throw InternalServerErrorException when the file check fails", async () => {
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       // Mock GCS file validation to return error
       mockStorageService.fileExists.mockResolvedValue({
         success: false,
         data: null,
-        error: "GCS error",
+        error: appError("internal", "GCS error"),
       });
 
       await expect(
         controller.createCustomBot("test-bot", body, mockUser),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(InternalServerErrorException);
     });
 
     it("should throw BadRequestException when config is missing", async () => {
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: "", filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -167,8 +167,7 @@ describe("CustomBotController", () => {
     });
 
     it("should throw BadRequestException when config is invalid JSON", async () => {
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: "invalid json", filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -187,8 +186,7 @@ describe("CustomBotController", () => {
         ...validConfig,
         name: "different-bot",
       };
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = {
         config: JSON.stringify(configWithDifferentName),
         filePath,
@@ -206,8 +204,7 @@ describe("CustomBotController", () => {
     });
 
     it("should throw BadRequestException when service returns error", async () => {
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -216,7 +213,7 @@ describe("CustomBotController", () => {
         error: null,
       });
       mockService.createCustomBot.mockResolvedValue(
-        Failure("Bot already exists"),
+        Failure(appError("validation", "Bot already exists")),
       );
 
       await expect(
@@ -255,15 +252,13 @@ describe("CustomBotController", () => {
         name: "test-bot",
         version: "1.1.0",
         config: updateConfig,
-        filePath:
-          "user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
+        filePath: "user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
         userId: "user123",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
-      const filePath =
-        "user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip";
+      const filePath = "user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip";
       const body = { config: JSON.stringify(updateConfig), filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -291,8 +286,7 @@ describe("CustomBotController", () => {
     });
 
     it("should throw BadRequestException when service returns error", async () => {
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -301,7 +295,7 @@ describe("CustomBotController", () => {
         error: null,
       });
       mockService.updateCustomBot.mockResolvedValue(
-        Failure("Version must be newer"),
+        Failure(appError("validation", "Version must be newer")),
       );
 
       await expect(
@@ -322,8 +316,7 @@ describe("CustomBotController", () => {
         ...validConfig,
         name: "different-bot",
       };
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = {
         config: JSON.stringify(configWithDifferentName),
         filePath,
@@ -354,18 +347,18 @@ describe("CustomBotController", () => {
     "%s deploy request validation",
     (method) => {
       const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
-      const fileFound = Ok<boolean, string>(true);
+      const fileFound = Ok<boolean, AppError>(true);
 
       it.each([
         [
           "the file lookup fails",
-          Failure<boolean, string>("GCS error"),
+          Failure<boolean, AppError>(appError("internal", "GCS error")),
           JSON.stringify(validConfig),
           "File validation failed: GCS error",
         ],
         [
           "the file is missing",
-          Ok<boolean, string>(false),
+          Ok<boolean, AppError>(false),
           JSON.stringify(validConfig),
           "File not found at specified file path",
         ],
@@ -509,18 +502,17 @@ describe("CustomBotController", () => {
       expect(mockService.getUserCustomBots).toHaveBeenCalledWith("user123");
     });
 
-    it("should throw BadRequestException when service returns error", async () => {
+    it("should throw InternalServerErrorException when reading fails", async () => {
       mockService.getUserCustomBots.mockResolvedValue(
-        Failure("Database connection failed"),
+        Failure(appError("internal", "Database connection failed")),
       );
 
       await expect(controller.getUserCustomBots(mockUser)).rejects.toThrow(
-        BadRequestException,
+        InternalServerErrorException,
       );
 
       expect(mockService.getUserCustomBots).toHaveBeenCalledWith("user123");
     });
-
   });
 
   describe("getAllVersions", () => {
@@ -562,7 +554,7 @@ describe("CustomBotController", () => {
 
     it("should throw NotFoundException when bot not found", async () => {
       mockService.getAllGlobalVersions.mockResolvedValue(
-        Failure("Bot not found"),
+        Failure(appError("not_found", "Bot not found")),
       );
 
       await expect(
@@ -578,8 +570,7 @@ describe("CustomBotController", () => {
         name: "test-bot",
         version: "1.0.0",
         config: validConfig,
-        filePath:
-          "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
+        filePath: "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
         userId: "user123",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -587,10 +578,7 @@ describe("CustomBotController", () => {
 
       mockService.getGlobalSpecificVersion.mockResolvedValue(Ok(mockBot));
 
-      const result = await controller.getSpecificVersion(
-        "test-bot",
-        "1.0.0",
-      );
+      const result = await controller.getSpecificVersion("test-bot", "1.0.0");
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockBot);
@@ -603,7 +591,7 @@ describe("CustomBotController", () => {
 
     it("should throw NotFoundException when version not found", async () => {
       mockService.getGlobalSpecificVersion.mockResolvedValue(
-        Failure("Version not found"),
+        Failure(appError("not_found", "Version not found")),
       );
 
       await expect(
@@ -638,7 +626,7 @@ describe("CustomBotController", () => {
 
     it("should throw NotFoundException when bot not found", async () => {
       mockService.getVersionsWithInstanceCounts.mockResolvedValue(
-        Failure("Bot not found"),
+        Failure(appError("not_found", "Bot not found")),
       );
 
       await expect(
@@ -667,7 +655,12 @@ describe("CustomBotController", () => {
 
     it("should throw BadRequestException when version has instances", async () => {
       mockService.deleteVersion.mockResolvedValue(
-        Failure("Cannot delete version 1.0.0: 3 active instance(s) reference it"),
+        Failure(
+          appError(
+            "validation",
+            "Cannot delete version 1.0.0: 3 active instance(s) reference it",
+          ),
+        ),
       );
 
       await expect(
@@ -691,7 +684,12 @@ describe("CustomBotController", () => {
 
     it("should throw BadRequestException when versions have instances", async () => {
       mockService.deleteAllVersions.mockResolvedValue(
-        Failure("Cannot delete: versions with active instance(s)"),
+        Failure(
+          appError(
+            "validation",
+            "Cannot delete: versions with active instance(s)",
+          ),
+        ),
       );
 
       await expect(

@@ -1,3 +1,4 @@
+import { appError } from "@/common/app-error";
 import { CustomBotRepository } from "../custom-bot.repository";
 import { CustomBot, CustomBotConfig } from "../custom-bot.types";
 
@@ -176,7 +177,7 @@ describe("CustomBotRepository", () => {
       const originalFindByKeyAndVersion = repository.findByKeyAndVersion;
       repository.findByKeyAndVersion = jest.fn().mockResolvedValue({
         success: false,
-        error: "Not found",
+        error: appError("not_found", "Not found"),
       });
 
       const result = await repository.userVersionExists(
@@ -225,7 +226,7 @@ describe("CustomBotRepository", () => {
         repository.findGlobalByKeyAndVersion;
       repository.findGlobalByKeyAndVersion = jest.fn().mockResolvedValue({
         success: false,
-        error: "Not found",
+        error: appError("not_found", "Not found"),
       });
 
       const result = await repository.globalVersionExists("test-bot", "2.0.0");
@@ -437,13 +438,13 @@ describe("CustomBotRepository", () => {
       const originalFindAll = repository.findAll;
       repository.findAll = jest.fn().mockResolvedValue({
         success: false,
-        error: "Database connection failed",
+        error: appError("internal", "Database connection failed"),
       });
 
       const result = await repository.getUserCustomBots("user123");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Database connection failed");
+      expect(result.error.message).toBe("Database connection failed");
 
       // Restore original method
       repository.findAll = originalFindAll;
@@ -459,7 +460,7 @@ describe("CustomBotRepository", () => {
       const result = await repository.getUserCustomBots("user123");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Unexpected error");
+      expect(result.error.message).toBe("Failed to read from the database");
 
       // Restore original method
       repository.findAll = originalFindAll;
@@ -529,7 +530,7 @@ describe("CustomBotRepository", () => {
       repository.findByKey = originalFindByKey;
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Bot not found");
+      expect(result.error.message).toBe("Bot not found");
     });
   });
 
@@ -591,7 +592,7 @@ describe("CustomBotRepository", () => {
       repository.findGlobalByKey = originalFindGlobalByKey;
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Bot not found");
+      expect(result.error.message).toBe("Bot not found");
     });
   });
 
@@ -744,12 +745,10 @@ describe("CustomBotRepository", () => {
       };
       mockTables.bots = mockBotsTable;
 
-      mockDb.where.mockResolvedValue([
-        { id: "bot-1" },
-        { id: "bot-2" },
-      ]);
+      mockDb.where.mockResolvedValue([{ id: "bot-1" }, { id: "bot-2" }]);
 
-      const result = await repository.countInstancesByCustomBotId("custom-bot-id-1");
+      const result =
+        await repository.countInstancesByCustomBotId("custom-bot-id-1");
 
       expect(result.success).toBe(true);
       expect(result.data).toBe(2);
@@ -763,7 +762,9 @@ describe("CustomBotRepository", () => {
 
       mockDb.where.mockResolvedValue([]);
 
-      const result = await repository.countInstancesByCustomBotId("unused-custom-bot-id");
+      const result = await repository.countInstancesByCustomBotId(
+        "unused-custom-bot-id",
+      );
 
       expect(result.success).toBe(true);
       expect(result.data).toBe(0);
@@ -777,10 +778,11 @@ describe("CustomBotRepository", () => {
 
       mockDb.where.mockRejectedValue(new Error("Database error"));
 
-      const result = await repository.countInstancesByCustomBotId("custom-bot-id-1");
+      const result =
+        await repository.countInstancesByCustomBotId("custom-bot-id-1");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Database error");
+      expect(result.error.message).toBe("Failed to read from the database");
     });
   });
 
@@ -797,7 +799,11 @@ describe("CustomBotRepository", () => {
         { customBotId: "cb-2" },
       ]);
 
-      const result = await repository.countInstancesByCustomBotIds(["cb-1", "cb-2", "cb-3"]);
+      const result = await repository.countInstancesByCustomBotIds([
+        "cb-1",
+        "cb-2",
+        "cb-3",
+      ]);
 
       expect(result.success).toBe(true);
       expect(result.data!.get("cb-1")).toBe(2);
@@ -967,7 +973,7 @@ describe("CustomBotRepository", () => {
       repository.findGlobalByKey = originalFindGlobalByKey;
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Insufficient permissions");
+      expect(result.error.message).toBe("Insufficient permissions");
     });
 
     it("should return error if bot is not found", async () => {
@@ -987,7 +993,7 @@ describe("CustomBotRepository", () => {
       repository.findGlobalByKey = originalFindGlobalByKey;
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Bot not found");
+      expect(result.error.message).toBe("Bot not found");
     });
   });
 });

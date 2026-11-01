@@ -12,7 +12,8 @@ import {
   SUPPORTED_RUNTIMES,
   COMPILED_RUNTIMES,
 } from "./custom-bot.types";
-import { Result, Failure, Ok, errorMessage } from "@/common/result";
+import { appError, AppError, WRITE_FAILED } from "@/common/app-error";
+import { Result, Failure, Ok } from "@/common/result";
 
 @Injectable()
 export class CustomBotService {
@@ -26,12 +27,17 @@ export class CustomBotService {
     userId: string,
     config: CustomBotConfig,
     filePath: string,
-  ): Promise<Result<CustomBot, string>> {
+  ): Promise<Result<CustomBot, AppError>> {
     try {
       // Validate config structure
       const validation = validateCustomBotConfigPayload(config);
       if (!validation.valid) {
-        return Failure(`Validation failed: ${validation.errors?.join(", ")}`);
+        return Failure(
+          appError(
+            "validation",
+            `Validation failed: ${validation.errors?.join(", ")}`,
+          ),
+        );
       }
 
       // Check if bot already exists
@@ -44,12 +50,17 @@ export class CustomBotService {
 
       if (!config.runtime || !SUPPORTED_RUNTIMES.includes(config.runtime)) {
         return Failure(
-          `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
+          appError(
+            "validation",
+            `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
+          ),
         );
       }
 
       if (existsResult.data) {
-        return Failure("Custom bot with this name already exists");
+        return Failure(
+          appError("validation", "Custom bot with this name already exists"),
+        );
       }
 
       return await this.storeVersion(
@@ -60,7 +71,7 @@ export class CustomBotService {
       );
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error creating custom bot");
-      return Failure(`Failed to create custom bot: ${errorMessage(error)}`);
+      return Failure(appError("internal", "Failed to create custom bot"));
     }
   }
 
@@ -69,7 +80,7 @@ export class CustomBotService {
     config: CustomBotConfig,
     filePath: string,
     frontendLogMessage: string,
-  ): Promise<Result<CustomBot, string>> {
+  ): Promise<Result<CustomBot, AppError>> {
     const requiredFiles = COMPILED_RUNTIMES.includes(config.runtime)
       ? []
       : Object.values(config.entrypoints).filter(Boolean);
@@ -78,7 +89,12 @@ export class CustomBotService {
       requiredFiles,
     );
     if (!zipValidation.success) {
-      return Failure(`ZIP validation failed: ${zipValidation.error}`);
+      return Failure(
+        appError(
+          zipValidation.error.code,
+          `ZIP validation failed: ${zipValidation.error.message}`,
+        ),
+      );
     }
 
     const frontendResult = await this.storageService.extractAndStoreFrontend(
@@ -123,7 +139,7 @@ export class CustomBotService {
     name: string,
     config: CustomBotConfig,
     filePath: string,
-  ): Promise<Result<CustomBot, string>> {
+  ): Promise<Result<CustomBot, AppError>> {
     try {
       const configCheck = this.checkUpdateConfig(name, config);
       if (!configCheck.success) return Failure(configCheck.error);
@@ -142,26 +158,39 @@ export class CustomBotService {
       );
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error updating custom bot");
-      return Failure(`Failed to update custom bot: ${errorMessage(error)}`);
+      return Failure(appError("internal", "Failed to update custom bot"));
     }
   }
 
   private checkUpdateConfig(
     name: string,
     config: CustomBotConfig,
-  ): Result<null, string> {
+  ): Result<null, AppError> {
     const validation = validateCustomBotConfigPayload(config);
     if (!validation.valid) {
-      return Failure(`Validation failed: ${validation.errors?.join(", ")}`);
+      return Failure(
+        appError(
+          "validation",
+          `Validation failed: ${validation.errors?.join(", ")}`,
+        ),
+      );
     }
 
     if (config.name !== name) {
-      return Failure("Bot name in config must match the URL parameter");
+      return Failure(
+        appError(
+          "validation",
+          "Bot name in config must match the URL parameter",
+        ),
+      );
     }
 
     if (!config.runtime || !SUPPORTED_RUNTIMES.includes(config.runtime)) {
       return Failure(
-        `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
+        appError(
+          "validation",
+          `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
+        ),
       );
     }
 
@@ -171,14 +200,19 @@ export class CustomBotService {
   private async checkUserOwnsExistingBot(
     userId: string,
     name: string,
-  ): Promise<Result<null, string>> {
+  ): Promise<Result<null, AppError>> {
     const existsResult = await this.customBotRepository.globalBotExists(name);
     if (!existsResult.success) {
       return Failure(existsResult.error);
     }
 
     if (!existsResult.data) {
-      return Failure("Custom bot does not exist. Create it first using POST.");
+      return Failure(
+        appError(
+          "not_found",
+          "Custom bot does not exist. Create it first using POST.",
+        ),
+      );
     }
 
     const ownershipCheckResult =
@@ -193,7 +227,7 @@ export class CustomBotService {
   private async checkVersionIsNew(
     name: string,
     version: string,
-  ): Promise<Result<null, string>> {
+  ): Promise<Result<null, AppError>> {
     const latestResult =
       await this.customBotRepository.getGlobalLatestVersion(name);
     if (!latestResult.success) {
@@ -203,7 +237,10 @@ export class CustomBotService {
     const latestVersion = latestResult.data.version;
     if (!this.customBotRepository.isVersionNewer(latestVersion, version)) {
       return Failure(
-        `Version ${version} must be greater than current version ${latestVersion}`,
+        appError(
+          "validation",
+          `Version ${version} must be greater than current version ${latestVersion}`,
+        ),
       );
     }
 
@@ -214,7 +251,12 @@ export class CustomBotService {
     }
 
     if (versionExistsResult.data) {
-      return Failure(`Version ${version} already exists for this bot`);
+      return Failure(
+        appError(
+          "validation",
+          `Version ${version} already exists for this bot`,
+        ),
+      );
     }
 
     return Ok(null);
@@ -222,7 +264,7 @@ export class CustomBotService {
 
   async getUserCustomBots(
     userId: string,
-  ): Promise<Result<CustomBotWithVersions[], string>> {
+  ): Promise<Result<CustomBotWithVersions[], AppError>> {
     try {
       const result = await this.customBotRepository.getUserCustomBots(userId);
 
@@ -233,20 +275,20 @@ export class CustomBotService {
       return result;
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error getting user custom bots");
-      return Failure(`Failed to get user custom bots: ${errorMessage(error)}`);
+      return Failure(appError("internal", "Failed to get user custom bots"));
     }
   }
 
   async getAllUserVersions(
     userId: string,
     name: string,
-  ): Promise<Result<CustomBotWithVersions, string>> {
+  ): Promise<Result<CustomBotWithVersions, AppError>> {
     return await this.customBotRepository.getAllUserVersions(userId, name);
   }
 
   async getAllGlobalVersions(
     name: string,
-  ): Promise<Result<CustomBotWithVersions, string>> {
+  ): Promise<Result<CustomBotWithVersions, AppError>> {
     return await this.customBotRepository.getAllGlobalVersions(name);
   }
 
@@ -254,7 +296,7 @@ export class CustomBotService {
     userId: string,
     name: string,
     version: string,
-  ): Promise<Result<CustomBot, string>> {
+  ): Promise<Result<CustomBot, AppError>> {
     return await this.customBotRepository.getSpecificUserVersion(
       userId,
       name,
@@ -265,7 +307,7 @@ export class CustomBotService {
   async getGlobalSpecificVersion(
     name: string,
     version: string,
-  ): Promise<Result<CustomBot, string>> {
+  ): Promise<Result<CustomBot, AppError>> {
     return await this.customBotRepository.getSpecificGlobalVersion(
       name,
       version,
@@ -274,24 +316,24 @@ export class CustomBotService {
 
   async getGlobalLatestVersion(
     name: string,
-  ): Promise<Result<CustomBot, string>> {
+  ): Promise<Result<CustomBot, AppError>> {
     return await this.customBotRepository.getGlobalLatestVersion(name);
   }
 
   async getAllGlobalCustomBots(): Promise<
-    Result<CustomBotWithVersions[], string>
+    Result<CustomBotWithVersions[], AppError>
   > {
     return await this.customBotRepository.getAllGlobalCustomBots();
   }
 
-  async getById(id: string): Promise<Result<CustomBot, string>> {
+  async getById(id: string): Promise<Result<CustomBot, AppError>> {
     return await this.customBotRepository.findOneById(id);
   }
 
   async getVersionsWithInstanceCounts(
     userId: string,
     name: string,
-  ): Promise<Result<VersionWithInstances[], string>> {
+  ): Promise<Result<VersionWithInstances[], AppError>> {
     const versionsResult = await this.customBotRepository.getAllUserVersions(
       userId,
       name,
@@ -321,9 +363,11 @@ export class CustomBotService {
     userId: string,
     name: string,
     version: string,
-  ): Promise<Result<void, string>> {
-    const ownershipResult =
-      await this.customBotRepository.checkUserOwnership(userId, name);
+  ): Promise<Result<void, AppError>> {
+    const ownershipResult = await this.customBotRepository.checkUserOwnership(
+      userId,
+      name,
+    );
     if (!ownershipResult.success) {
       return Failure(ownershipResult.error);
     }
@@ -343,7 +387,10 @@ export class CustomBotService {
 
     if (countResult.data > 0) {
       return Failure(
-        `Cannot delete version ${version}: ${countResult.data} active instance(s) reference it`,
+        appError(
+          "validation",
+          `Cannot delete version ${version}: ${countResult.data} active instance(s) reference it`,
+        ),
       );
     }
 
@@ -355,10 +402,19 @@ export class CustomBotService {
       customBot.id,
     );
     if (!removeResult.success) {
+      if (removeResult.error.reason === "error") {
+        this.logger.error(
+          { name, error: removeResult.error.message },
+          "Failed to delete custom bot versions",
+        );
+      }
       return Failure(
         removeResult.error.reason === "in-use"
-          ? `Cannot delete version ${version}: active instance(s) reference it`
-          : removeResult.error.message,
+          ? appError(
+              "validation",
+              `Cannot delete version ${version}: active instance(s) reference it`,
+            )
+          : WRITE_FAILED,
       );
     }
 
@@ -389,9 +445,11 @@ export class CustomBotService {
   async deleteAllVersions(
     userId: string,
     name: string,
-  ): Promise<Result<void, string>> {
-    const ownershipResult =
-      await this.customBotRepository.checkUserOwnership(userId, name);
+  ): Promise<Result<void, AppError>> {
+    const ownershipResult = await this.customBotRepository.checkUserOwnership(
+      userId,
+      name,
+    );
     if (!ownershipResult.success) {
       return Failure(ownershipResult.error);
     }
@@ -419,7 +477,10 @@ export class CustomBotService {
 
     if (versionsWithInstances.length > 0) {
       return Failure(
-        `Cannot delete: versions with active instance(s): ${versionsWithInstances.join(", ")}`,
+        appError(
+          "validation",
+          `Cannot delete: versions with active instance(s): ${versionsWithInstances.join(", ")}`,
+        ),
       );
     }
 
@@ -429,10 +490,19 @@ export class CustomBotService {
       name,
     );
     if (!removeResult.success) {
+      if (removeResult.error.reason === "error") {
+        this.logger.error(
+          { name, error: removeResult.error.message },
+          "Failed to delete custom bot versions",
+        );
+      }
       return Failure(
         removeResult.error.reason === "in-use"
-          ? "Cannot delete: versions with active instance(s)"
-          : removeResult.error.message,
+          ? appError(
+              "validation",
+              "Cannot delete: versions with active instance(s)",
+            )
+          : WRITE_FAILED,
       );
     }
 
@@ -462,10 +532,9 @@ export class CustomBotService {
   async checkOrphaned(
     customBotId: string,
   ): Promise<
-    Result<{ orphaned: boolean; name: string; version: string }, string>
+    Result<{ orphaned: boolean; name: string; version: string }, AppError>
   > {
-    const botResult =
-      await this.customBotRepository.findOneById(customBotId);
+    const botResult = await this.customBotRepository.findOneById(customBotId);
     if (!botResult.success) {
       return Failure(botResult.error);
     }

@@ -1,5 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { appError } from "@/common/app-error";
+import { appError, AppError } from "@/common/app-error";
 import { PinoLogger } from "nestjs-pino";
 import { McpService } from "../mcp.service";
 import { mockActor } from "@/test/mock-actor";
@@ -46,8 +46,8 @@ const catalogueVersion = (version: string): CustomBot => ({
 
 const findInCatalogue = async (name: string, version: string) =>
   name === "test-bot" && CATALOGUE_VERSIONS.includes(version)
-    ? Ok<CustomBot, string>(catalogueVersion(version))
-    : Failure<CustomBot, string>("Not found");
+    ? Ok<CustomBot, AppError>(catalogueVersion(version))
+    : Failure<CustomBot, AppError>(appError("not_found", "Not found"));
 
 /**
  * Scopes every query by user, as RoleRepository does in SQL, and keeps the

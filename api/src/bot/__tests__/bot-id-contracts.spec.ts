@@ -1,4 +1,5 @@
 import { createId } from "@paralleldrive/cuid2";
+import { appError } from "@/common/app-error";
 import { unsetConfig } from "@/test/mock-config";
 import { PinoLogger } from "nestjs-pino";
 import * as Minio from "minio";
@@ -40,7 +41,11 @@ describe("bot ID contracts", () => {
     let service: BotStateService;
 
     beforeEach(() => {
-      botService = { findOne: jest.fn().mockResolvedValue(Failure("none")) };
+      botService = {
+        findOne: jest
+          .fn()
+          .mockResolvedValue(Failure(appError("internal", "none"))),
+      };
       service = new BotStateService(
         {} as Minio.Client,
         unsetConfig(),

@@ -35,6 +35,8 @@ import { AuthenticatedUser } from "@/auth/auth.types";
 import { CurrentUser } from "@/auth/current-user.decorator";
 import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 import { StorageService } from "./storage.service";
+import { appError } from "@/common/app-error";
+import { toHttpException } from "@/common/http-error";
 
 interface CustomBotDeployDto {
   config: string; // JSON string
@@ -83,8 +85,11 @@ export class CustomBotController {
 
     const fileExistsResult = await this.storageService.fileExists(filePath);
     if (!fileExistsResult.success) {
-      throw new BadRequestException(
-        `File validation failed: ${fileExistsResult.error}`,
+      throw toHttpException(
+        appError(
+          fileExistsResult.error.code,
+          `File validation failed: ${fileExistsResult.error.message}`,
+        ),
       );
     }
 
@@ -187,7 +192,12 @@ export class CustomBotController {
     );
 
     if (!uploadResult.success) {
-      throw new BadRequestException(`Upload failed: ${uploadResult.error}`);
+      throw toHttpException(
+        appError(
+          uploadResult.error.code,
+          `Upload failed: ${uploadResult.error.message}`,
+        ),
+      );
     }
 
     return {
@@ -222,7 +232,7 @@ export class CustomBotController {
     );
 
     if (!result.success) {
-      throw new BadRequestException(result.error);
+      throw toHttpException(result.error);
     }
 
     return {
@@ -258,7 +268,7 @@ export class CustomBotController {
     );
 
     if (!result.success) {
-      throw new BadRequestException(result.error);
+      throw toHttpException(result.error);
     }
 
     return {
@@ -277,7 +287,7 @@ export class CustomBotController {
     const result = await this.customBotService.getUserCustomBots(userId);
 
     if (!result.success) {
-      throw new BadRequestException(result.error);
+      throw toHttpException(result.error);
     }
 
     return {
@@ -304,7 +314,7 @@ export class CustomBotController {
     );
 
     if (!result.success) {
-      throw new NotFoundException(result.error);
+      throw toHttpException(result.error);
     }
 
     return {
@@ -323,7 +333,7 @@ export class CustomBotController {
     const result = await this.customBotService.getAllGlobalVersions(name);
 
     if (!result.success) {
-      throw new NotFoundException(result.error);
+      throw toHttpException(result.error);
     }
 
     return {
@@ -343,8 +353,12 @@ export class CustomBotController {
     // Get custom bot by ID (includes specific version info)
     const result = await this.customBotService.getById(id);
 
-    if (!result.success || !result.data) {
-      throw new NotFoundException(`Custom bot not found: ${id}`);
+    if (!result.success) {
+      throw toHttpException(
+        result.error.code === "not_found"
+          ? appError("not_found", `Custom bot not found: ${id}`)
+          : result.error,
+      );
     }
 
     const customBot = result.data;
@@ -364,8 +378,8 @@ export class CustomBotController {
     const streamResult =
       await this.storageService.getBotFrontendStream(frontendPath);
 
-    if (!streamResult.success || !streamResult.data) {
-      throw new NotFoundException("Frontend bundle not found");
+    if (!streamResult.success) {
+      throw toHttpException(streamResult.error);
     }
 
     // Serve the JavaScript bundle as a stream to avoid memory issues with large bundles
@@ -392,7 +406,7 @@ export class CustomBotController {
     );
 
     if (!result.success) {
-      throw new BadRequestException(result.error);
+      throw toHttpException(result.error);
     }
 
     return {
@@ -416,7 +430,7 @@ export class CustomBotController {
     );
 
     if (!result.success) {
-      throw new BadRequestException(result.error);
+      throw toHttpException(result.error);
     }
 
     return {
@@ -441,7 +455,7 @@ export class CustomBotController {
     );
 
     if (!result.success) {
-      throw new NotFoundException(result.error);
+      throw toHttpException(result.error);
     }
 
     return {
