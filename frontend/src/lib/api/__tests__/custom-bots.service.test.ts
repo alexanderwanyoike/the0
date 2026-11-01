@@ -1,17 +1,16 @@
 import { CustomBotService } from "../custom-bots.service";
-import { ApiClient } from "@/lib/api-client";
+import { setAuthFetchService } from "@/lib/auth-fetch";
 
-// Mock ApiClient
-jest.mock("@/lib/api-client", () => ({
-  ApiClient: {
-    get: jest.fn(),
-    post: jest.fn(),
-    put: jest.fn(),
-    delete: jest.fn(),
-  },
-}));
+let fetchMock: jest.SpyInstance;
 
-const mockApiClient = ApiClient as jest.Mocked<typeof ApiClient>;
+function respond(data: unknown, status = 200) {
+  fetchMock.mockResolvedValue(
+    new Response(JSON.stringify(data), {
+      status,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+}
 
 describe("CustomBotService", () => {
   const mockBotWithVersions = {
@@ -35,17 +34,21 @@ describe("CustomBotService", () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    setAuthFetchService(
+      { getToken: () => "jwt", logout: jest.fn() },
+      jest.fn(),
+    );
+    fetchMock = jest.spyOn(globalThis, "fetch");
   });
+
+  afterEach(() => jest.restoreAllMocks());
 
   describe("getCustomBots", () => {
     it("should fetch custom bots successfully", async () => {
-      mockApiClient.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: [mockBotWithVersions],
-          message: "Success",
-        },
+      respond({
+        success: true,
+        data: [mockBotWithVersions],
+        message: "Success",
       });
 
       const result = await CustomBotService.getCustomBots();
@@ -56,19 +59,11 @@ describe("CustomBotService", () => {
         expect(result.data[0].name).toBe("test-bot");
         expect(result.data[0].versions).toHaveLength(1);
       }
-      expect(mockApiClient.get).toHaveBeenCalledWith("/api/custom-bots");
+      expect(fetchMock.mock.calls[0][0]).toBe("/api/custom-bots");
     });
 
     it("should handle API error response", async () => {
-      mockApiClient.get.mockResolvedValue({
-        data: {
-          success: false,
-        },
-        error: {
-          message: "Failed to fetch",
-          statusCode: 500,
-        },
-      });
+      respond({ success: false, message: "Failed to fetch" }, 500);
 
       const result = await CustomBotService.getCustomBots();
 
@@ -80,12 +75,7 @@ describe("CustomBotService", () => {
     });
 
     it("should handle 401 unauthorized error", async () => {
-      mockApiClient.get.mockResolvedValue({
-        error: {
-          message: "Unauthorized",
-          statusCode: 401,
-        },
-      });
+      respond({ message: "Unauthorized", statusCode: 401 }, 401);
 
       const result = await CustomBotService.getCustomBots();
 
@@ -96,13 +86,27 @@ describe("CustomBotService", () => {
     });
 
     it("should handle network errors", async () => {
-      mockApiClient.get.mockRejectedValue(new Error("Network error"));
+      fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
 
       const result = await CustomBotService.getCustomBots();
 
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.message).toBe("Network error");
+        expect(result.error.message).toBe("No response received from server");
+        expect(result.error.statusCode).toBe(500);
+      }
+    });
+
+    it.each([
+      ["no data", null],
+      ["data that is not a list", {}],
+    ])("should fail rather than throw on a body with %s", async (_, data) => {
+      respond({ success: true, data, message: "Success" });
+
+      const result = await CustomBotService.getCustomBots();
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
         expect(result.error.statusCode).toBe(500);
       }
     });
@@ -121,13 +125,7 @@ describe("CustomBotService", () => {
         filePath: "/bots/test-bot/1.0.0",
       };
 
-      mockApiClient.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: [rawBot],
-          message: "Success",
-        },
-      });
+      respond({ success: true, data: [rawBot], message: "Success" });
 
       const result = await CustomBotService.getCustomBots();
 
@@ -141,12 +139,10 @@ describe("CustomBotService", () => {
 
   describe("getCustomBot", () => {
     it("should fetch a specific bot by name", async () => {
-      mockApiClient.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: [mockBotWithVersions],
-          message: "Success",
-        },
+      respond({
+        success: true,
+        data: [mockBotWithVersions],
+        message: "Success",
       });
 
       const result = await CustomBotService.getCustomBot("test-bot");
@@ -158,12 +154,10 @@ describe("CustomBotService", () => {
     });
 
     it("should return 404 error for non-existent bot", async () => {
-      mockApiClient.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: [mockBotWithVersions],
-          message: "Success",
-        },
+      respond({
+        success: true,
+        data: [mockBotWithVersions],
+        message: "Success",
       });
 
       const result = await CustomBotService.getCustomBot("non-existent-bot");
@@ -176,114 +170,13 @@ describe("CustomBotService", () => {
     });
 
     it("should propagate API errors", async () => {
-      mockApiClient.get.mockResolvedValue({
-        error: {
-          message: "Server error",
-          statusCode: 500,
-        },
-      });
+      respond({ message: "Server error", statusCode: 500 }, 500);
 
       const result = await CustomBotService.getCustomBot("test-bot");
 
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error.statusCode).toBe(500);
-      }
-    });
-  });
-
-  describe("getCustomBotVersion", () => {
-    it("should fetch specific version of a bot", async () => {
-      const versionData = {
-        id: "version-1",
-        name: "test-bot",
-        version: "1.0.0",
-        createdAt: "2024-01-01T00:00:00.000Z",
-        updatedAt: "2024-01-02T00:00:00.000Z",
-        status: "active",
-      };
-
-      mockApiClient.get.mockResolvedValue({
-        data: versionData,
-      });
-
-      const result = await CustomBotService.getCustomBotVersion(
-        "test-bot",
-        "1.0.0",
-      );
-
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.version).toBe("1.0.0");
-      }
-      expect(mockApiClient.get).toHaveBeenCalledWith(
-        "/api/custom-bots/test-bot/1.0.0",
-      );
-    });
-
-    it("should handle version not found", async () => {
-      mockApiClient.get.mockResolvedValue({
-        error: {
-          message: "Version not found",
-          statusCode: 404,
-        },
-      });
-
-      const result = await CustomBotService.getCustomBotVersion(
-        "test-bot",
-        "9.9.9",
-      );
-
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error.statusCode).toBe(404);
-      }
-    });
-
-    it("should URL encode bot name and version", async () => {
-      mockApiClient.get.mockResolvedValue({
-        data: { version: "1.0.0" },
-      });
-
-      await CustomBotService.getCustomBotVersion("bot with spaces", "1.0.0");
-
-      expect(mockApiClient.get).toHaveBeenCalledWith(
-        "/api/custom-bots/bot%20with%20spaces/1.0.0",
-      );
-    });
-  });
-
-  describe("getCustomBotVersions", () => {
-    it("should fetch all versions for a bot", async () => {
-      mockApiClient.get.mockResolvedValue({
-        data: ["1.0.0", "0.9.0", "0.8.0"],
-      });
-
-      const result = await CustomBotService.getCustomBotVersions("test-bot");
-
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data).toHaveLength(3);
-        expect(result.data).toContain("1.0.0");
-      }
-      expect(mockApiClient.get).toHaveBeenCalledWith(
-        "/api/custom-bots/test-bot/versions",
-      );
-    });
-
-    it("should handle error fetching versions", async () => {
-      mockApiClient.get.mockResolvedValue({
-        error: {
-          message: "Failed to fetch versions",
-          statusCode: 500,
-        },
-      });
-
-      const result = await CustomBotService.getCustomBotVersions("test-bot");
-
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error.message).toBe("Failed to fetch versions");
       }
     });
   });

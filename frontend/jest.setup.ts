@@ -103,56 +103,6 @@ const mockBotLog = {
 
 // API mocking setup
 const server = setupServer(
-  // User endpoints
-  http.get("/api/users/:id", ({ params }) => {
-    return HttpResponse.json({
-      success: true,
-      data: {
-        id: params.id,
-        email: "test@example.com",
-        displayName: "Test User",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isActive: true,
-        isEmailVerified: true,
-      },
-    });
-  }),
-
-  http.post("/api/users", () => {
-    return HttpResponse.json({
-      success: true,
-      data: {
-        id: "new-user-id",
-        email: "test@example.com",
-        displayName: "Test User",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isActive: true,
-        isEmailVerified: true,
-      },
-    });
-  }),
-
-  http.put("/api/users/:id", () => {
-    return HttpResponse.json({
-      success: true,
-      data: {
-        id: "user-id",
-        email: "test@example.com",
-        displayName: "Updated User",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isActive: true,
-        isEmailVerified: true,
-      },
-    });
-  }),
-
-  http.delete("/api/users/:id", () => {
-    return HttpResponse.json({ success: true });
-  }),
-
   // Custom bots endpoints
   http.get("/api/custom-bots", () => {
     return HttpResponse.json({
@@ -160,18 +110,6 @@ const server = setupServer(
       data: [mockCustomBot],
       message: "Custom bots fetched successfully",
     });
-  }),
-
-  http.get("/api/custom-bots/:name/:version", ({ params }) => {
-    return HttpResponse.json({
-      ...mockCustomBot.versions[0],
-      name: params.name,
-      version: params.version,
-    });
-  }),
-
-  http.get("/api/custom-bots/:name/versions", () => {
-    return HttpResponse.json(["1.0.0", "0.9.0"]);
   }),
 
   // API keys endpoints

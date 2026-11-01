@@ -10,9 +10,7 @@ import React, {
 import { useRouter } from "next/navigation";
 import { JwtAuthService } from "@/lib/auth/jwt-auth.service";
 import { AuthUser } from "@/lib/auth/types";
-import { setAuthService } from "@/lib/axios-interceptor";
 import { setAuthFetchService } from "@/lib/auth-fetch";
-import { setApiClientService } from "@/lib/api-client";
 import { setSSEAuthService } from "@/lib/sse/sse-auth";
 
 interface AuthContextType {
@@ -96,9 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearAuthState, router]);
 
   useEffect(() => {
-    setAuthService(authService, logout);
     setAuthFetchService(authService, logout);
-    setApiClientService(authService, logout);
     setSSEAuthService(authService, logout);
 
     initializeAuth();

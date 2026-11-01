@@ -1,76 +1,63 @@
-import { ApiKeyService, ApiKey, ApiKeyStats } from "../api-key-service";
-import axios from "@/lib/axios-interceptor";
+import { ApiKeyService, ApiKey } from "../api-key-service";
+import { setAuthFetchService } from "@/lib/auth-fetch";
 
-// Mock axios-interceptor
-jest.mock("@/lib/axios-interceptor", () => ({
-  get: jest.fn(),
-  post: jest.fn(),
-  delete: jest.fn(),
-}));
+const mockApiKey: ApiKey = {
+  id: "key-1",
+  userId: "user-1",
+  name: "Test API Key",
+  key: "the0_test_key_123",
+  isActive: true,
+  createdAt: "2024-01-01T00:00:00.000Z",
+  updatedAt: "2024-01-02T00:00:00.000Z",
+};
 
-const mockAxios = axios as jest.Mocked<typeof axios>;
+let fetchMock: jest.SpyInstance;
+
+beforeEach(() => {
+  setAuthFetchService({ getToken: () => "jwt", logout: jest.fn() }, jest.fn());
+  fetchMock = jest.spyOn(globalThis, "fetch");
+});
+
+afterEach(() => jest.restoreAllMocks());
+
+function respond(data: unknown, status = 200) {
+  fetchMock.mockResolvedValueOnce(
+    new Response(JSON.stringify(data), {
+      status,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+}
+
+function sent(): { url: string; method?: string; body?: unknown } {
+  const [url, init] = fetchMock.mock.calls[0];
+  return { url, method: init.method, body: init.body };
+}
 
 describe("ApiKeyService", () => {
-  const mockApiKey: ApiKey = {
-    id: "key-1",
-    userId: "user-1",
-    name: "Test API Key",
-    key: "the0_test_key_123",
-    isActive: true,
-    createdAt: "2024-01-01T00:00:00.000Z",
-    updatedAt: "2024-01-02T00:00:00.000Z",
-  };
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
   describe("getApiKeys", () => {
-    it("should fetch all API keys successfully", async () => {
-      mockAxios.get.mockResolvedValue({
-        data: [mockApiKey],
-      });
+    it("returns the user's keys", async () => {
+      respond([mockApiKey]);
 
       const result = await ApiKeyService.getApiKeys();
 
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data).toHaveLength(1);
-        expect(result.data[0].name).toBe("Test API Key");
-      }
-      expect(mockAxios.get).toHaveBeenCalledWith("/api/api-keys", {
-        timeout: 10000,
-      });
+      expect(result).toEqual({ success: true, data: [mockApiKey] });
+      expect(sent()).toMatchObject({ url: "/api/api-keys", method: "GET" });
     });
 
-    it("should return empty array when no keys exist", async () => {
-      mockAxios.get.mockResolvedValue({
-        data: [],
-      });
+    it("returns the api's message and status on error", async () => {
+      respond({ message: "Server error", statusCode: 500 }, 500);
 
       const result = await ApiKeyService.getApiKeys();
 
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data).toHaveLength(0);
-      }
-    });
-
-    it("should handle API error", async () => {
-      mockAxios.get.mockRejectedValue({
-        response: {
-          status: 500,
-          data: { message: "Server error" },
-        },
+      expect(result).toEqual({
+        success: false,
+        error: { message: "Server error", statusCode: 500 },
       });
-
-      const result = await ApiKeyService.getApiKeys();
-
-      expect(result.success).toBe(false);
     });
 
-    it("should handle network error", async () => {
-      mockAxios.get.mockRejectedValue(new Error("Network error"));
+    it("fails when no response arrives", async () => {
+      fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
       const result = await ApiKeyService.getApiKeys();
 
@@ -79,95 +66,74 @@ describe("ApiKeyService", () => {
   });
 
   describe("createApiKey", () => {
-    it("should create a new API key successfully", async () => {
-      const newKey = { ...mockApiKey, id: "new-key-id", name: "New Key" };
-      mockAxios.post.mockResolvedValue({
-        data: newKey,
-      });
+    it("posts the name and returns the new key", async () => {
+      respond({ ...mockApiKey, name: "New Key" }, 201);
 
       const result = await ApiKeyService.createApiKey({ name: "New Key" });
 
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.name).toBe("New Key");
-        expect(result.data.key).toBeDefined();
-      }
-      expect(mockAxios.post).toHaveBeenCalledWith(
-        "/api/api-keys",
-        { name: "New Key" },
-        { timeout: 10000 },
-      );
+      expect(result).toEqual({
+        success: true,
+        data: { ...mockApiKey, name: "New Key" },
+      });
+      expect(sent()).toEqual({
+        url: "/api/api-keys",
+        method: "POST",
+        body: JSON.stringify({ name: "New Key" }),
+      });
     });
 
-    it("should handle creation error", async () => {
-      mockAxios.post.mockRejectedValue({
-        response: {
-          status: 400,
-          data: { message: "Invalid name" },
-        },
-      });
+    it("returns the api's validation message", async () => {
+      respond({ message: ["name should not be empty"], statusCode: 400 }, 400);
 
       const result = await ApiKeyService.createApiKey({ name: "" });
 
-      expect(result.success).toBe(false);
+      expect(result).toEqual({
+        success: false,
+        error: { message: "name should not be empty", statusCode: 400 },
+      });
     });
   });
 
   describe("getApiKey", () => {
-    it("should fetch a specific API key by ID", async () => {
-      mockAxios.get.mockResolvedValue({
-        data: mockApiKey,
-      });
+    it("returns one key", async () => {
+      respond(mockApiKey);
 
       const result = await ApiKeyService.getApiKey("key-1");
 
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.id).toBe("key-1");
-      }
-      expect(mockAxios.get).toHaveBeenCalledWith("/api/api-keys/key-1", {
-        timeout: 10000,
-      });
+      expect(result).toEqual({ success: true, data: mockApiKey });
+      expect(sent()).toMatchObject({ url: "/api/api-keys/key-1" });
     });
 
-    it("should handle key not found", async () => {
-      mockAxios.get.mockRejectedValue({
-        response: {
-          status: 404,
-          data: { message: "Key not found" },
-        },
-      });
+    it("reports a missing key with 404", async () => {
+      respond({ message: "API key not found", statusCode: 404 }, 404);
 
       const result = await ApiKeyService.getApiKey("non-existent");
 
-      expect(result.success).toBe(false);
+      expect(result).toEqual({
+        success: false,
+        error: { message: "API key not found", statusCode: 404 },
+      });
     });
   });
 
   describe("deleteApiKey", () => {
-    it("should delete an API key successfully", async () => {
-      mockAxios.delete.mockResolvedValue({
-        data: { message: "API key deleted successfully" },
-      });
+    it("deletes the key", async () => {
+      respond({ message: "API key deleted successfully" });
 
       const result = await ApiKeyService.deleteApiKey("key-1");
 
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.message).toBe("API key deleted successfully");
-      }
-      expect(mockAxios.delete).toHaveBeenCalledWith("/api/api-keys/key-1", {
-        timeout: 10000,
+      expect(result).toEqual({
+        success: true,
+        data: { message: "API key deleted successfully" },
+      });
+      expect(sent()).toMatchObject({
+        url: "/api/api-keys/key-1",
+        method: "DELETE",
       });
     });
 
-    it("should handle delete error", async () => {
-      mockAxios.delete.mockRejectedValue({
-        response: {
-          status: 404,
-          data: { message: "Key not found" },
-        },
-      });
+    it("reports a missing key with 404", async () => {
+      respond({ message: "API key not found", statusCode: 404 }, 404);
 
       const result = await ApiKeyService.deleteApiKey("non-existent");
 
@@ -176,34 +142,17 @@ describe("ApiKeyService", () => {
   });
 
   describe("getApiKeyStats", () => {
-    it("should fetch API key stats successfully", async () => {
-      const stats: ApiKeyStats = { total: 5, active: 3 };
-      mockAxios.get.mockResolvedValue({
-        data: stats,
-      });
+    it("returns the counts", async () => {
+      respond({ total: 5, active: 3 });
 
       const result = await ApiKeyService.getApiKeyStats();
 
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.total).toBe(5);
-        expect(result.data.active).toBe(3);
-      }
-      expect(mockAxios.get).toHaveBeenCalledWith(
-        "/api/api-keys/stats/summary",
-        {
-          timeout: 10000,
-        },
-      );
+      expect(result).toEqual({ success: true, data: { total: 5, active: 3 } });
+      expect(sent()).toMatchObject({ url: "/api/api-keys/stats/summary" });
     });
 
-    it("should handle stats error", async () => {
-      mockAxios.get.mockRejectedValue({
-        response: {
-          status: 500,
-          data: { message: "Server error" },
-        },
-      });
+    it("returns the api's message on error", async () => {
+      respond({ message: "Server error", statusCode: 500 }, 500);
 
       const result = await ApiKeyService.getApiKeyStats();
 

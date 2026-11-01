@@ -1,5 +1,7 @@
 "use client";
 
+import { Failure, Ok, Result } from "@/lib/result";
+
 export interface AuthFetchOptions extends RequestInit {
   skipTokenRefresh?: boolean;
 }
@@ -17,6 +19,8 @@ export const setAuthFetchService = (
   globalLogout = logoutFn;
 };
 
+class AuthenticationError extends Error {}
+
 export async function authFetch(
   url: string,
   options: AuthFetchOptions = {},
@@ -28,7 +32,7 @@ export async function authFetch(
   const token = globalAuthService.getToken();
 
   if (!token) {
-    throw new Error("Not authenticated");
+    throw new AuthenticationError("Not authenticated");
   }
 
   const { skipTokenRefresh, ...fetchOptions } = options;
@@ -51,8 +55,80 @@ export async function authFetch(
     } else if (globalAuthService) {
       globalAuthService.logout();
     }
-    throw new Error("Authentication failed");
+    throw new AuthenticationError("Authentication failed");
   }
 
   return response;
+}
+
+export interface ApiError {
+  message: string;
+  statusCode: number;
+}
+
+export interface ApiRequestOptions {
+  method?: string;
+  /** Sent as JSON. */
+  body?: unknown;
+  timeoutMs?: number;
+}
+
+/** A JSON call to the api through authFetch, as a Result. */
+export async function apiRequest<T>(
+  url: string,
+  { method = "GET", body, timeoutMs }: ApiRequestOptions = {},
+): Promise<Result<T, ApiError>> {
+  const controller = new AbortController();
+  const timeout =
+    timeoutMs === undefined
+      ? undefined
+      : setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await authFetch(url, {
+      method,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const data = await readBody(response);
+    if (!response.ok) {
+      return Failure({
+        message: errorMessage(data) || response.statusText || "Request failed",
+        statusCode: response.status,
+      });
+    }
+    return Ok(data as T);
+  } catch (error) {
+    if (error instanceof AuthenticationError) {
+      return Failure({ message: error.message, statusCode: 401 });
+    }
+    if (controller.signal.aborted) {
+      return Failure({ message: "Request timed out", statusCode: 504 });
+    }
+    return Failure({
+      message: "No response received from server",
+      statusCode: 500,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function readBody(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+// The api answers errors as { message }, where validation errors carry one
+// message per failed rule.
+function errorMessage(data: unknown): string | undefined {
+  if (typeof data !== "object" || data === null) return undefined;
+  const { message } = data as { message?: unknown };
+  if (Array.isArray(message)) return message.join(", ");
+  return typeof message === "string" ? message : undefined;
 }
