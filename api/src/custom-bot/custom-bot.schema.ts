@@ -1,5 +1,6 @@
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
+import { CUSTOM_BOT_NAME, CUSTOM_BOT_NAME_RULE } from "./custom-bot-name";
 import { CustomBotConfig, SUPPORTED_RUNTIMES } from "./custom-bot.types";
 
 const ajv = new Ajv();
@@ -20,7 +21,7 @@ const customBotConfigSchema = {
   properties: {
     name: {
       type: "string",
-      pattern: "^[a-z0-9-]+$",
+      pattern: `^${CUSTOM_BOT_NAME}$`,
       minLength: 3,
       maxLength: 50,
     },
@@ -133,8 +134,10 @@ export function validateCustomBotConfigPayload(
     return {
       valid: false,
       errors:
-        validateCustomBotConfig.errors?.map(
-          (err) => `${err.instancePath} ${err.message}`,
+        validateCustomBotConfig.errors?.map((err) =>
+          err.instancePath === "/name" && err.keyword === "pattern"
+            ? `/name ${CUSTOM_BOT_NAME_RULE}`
+            : `${err.instancePath} ${err.message}`,
         ) || [],
     };
   }
