@@ -5,7 +5,7 @@ import { PinoLogger } from "nestjs-pino";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { AuthService } from "@/auth/auth.service";
 import { BotService } from "@/bot/bot.service";
-import { appError } from "@/common/app-error";
+import { appError, READ_FAILED } from "@/common/app-error";
 import { Failure, Ok } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import { mockBot } from "./mock-bot";
@@ -15,6 +15,8 @@ import { createMockLogger } from "./mock-logger";
 /** The user every front door test calls as, and the one bot they own. */
 export const OWNER = "user-1";
 export const OWNED_BOT = "bot-1";
+/** A bot whose ownership lookup fails in the database. */
+export const UNREADABLE_BOT = "bot-unreadable";
 export const AS_OWNER = { "x-api-key": "the0_owner" };
 
 /**
@@ -66,10 +68,12 @@ export async function frontDoor(options: {
   return app;
 }
 
-const ownedBot = (userId: string, id: string) =>
-  userId === OWNER && id === OWNED_BOT
+const ownedBot = (userId: string, id: string) => {
+  if (id === UNREADABLE_BOT) return Failure(READ_FAILED);
+  return userId === OWNER && id === OWNED_BOT
     ? Ok(mockBot({ id, userId }))
     : Failure(appError("not_found", "Not found"));
+};
 
 /** Nest's body for an HTTP error. */
 export const errorBody = (statusCode: number, message: string) => ({

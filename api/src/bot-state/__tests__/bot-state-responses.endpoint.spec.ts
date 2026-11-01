@@ -2,7 +2,13 @@ import { INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { BotStateController } from "../bot-state.controller";
 import { BotStateService } from "../bot-state.service";
-import { AS_OWNER, errorBody, frontDoor, OWNED_BOT } from "@/test/front-door";
+import {
+  AS_OWNER,
+  errorBody,
+  frontDoor,
+  OWNED_BOT,
+  UNREADABLE_BOT,
+} from "@/test/front-door";
 
 const storageMissing = () =>
   Object.assign(new Error("Not Found"), { code: "NotFound" });
@@ -89,6 +95,21 @@ describe("/bots/:botId/state responses", () => {
         .set(AS_OWNER);
 
       expectAnswer(res, 404, "Bot not found or access denied");
+    });
+  });
+
+  describe("answer a failed ownership lookup with 500", () => {
+    it.each([
+      { request: "a list", method: "get", path: "/state" },
+      { request: "a key read", method: "get", path: "/state/positions" },
+      { request: "a key delete", method: "delete", path: "/state/positions" },
+      { request: "a clear", method: "delete", path: "/state" },
+    ] as const)("answers $request", async ({ method, path }) => {
+      const res = await api()
+        [method](`/bots/${UNREADABLE_BOT}${path}`)
+        .set(AS_OWNER);
+
+      expectAnswer(res, 500, "Failed to read from the database");
     });
   });
 
