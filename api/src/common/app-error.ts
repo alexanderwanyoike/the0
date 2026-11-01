@@ -1,3 +1,5 @@
+import { Failure, Result } from "./result";
+
 /**
  * What went wrong, from a fixed set every front door knows how to answer.
  * Add a code only when a caller has to react to it differently from the
@@ -30,3 +32,16 @@ export const appError = (code: ErrorCode, message: string): AppError => ({
   code,
   message,
 });
+
+export const invalid = <T>(message: string): Result<T, AppError> =>
+  Failure(appError("validation", message));
+
+// The driver's message can quote the values written, so it stays in the log.
+export const READ_FAILED = appError(
+  "internal",
+  "Failed to read from the database",
+);
+export const WRITE_FAILED = appError(
+  "internal",
+  "Failed to write to the database",
+);

@@ -106,7 +106,7 @@ describe("BotQueryService", () => {
       );
     });
 
-    it("should return BOT_NOT_FOUND when bot does not exist", async () => {
+    it("should refuse a bot the Actor cannot see", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: false,
         data: null,
@@ -141,7 +141,7 @@ describe("BotQueryService", () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it("should return BOT_NOT_FOUND when runtime returns 404", async () => {
+    it("should report a bot the runtime does not hold as not found", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
         data: testBot,
@@ -163,7 +163,7 @@ describe("BotQueryService", () => {
       expect(result.error?.message).toBe("Bot not found in runtime");
     });
 
-    it("should return NO_QUERY_ENTRYPOINT when the bot defines no queries", async () => {
+    it("should report a bot that defines no queries as unprocessable", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
         data: testBot,
@@ -190,7 +190,7 @@ describe("BotQueryService", () => {
       );
     });
 
-    it("should return QUERY_FAILED when runtime returns error", async () => {
+    it("should report the runtime's error answer as a refused query", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
         data: testBot,
@@ -212,7 +212,7 @@ describe("BotQueryService", () => {
       expect(result.error?.message).toContain("Internal server error");
     });
 
-    it("should return TIMEOUT when request times out", async () => {
+    it("should report a query that runs too long as a timeout", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
         data: testBot,
@@ -233,7 +233,7 @@ describe("BotQueryService", () => {
       expect(result.error?.message).toContain("timed out after 5 seconds");
     });
 
-    it("should return RUNTIME_UNAVAILABLE when connection refused", async () => {
+    it("should report a refused connection as an unavailable runtime", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
         data: testBot,

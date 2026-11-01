@@ -1,8 +1,8 @@
 import { Injectable, Scope, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
-import { BotService } from "@/bot/bot.service";
-import { appError, AppError } from "@/common/app-error";
+import { botAccessError, BotService } from "@/bot/bot.service";
+import { appError, AppError, invalid } from "@/common/app-error";
 import {
   Result,
   Ok,
@@ -55,9 +55,6 @@ interface FilePosition {
 // 15 digits stay within Number.MAX_SAFE_INTEGER, far past any daily file.
 const POSITION_KEY = /^(\d{8}):(\d{1,15})$/;
 
-const invalid = <T>(message: string): Result<T, AppError> =>
-  Failure(appError("validation", message));
-
 const dayLogPath = (botId: string, date: string): string =>
   `logs/${botId}/${date}.log`;
 
@@ -92,7 +89,7 @@ export class LogsService {
   ): Promise<Result<true, AppError>> {
     const botResult = await this.botService.findOneByUserId(userId, botId);
     if (!botResult.success) {
-      return Failure(appError("not_found", "Bot not found or access denied"));
+      return Failure(botAccessError(botResult.error));
     }
     return Ok(true);
   }

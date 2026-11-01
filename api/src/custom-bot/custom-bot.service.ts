@@ -12,9 +12,8 @@ import {
   SUPPORTED_RUNTIMES,
   COMPILED_RUNTIMES,
 } from "./custom-bot.types";
-import { appError, AppError } from "@/common/app-error";
-import { Result, Failure, Ok, errorMessage } from "@/common/result";
-import { WRITE_FAILED } from "@/common/role.repository";
+import { appError, AppError, WRITE_FAILED } from "@/common/app-error";
+import { Result, Failure, Ok } from "@/common/result";
 
 @Injectable()
 export class CustomBotService {
@@ -72,12 +71,7 @@ export class CustomBotService {
       );
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error creating custom bot");
-      return Failure(
-        appError(
-          "internal",
-          `Failed to create custom bot: ${errorMessage(error)}`,
-        ),
-      );
+      return Failure(appError("internal", "Failed to create custom bot"));
     }
   }
 
@@ -164,12 +158,7 @@ export class CustomBotService {
       );
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error updating custom bot");
-      return Failure(
-        appError(
-          "internal",
-          `Failed to update custom bot: ${errorMessage(error)}`,
-        ),
-      );
+      return Failure(appError("internal", "Failed to update custom bot"));
     }
   }
 
@@ -286,12 +275,7 @@ export class CustomBotService {
       return result;
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error getting user custom bots");
-      return Failure(
-        appError(
-          "internal",
-          `Failed to get user custom bots: ${errorMessage(error)}`,
-        ),
-      );
+      return Failure(appError("internal", "Failed to get user custom bots"));
     }
   }
 
