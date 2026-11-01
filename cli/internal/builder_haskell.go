@@ -1,16 +1,10 @@
 package internal
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"os"
-	"os/user"
 	"path/filepath"
-	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
 	"github.com/fatih/color"
 )
 
@@ -62,16 +56,14 @@ func (b *HaskellBuilder) Build(vm *VendorManager) error {
 	blue.Println("Building Haskell project...")
 
 	// Pull Haskell image if needed
-	if err := b.pullImage(vm); err != nil {
+	if err := vm.runner.EnsureImage(haskellImage); err != nil {
 		return fmt.Errorf("failed to pull Haskell image: %v", err)
 	}
 
 	// Run build container
-	containerID, err := b.runBuildContainer(vm)
-	if err != nil {
+	if err := b.runBuildContainer(vm); err != nil {
 		return fmt.Errorf("failed to run Haskell build container: %v", err)
 	}
-	defer vm.cleanupContainer(containerID)
 
 	// Verify binaries were created in bin/
 	binaries := b.FindAllBinaries(vm.projectPath)
@@ -128,65 +120,11 @@ func (b *HaskellBuilder) FindAllBinaries(projectPath string) []string {
 	return binaries
 }
 
-// pullImage pulls the Haskell image if it doesn't exist locally.
-func (b *HaskellBuilder) pullImage(vm *VendorManager) error {
-	ctx := context.Background()
-
-	images, err := vm.dockerClient.ImageList(ctx, image.ListOptions{})
-	if err != nil {
-		return err
-	}
-
-	imageExists := false
-	for _, img := range images {
-		for _, tag := range img.RepoTags {
-			if tag == haskellImage {
-				imageExists = true
-				break
-			}
-		}
-		if imageExists {
-			break
-		}
-	}
-
-	if imageExists {
-		return nil
-	}
-
-	blue := color.New(color.FgBlue)
-	blue.Printf("Pulling Docker image: %s...\n", haskellImage)
-
-	reader, err := vm.dockerClient.ImagePull(ctx, haskellImage, image.PullOptions{})
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-
-	io.Copy(io.Discard, reader)
-	return nil
-}
-
 // runBuildContainer creates and runs a container for Haskell building.
-func (b *HaskellBuilder) runBuildContainer(vm *VendorManager) (string, error) {
-	ctx := context.Background()
-
-	ctrName := fmt.Sprintf("%shaskell-%d", vendorContainerName, time.Now().Unix())
-
+func (b *HaskellBuilder) runBuildContainer(vm *VendorManager) error {
 	absProjectPath, err := filepath.Abs(vm.projectPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute project path: %v", err)
-	}
-
-	// Get current user info for ownership
-	currentUser, err := user.Current()
-	var uid, gid string
-	if err == nil {
-		uid = currentUser.Uid
-		gid = currentUser.Gid
-	} else {
-		uid = "1000"
-		gid = "1000"
+		return fmt.Errorf("failed to get absolute project path: %v", err)
 	}
 
 	// Build command: build with optimizations, then copy all executables to bin/
@@ -218,89 +156,18 @@ if [ -z "$(ls -A bin/ 2>/dev/null)" ]; then
 fi
 `
 
-	config := &container.Config{
-		Image: haskellImage,
-		Cmd: []string{
-			"sh", "-c",
-			buildCmd,
-		},
-		WorkingDir: "/project",
-		Env:        getHaskellBuildEnvVars(),
-		User:       fmt.Sprintf("%s:%s", uid, gid),
-	}
-
-	hostConfig := &container.HostConfig{
-		Binds: []string{
-			fmt.Sprintf("%s:/project", absProjectPath),
-		},
-		AutoRemove: false,
-	}
-
-	resp, err := vm.dockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, ctrName)
-	if err != nil {
-		return "", err
-	}
-
-	if err := vm.dockerClient.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		return "", err
-	}
-
-	// Stream logs
-	logReader, err := vm.dockerClient.ContainerLogs(ctx, resp.ID, container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Follow:     true,
-		Timestamps: false,
+	uid, gid := hostUserIDs()
+	return vm.runner.Run(BuildStep{
+		NamePrefix:      "haskell-",
+		Image:           haskellImage,
+		Cmd:             []string{"sh", "-c", buildCmd},
+		WorkingDir:      "/project",
+		Env:             getHaskellBuildEnvVars(),
+		User:            fmt.Sprintf("%s:%s", uid, gid),
+		Binds:           []string{fmt.Sprintf("%s:/project", absProjectPath)},
+		FailureHeadline: "Haskell build",
+		FailedCommand:   "cabal build",
 	})
-	if err != nil {
-		return resp.ID, fmt.Errorf("failed to get container logs: %v", err)
-	}
-
-	logDone := make(chan struct{})
-	go func() {
-		defer close(logDone)
-		defer logReader.Close()
-
-		blue := color.New(color.FgBlue)
-		buffer := make([]byte, 1024)
-		for {
-			n, err := logReader.Read(buffer)
-			if err != nil {
-				if err != io.EOF {
-					blue.Printf("Log read error: %v\n", err)
-				}
-				break
-			}
-			if n > 0 {
-				output := vm.cleanDockerLogOutput(buffer[:n])
-				if output != "" {
-					blue.Printf("  %s", output)
-				}
-			}
-		}
-	}()
-
-	// Wait for container to finish
-	statusCh, errCh := vm.dockerClient.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
-	select {
-	case err := <-errCh:
-		if err != nil {
-			return resp.ID, err
-		}
-	case status := <-statusCh:
-		<-logDone
-		if status.StatusCode != 0 {
-			logs, _ := vm.getContainerLogs(resp.ID)
-			red := color.New(color.FgRed)
-			red.Printf("Haskell build failed with exit code %d\n", status.StatusCode)
-			if logs != "" {
-				red.Printf("Full error log:\n%s\n", logs)
-			}
-			return resp.ID, fmt.Errorf("cabal build failed with exit code %d", status.StatusCode)
-		}
-	}
-
-	return resp.ID, nil
 }
 
 // getHaskellBuildEnvVars returns environment variables for Haskell build.
@@ -320,57 +187,4 @@ func getHaskellBuildEnvVars() []string {
 		envVars = append(envVars, fmt.Sprintf("GITHUB_TOKEN=%s", secrets.GitHubToken))
 	}
 	return envVars
-}
-
-// Legacy functions for backwards compatibility
-
-// IsHaskellProject checks if the project is a Haskell project.
-func IsHaskellProject(projectPath string) bool {
-	builder := &HaskellBuilder{}
-	return builder.Detect(projectPath)
-}
-
-// ShouldBuildHaskell checks if Haskell project needs building.
-func ShouldBuildHaskell(projectPath string) (bool, error) {
-	builder := &HaskellBuilder{}
-	return builder.ShouldBuild(projectPath)
-}
-
-// BuildHaskellIfNeeded builds Haskell project only if needed and Docker is available.
-func BuildHaskellIfNeeded(projectPath string) error {
-	builder := &HaskellBuilder{}
-
-	shouldBuild, err := builder.ShouldBuild(projectPath)
-	if err != nil {
-		return err
-	}
-
-	if !shouldBuild {
-		return nil
-	}
-
-	blue := color.New(color.FgBlue)
-	red := color.New(color.FgRed)
-
-	blue.Println("Haskell project detected, building...")
-
-	if err := CheckDockerInstalled(); err != nil {
-		red.Printf("Docker required for Haskell build: %v\n", err)
-		red.Println("Solution: Install Docker or pre-build with 'cabal build --enable-optimization=2'")
-		return fmt.Errorf("docker unavailable for haskell build")
-	}
-
-	vm, err := NewVendorManager(projectPath)
-	if err != nil {
-		return fmt.Errorf("failed to initialize vendor manager: %v", err)
-	}
-	defer vm.Close()
-
-	if err := vm.CheckDockerRunning(); err != nil {
-		red.Printf("Docker daemon not running: %v\n", err)
-		red.Println("Solution: Start Docker or pre-build with 'cabal build --enable-optimization=2'")
-		return fmt.Errorf("docker daemon not running for haskell build")
-	}
-
-	return builder.Build(vm)
 }

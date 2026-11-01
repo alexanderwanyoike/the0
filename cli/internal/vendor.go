@@ -1,17 +1,11 @@
 package internal
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
-	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
 	"github.com/fatih/color"
 )
 
@@ -19,24 +13,16 @@ const (
 	vendorContainerName = "the0-vendor-"
 )
 
-// VendorManager handles Docker-based package vendoring
+// VendorManager runs a project's dependency installs and builds
 type VendorManager struct {
-	dockerClient *client.Client
-	projectPath  string
-	runtime      string
+	runner      BuildRunner
+	projectPath string
+	runtime     string
 }
 
-// NewVendorManager creates a new vendor manager instance
-func NewVendorManager(projectPath string) (*VendorManager, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Docker client: %v", err)
-	}
-
-	return &VendorManager{
-		dockerClient: cli,
-		projectPath:  projectPath,
-	}, nil
+// NewVendorManager runs projectPath's installs and builds with runner.
+func NewVendorManager(projectPath string, runner BuildRunner) *VendorManager {
+	return &VendorManager{runner: runner, projectPath: projectPath}
 }
 
 // CheckDockerInstalled verifies if Docker is installed and accessible
@@ -51,49 +37,15 @@ func CheckDockerInstalled() error {
 
 // CheckDockerRunning verifies if Docker daemon is running
 func (vm *VendorManager) CheckDockerRunning() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	_, err := vm.dockerClient.Ping(ctx)
-	if err != nil {
+	if err := vm.runner.Ping(); err != nil {
 		return fmt.Errorf("Docker daemon is not running. Please start Docker and try again")
 	}
 	return nil
 }
 
-// Close closes the Docker client connection
+// Close closes the runner's connection
 func (vm *VendorManager) Close() error {
-	if vm.dockerClient != nil {
-		return vm.dockerClient.Close()
-	}
-	return nil
-}
-
-// cleanupContainer removes a container
-func (vm *VendorManager) cleanupContainer(containerID string) {
-	ctx := context.Background()
-	vm.dockerClient.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true})
-}
-
-// getContainerLogs retrieves logs from a container for debugging
-func (vm *VendorManager) getContainerLogs(containerID string) (string, error) {
-	ctx := context.Background()
-
-	reader, err := vm.dockerClient.ContainerLogs(ctx, containerID, container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-	})
-	if err != nil {
-		return "", err
-	}
-	defer reader.Close()
-
-	logs, err := io.ReadAll(reader)
-	if err != nil {
-		return "", err
-	}
-
-	return string(logs), nil
+	return vm.runner.Close()
 }
 
 // verifyVendoredFiles verifies that vendoring was successful
@@ -176,40 +128,6 @@ func (vm *VendorManager) formatFileSize(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-// cleanDockerLogOutput removes Docker log headers from raw log data
-func (vm *VendorManager) cleanDockerLogOutput(logData []byte) string {
-	var output strings.Builder
-	i := 0
-
-	for i < len(logData) {
-		// Docker log format: 8-byte header + message
-		// Header: [stream_type][0][0][0][size_bytes_3][size_bytes_2][size_bytes_1][size_bytes_0]
-		if i+8 > len(logData) {
-			// Not enough bytes for header, append remaining
-			output.Write(logData[i:])
-			break
-		}
-
-		// Extract message size from header
-		size := int(logData[i+4])<<24 | int(logData[i+5])<<16 | int(logData[i+6])<<8 | int(logData[i+7])
-
-		// Skip header
-		i += 8
-
-		// Extract message
-		if i+size <= len(logData) {
-			output.Write(logData[i : i+size])
-			i += size
-		} else {
-			// Invalid size, append remaining
-			output.Write(logData[i:])
-			break
-		}
-	}
-
-	return output.String()
-}
-
 // getBuildEnvVars returns environment variables for the build container
 func getBuildEnvVars() []string {
 	secrets, err := LoadBuildSecrets()
@@ -254,75 +172,4 @@ func CleanupVendoring(projectPath string) {
 // This is a convenience function that uses VendorDependenciesIfNeeded from vendor_interface.go.
 func PerformVendoringIfNeeded(projectPath, runtime string) error {
 	return VendorDependenciesIfNeeded(projectPath, runtime)
-}
-
-// Legacy compatibility functions - these delegate to the new vendor implementations
-
-// ShouldPerformVendoring checks if Python vendoring should be performed
-func ShouldPerformVendoring(projectPath string) (bool, error) {
-	vendor := &PythonVendor{}
-	return vendor.ShouldVendor(projectPath)
-}
-
-// ShouldPerformNodeVendoring checks if Node.js vendoring should be performed
-func ShouldPerformNodeVendoring(projectPath string) (bool, error) {
-	vendor := &NodeVendor{}
-	return vendor.ShouldVendor(projectPath)
-}
-
-// Legacy VendorManager methods for backward compatibility
-
-// CheckRequirementsFile checks if requirements.txt exists in the project
-func (vm *VendorManager) CheckRequirementsFile() bool {
-	vendor := &PythonVendor{}
-	return vendor.Detect(vm.projectPath)
-}
-
-// CheckPackageJsonFile checks if package.json exists in the project
-func (vm *VendorManager) CheckPackageJsonFile() bool {
-	vendor := &NodeVendor{}
-	return vendor.Detect(vm.projectPath)
-}
-
-// CheckTypeScriptFiles checks if TypeScript files exist in the project
-func (vm *VendorManager) CheckTypeScriptFiles() bool {
-	vendor := &NodeVendor{}
-	return vendor.hasTypeScriptFiles(vm.projectPath)
-}
-
-// PerformVendoring performs the complete Python vendoring process
-func (vm *VendorManager) PerformVendoring() error {
-	vendor := &PythonVendor{}
-	return vendor.Vendor(vm)
-}
-
-// PerformNodeVendoring performs Node.js package vendoring
-func (vm *VendorManager) PerformNodeVendoring(hasTypeScript bool) error {
-	vendor := &NodeVendor{}
-	return vendor.Vendor(vm)
-}
-
-// getPythonInstallCommand returns the pip install command with proper ownership
-// This is exposed for testing purposes
-func (vm *VendorManager) getPythonInstallCommand() string {
-	vendor := &PythonVendor{}
-	return vendor.getInstallCommand()
-}
-
-// BackupExistingNodeModules creates a backup of existing node_modules directory (exported for testing)
-func (vm *VendorManager) BackupExistingNodeModules() error {
-	vendor := &NodeVendor{}
-	return vendor.backupExistingNodeModules(vm.projectPath)
-}
-
-// RestoreNodeModulesBackup restores node_modules from backup on failure (exported for testing)
-func (vm *VendorManager) RestoreNodeModulesBackup() error {
-	vendor := &NodeVendor{}
-	return vendor.restoreNodeModulesBackup(vm.projectPath)
-}
-
-// CleanupNodeModulesBackup removes backup after successful vendoring (exported for testing)
-func (vm *VendorManager) CleanupNodeModulesBackup() error {
-	vendor := &NodeVendor{}
-	return vendor.cleanupNodeModulesBackup(vm.projectPath)
 }

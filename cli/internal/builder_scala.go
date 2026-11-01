@@ -1,17 +1,11 @@
 package internal
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
 	"github.com/fatih/color"
 )
 
@@ -64,16 +58,14 @@ func (b *ScalaBuilder) Build(vm *VendorManager) error {
 	}
 
 	// Pull Scala image if needed
-	if err := b.pullImage(vm); err != nil {
+	if err := vm.runner.EnsureImage(scala3Image); err != nil {
 		return fmt.Errorf("failed to pull Scala image: %v", err)
 	}
 
 	// Run build container
-	containerID, err := b.runBuildContainer(vm)
-	if err != nil {
+	if err := b.runBuildContainer(vm); err != nil {
 		return fmt.Errorf("failed to run Scala build container: %v", err)
 	}
-	defer vm.cleanupContainer(containerID)
 
 	// Verify output was created
 	binaryPath := b.FindBinary(vm.projectPath)
@@ -167,153 +159,28 @@ func (b *ScalaBuilder) ensureAssemblyPlugin(projectPath string) error {
 	return os.WriteFile(pluginsFile, []byte(content), 0644)
 }
 
-// pullImage pulls the Scala image if it doesn't exist locally.
-func (b *ScalaBuilder) pullImage(vm *VendorManager) error {
-	ctx := context.Background()
-
-	images, err := vm.dockerClient.ImageList(ctx, image.ListOptions{})
-	if err != nil {
-		return err
-	}
-
-	imageExists := false
-	for _, img := range images {
-		for _, tag := range img.RepoTags {
-			if tag == scala3Image {
-				imageExists = true
-				break
-			}
-		}
-		if imageExists {
-			break
-		}
-	}
-
-	if imageExists {
-		return nil
-	}
-
-	blue := color.New(color.FgBlue)
-	blue.Printf("Pulling Docker image: %s...\n", scala3Image)
-
-	reader, err := vm.dockerClient.ImagePull(ctx, scala3Image, image.PullOptions{})
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-
-	io.Copy(io.Discard, reader)
-	return nil
-}
-
 // runBuildContainer creates and runs a container for Scala building.
-func (b *ScalaBuilder) runBuildContainer(vm *VendorManager) (string, error) {
-	ctx := context.Background()
-
-	ctrName := fmt.Sprintf("%sscala-%d", vendorContainerName, time.Now().Unix())
-
+func (b *ScalaBuilder) runBuildContainer(vm *VendorManager) error {
 	absProjectPath, err := filepath.Abs(vm.projectPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute project path: %v", err)
-	}
-
-	// Get current user info for ownership
-	currentUser, err := user.Current()
-	var uid, gid string
-	if err == nil {
-		uid = currentUser.Uid
-		gid = currentUser.Gid
-	} else {
-		uid = "1000"
-		gid = "1000"
+		return fmt.Errorf("failed to get absolute project path: %v", err)
 	}
 
 	// Build command
 	buildCmd := "sbt assembly 2>&1"
 
-	config := &container.Config{
-		Image: scala3Image,
-		Cmd: []string{
-			"bash", "-c",
-			buildCmd,
-		},
-		WorkingDir: "/project",
-		Env:        getScalaBuildEnvVars(),
-		User:       fmt.Sprintf("%s:%s", uid, gid),
-	}
-
-	hostConfig := &container.HostConfig{
-		Binds: []string{
-			fmt.Sprintf("%s:/project", absProjectPath),
-		},
-		AutoRemove: false,
-	}
-
-	resp, err := vm.dockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, ctrName)
-	if err != nil {
-		return "", err
-	}
-
-	if err := vm.dockerClient.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		return "", err
-	}
-
-	// Stream logs
-	logReader, err := vm.dockerClient.ContainerLogs(ctx, resp.ID, container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Follow:     true,
-		Timestamps: false,
+	uid, gid := hostUserIDs()
+	return vm.runner.Run(BuildStep{
+		NamePrefix:      "scala-",
+		Image:           scala3Image,
+		Cmd:             []string{"bash", "-c", buildCmd},
+		WorkingDir:      "/project",
+		Env:             getScalaBuildEnvVars(),
+		User:            fmt.Sprintf("%s:%s", uid, gid),
+		Binds:           []string{fmt.Sprintf("%s:/project", absProjectPath)},
+		FailureHeadline: "Scala build",
+		FailedCommand:   "sbt assembly",
 	})
-	if err != nil {
-		return resp.ID, fmt.Errorf("failed to get container logs: %v", err)
-	}
-
-	logDone := make(chan struct{})
-	go func() {
-		defer close(logDone)
-		defer logReader.Close()
-
-		blue := color.New(color.FgBlue)
-		buffer := make([]byte, 1024)
-		for {
-			n, err := logReader.Read(buffer)
-			if err != nil {
-				if err != io.EOF {
-					blue.Printf("Log read error: %v\n", err)
-				}
-				break
-			}
-			if n > 0 {
-				output := vm.cleanDockerLogOutput(buffer[:n])
-				if output != "" {
-					blue.Printf("  %s", output)
-				}
-			}
-		}
-	}()
-
-	// Wait for container to finish
-	statusCh, errCh := vm.dockerClient.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
-	select {
-	case err := <-errCh:
-		if err != nil {
-			return resp.ID, err
-		}
-	case status := <-statusCh:
-		<-logDone
-		if status.StatusCode != 0 {
-			logs, _ := vm.getContainerLogs(resp.ID)
-			red := color.New(color.FgRed)
-			red.Printf("Scala build failed with exit code %d\n", status.StatusCode)
-			if logs != "" {
-				red.Printf("Full error log:\n%s\n", logs)
-			}
-			return resp.ID, fmt.Errorf("sbt assembly failed with exit code %d", status.StatusCode)
-		}
-	}
-
-	return resp.ID, nil
 }
 
 // getScalaBuildEnvVars returns environment variables for Scala build.
@@ -339,57 +206,4 @@ func getScalaBuildEnvVars() []string {
 	}
 
 	return envVars
-}
-
-// Legacy functions for backwards compatibility
-
-// IsScalaProject checks if the project is a Scala project.
-func IsScalaProject(projectPath string) bool {
-	builder := &ScalaBuilder{}
-	return builder.Detect(projectPath)
-}
-
-// ShouldBuildScala checks if Scala project needs building.
-func ShouldBuildScala(projectPath string) (bool, error) {
-	builder := &ScalaBuilder{}
-	return builder.ShouldBuild(projectPath)
-}
-
-// BuildScalaIfNeeded builds Scala project only if needed and Docker is available.
-func BuildScalaIfNeeded(projectPath string) error {
-	builder := &ScalaBuilder{}
-
-	shouldBuild, err := builder.ShouldBuild(projectPath)
-	if err != nil {
-		return err
-	}
-
-	if !shouldBuild {
-		return nil
-	}
-
-	blue := color.New(color.FgBlue)
-	red := color.New(color.FgRed)
-
-	blue.Println("Scala project detected, building...")
-
-	if err := CheckDockerInstalled(); err != nil {
-		red.Printf("Docker required for Scala build: %v\n", err)
-		red.Println("Solution: Install Docker or pre-build with 'sbt assembly'")
-		return fmt.Errorf("docker unavailable for Scala build")
-	}
-
-	vm, err := NewVendorManager(projectPath)
-	if err != nil {
-		return fmt.Errorf("failed to initialize vendor manager: %v", err)
-	}
-	defer vm.Close()
-
-	if err := vm.CheckDockerRunning(); err != nil {
-		red.Printf("Docker daemon not running: %v\n", err)
-		red.Println("Solution: Start Docker or pre-build with 'sbt assembly'")
-		return fmt.Errorf("docker daemon not running for Scala build")
-	}
-
-	return builder.Build(vm)
 }
