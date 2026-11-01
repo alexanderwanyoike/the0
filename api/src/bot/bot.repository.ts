@@ -3,7 +3,9 @@ import { and, eq } from "drizzle-orm";
 import pino from "pino";
 import { Bot } from "./entities/bot.entity";
 import { RoleRepository } from "@/common/role.repository";
-import { Failure, Ok, Result, errorMessage } from "@/common/result";
+import { appError, AppError, WRITE_FAILED } from "@/common/app-error";
+import { isForeignKeyViolation } from "@/common/database-errors";
+import { Failure, Ok, Result } from "@/common/result";
 import { appendBotEvents, BotEvent, Executor } from "./bot-event-outbox";
 
 const logger = pino({ name: "BotRepository" });
@@ -19,7 +21,7 @@ export class BotRepository extends RoleRepository<Bot> {
   async createWithEvents(
     bot: Partial<Bot>,
     events: BotEvent[],
-  ): Promise<Result<Bot, string>> {
+  ): Promise<Result<Bot, AppError>> {
     try {
       const now = new Date();
       const record = await this.db.transaction(async (tx: Executor) => {
@@ -33,7 +35,7 @@ export class BotRepository extends RoleRepository<Bot> {
       return Ok(this.transformSnapshotToData<Bot>(record));
     } catch (error: unknown) {
       logger.error({ err: error }, "Error creating bot");
-      return Failure(errorMessage(error));
+      return Failure(writeFailure(error));
     }
   }
 
@@ -43,7 +45,7 @@ export class BotRepository extends RoleRepository<Bot> {
     id: string,
     changes: Partial<Bot>,
     events: BotEvent[],
-  ): Promise<Result<Bot, string>> {
+  ): Promise<Result<Bot, AppError>> {
     try {
       const updated: boolean = await this.db.transaction(
         async (tx: Executor) => {
@@ -57,11 +59,11 @@ export class BotRepository extends RoleRepository<Bot> {
           return true;
         },
       );
-      if (!updated) return Failure("Not found");
+      if (!updated) return Failure(appError("not_found", "Not found"));
       return this.findOne(userId, id);
     } catch (error: unknown) {
       logger.error({ err: error }, "Error updating bot");
-      return Failure(errorMessage(error));
+      return Failure(writeFailure(error));
     }
   }
 
@@ -70,7 +72,7 @@ export class BotRepository extends RoleRepository<Bot> {
     userId: string,
     id: string,
     events: BotEvent[],
-  ): Promise<Result<void, string>> {
+  ): Promise<Result<void, AppError>> {
     try {
       await this.db.transaction(async (tx: Executor) => {
         const rows = await tx
@@ -82,7 +84,7 @@ export class BotRepository extends RoleRepository<Bot> {
       return Ok(null);
     } catch (error: unknown) {
       logger.error({ err: error }, "Error deleting bot");
-      return Failure(errorMessage(error));
+      return Failure(WRITE_FAILED);
     }
   }
 
@@ -90,3 +92,9 @@ export class BotRepository extends RoleRepository<Bot> {
     return and(eq(this.table.userId, userId), eq(this.table.id, id));
   }
 }
+
+/** customBotId is the only reference a caller can break: by deleting the version. */
+const writeFailure = (error: unknown): AppError =>
+  isForeignKeyViolation(error)
+    ? appError("validation", "Custom bot version no longer exists")
+    : WRITE_FAILED;

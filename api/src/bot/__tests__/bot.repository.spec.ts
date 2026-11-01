@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { appError } from "@/common/app-error";
 import { BotRepository } from "../bot.repository";
 import { Ok, Failure } from "@/common/result";
 import { mockBot, mockBotConfig } from "@/test/mock-bot";
@@ -50,12 +51,12 @@ describe("BotRepository", () => {
     it("should handle creation errors", async () => {
       jest
         .spyOn(repository, "create")
-        .mockResolvedValue(Failure("Database error"));
+        .mockResolvedValue(Failure(appError("internal", "Database error")));
 
       const result = await repository.create(botData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Database error");
+      expect(result.error).toEqual(appError("internal", "Database error"));
     });
   });
 
@@ -104,12 +105,12 @@ describe("BotRepository", () => {
     it("should handle query errors", async () => {
       jest
         .spyOn(repository, "findAll")
-        .mockResolvedValue(Failure("Query error"));
+        .mockResolvedValue(Failure(appError("internal", "Query error")));
 
       const result = await repository.findAll(userId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Query error");
+      expect(result.error).toEqual(appError("internal", "Query error"));
     });
   });
 
@@ -141,23 +142,25 @@ describe("BotRepository", () => {
     });
 
     it("should return failure when bot not found", async () => {
-      jest.spyOn(repository, "findOne").mockResolvedValue(Failure("Not found"));
+      jest
+        .spyOn(repository, "findOne")
+        .mockResolvedValue(Failure(appError("not_found", "Not found")));
 
       const result = await repository.findOne(userId, botId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Not found");
+      expect(result.error).toEqual(appError("not_found", "Not found"));
     });
 
     it("should handle query errors", async () => {
       jest
         .spyOn(repository, "findOne")
-        .mockResolvedValue(Failure("Database error"));
+        .mockResolvedValue(Failure(appError("internal", "Database error")));
 
       const result = await repository.findOne(userId, botId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Database error");
+      expect(result.error).toEqual(appError("internal", "Database error"));
     });
   });
 
@@ -195,23 +198,25 @@ describe("BotRepository", () => {
     });
 
     it("should return failure when bot not found", async () => {
-      jest.spyOn(repository, "update").mockResolvedValue(Failure("Not found"));
+      jest
+        .spyOn(repository, "update")
+        .mockResolvedValue(Failure(appError("not_found", "Not found")));
 
       const result = await repository.update(userId, botId, updateData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Not found");
+      expect(result.error).toEqual(appError("not_found", "Not found"));
     });
 
     it("should handle update errors", async () => {
       jest
         .spyOn(repository, "update")
-        .mockResolvedValue(Failure("Update error"));
+        .mockResolvedValue(Failure(appError("internal", "Update error")));
 
       const result = await repository.update(userId, botId, updateData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Update error");
+      expect(result.error).toEqual(appError("internal", "Update error"));
     });
   });
 
@@ -228,23 +233,25 @@ describe("BotRepository", () => {
     });
 
     it("should return failure when bot not found", async () => {
-      jest.spyOn(repository, "remove").mockResolvedValue(Failure("Not found"));
+      jest
+        .spyOn(repository, "remove")
+        .mockResolvedValue(Failure(appError("not_found", "Not found")));
 
       const result = await repository.remove(userId, botId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Not found");
+      expect(result.error).toEqual(appError("not_found", "Not found"));
     });
 
     it("should handle deletion errors", async () => {
       jest
         .spyOn(repository, "remove")
-        .mockResolvedValue(Failure("Deletion error"));
+        .mockResolvedValue(Failure(appError("internal", "Deletion error")));
 
       const result = await repository.remove(userId, botId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Deletion error");
+      expect(result.error).toEqual(appError("internal", "Deletion error"));
     });
   });
 });

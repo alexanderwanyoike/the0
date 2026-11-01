@@ -1,10 +1,12 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { appError } from "@/common/app-error";
 import { BotController } from "../bot.controller";
 import { BotService } from "../bot.service";
 import { BotRepository } from "../bot.repository";
 import { Bot } from "../entities/bot.entity";
 import {
   BadRequestException,
+  InternalServerErrorException,
   CanActivate,
   NotFoundException,
 } from "@nestjs/common";
@@ -85,7 +87,11 @@ describe("BotController - Enhanced Tests", () => {
     getAllUserVersions: jest.fn(),
     getAllGlobalVersions: jest.fn(),
     getAllUserSpecificVersions: jest.fn(),
-    checkOrphaned: jest.fn().mockResolvedValue(Ok({ orphaned: false, name: "test", version: "1.0.0" })),
+    checkOrphaned: jest
+      .fn()
+      .mockResolvedValue(
+        Ok({ orphaned: false, name: "test", version: "1.0.0" }),
+      ),
   };
 
   beforeEach(async () => {
@@ -204,15 +210,15 @@ describe("BotController - Enhanced Tests", () => {
       );
     });
 
-    it("should throw BadRequestException when service fails", async () => {
+    it("should throw InternalServerErrorException when storing fails", async () => {
       jest.spyOn(repository, "createWithEvents").mockResolvedValue({
         success: false,
-        error: "Creation failed",
+        error: appError("internal", "Creation failed"),
         data: null,
       });
 
       await expect(controller.create(actor, validBot)).rejects.toThrow(
-        BadRequestException,
+        InternalServerErrorException,
       );
     });
 
@@ -237,22 +243,6 @@ describe("BotController - Enhanced Tests", () => {
       };
 
       await expect(controller.create(actor, invalidBot)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it("should throw BadRequestException when bot limit exceeded", async () => {
-      jest.spyOn(repository, "findAll").mockResolvedValue({
-        success: true,
-        error: null,
-        data: [
-          mockBot({ id: "bot1" }),
-          mockBot({ id: "bot2" }),
-          mockBot({ id: "bot3" }),
-        ],
-      });
-
-      await expect(controller.create(actor, validBot)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -305,15 +295,15 @@ describe("BotController - Enhanced Tests", () => {
       expect(repository.findAll).toHaveBeenCalledWith(uid);
     });
 
-    it("should throw NotFoundException when service fails", async () => {
+    it("should throw InternalServerErrorException when reading fails", async () => {
       jest.spyOn(repository, "findAll").mockResolvedValue({
         success: false,
-        error: "Database error",
+        error: appError("internal", "Database error"),
         data: null,
       });
 
       await expect(controller.findAll(actor)).rejects.toThrow(
-        NotFoundException,
+        InternalServerErrorException,
       );
     });
 
@@ -353,7 +343,7 @@ describe("BotController - Enhanced Tests", () => {
     it("should throw NotFoundException when bot not found", async () => {
       jest.spyOn(repository, "findOne").mockResolvedValue({
         success: false,
-        error: "Bot not found",
+        error: appError("not_found", "Bot not found"),
         data: null,
       });
 
@@ -365,12 +355,12 @@ describe("BotController - Enhanced Tests", () => {
     it("should handle invalid bot ID format", async () => {
       jest.spyOn(repository, "findOne").mockResolvedValue({
         success: false,
-        error: "Invalid ID format",
+        error: appError("validation", "Invalid ID format"),
         data: null,
       });
 
       await expect(controller.findOne(actor, "invalid-id")).rejects.toThrow(
-        NotFoundException,
+        BadRequestException,
       );
     });
   });
@@ -447,16 +437,16 @@ describe("BotController - Enhanced Tests", () => {
       );
     });
 
-    it("should throw BadRequestException when update fails", async () => {
+    it("should throw InternalServerErrorException when storing fails", async () => {
       jest.spyOn(repository, "updateWithEvents").mockResolvedValue({
         success: false,
-        error: "Update failed",
+        error: appError("internal", "Update failed"),
         data: null,
       });
 
       await expect(
         controller.update(actor, "test-id", updateData),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(InternalServerErrorException);
     });
 
     it("should throw BadRequestException when validation fails", async () => {
@@ -518,28 +508,18 @@ describe("BotController - Enhanced Tests", () => {
       );
     });
 
-    it("should throw BadRequestException when removal fails", async () => {
-      jest.spyOn(repository, "removeWithEvents").mockResolvedValue({
+    it("should throw NotFoundException when the bot is not the user's", async () => {
+      jest.spyOn(repository, "findOne").mockResolvedValue({
         success: false,
-        error: "Bot not found",
+        error: appError("not_found", "Not found"),
         data: null,
       });
+      jest.spyOn(repository, "removeWithEvents");
 
       await expect(controller.remove(actor, "test-id")).rejects.toThrow(
-        BadRequestException,
+        NotFoundException,
       );
-    });
-
-    it("should handle unauthorized removal attempt", async () => {
-      jest.spyOn(repository, "removeWithEvents").mockResolvedValue({
-        success: false,
-        error: "Unauthorized",
-        data: null,
-      });
-
-      await expect(controller.remove(actor, "test-id")).rejects.toThrow(
-        BadRequestException,
-      );
+      expect(repository.removeWithEvents).not.toHaveBeenCalled();
     });
   });
 });

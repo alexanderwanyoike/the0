@@ -1,4 +1,5 @@
 import { ServiceUnavailableException } from "@nestjs/common";
+import { appError } from "@/common/app-error";
 import { Test, TestingModule } from "@nestjs/testing";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { ApiKeyRepository } from "@/api-key/api-key.repository";
@@ -135,7 +136,9 @@ describe("ApiKeyService", () => {
 
     it("should handle repository errors", async () => {
       const createDto: CreateApiKeyDto = { name: "Test API Key" };
-      repository.findAll.mockResolvedValue(Failure("Database error"));
+      repository.findAll.mockResolvedValue(
+        Failure(appError("internal", "Database error")),
+      );
 
       const result = await service.createApiKey("user-123", createDto);
 
@@ -166,7 +169,9 @@ describe("ApiKeyService", () => {
     });
 
     it("should handle repository errors", async () => {
-      repository.findAll.mockResolvedValue(Failure("Database error"));
+      repository.findAll.mockResolvedValue(
+        Failure(appError("internal", "Database error")),
+      );
 
       const result = await service.getUserApiKeys("user-123");
 
@@ -196,7 +201,9 @@ describe("ApiKeyService", () => {
     });
 
     it("should handle not found", async () => {
-      repository.findOne.mockResolvedValue(Failure("Not found"));
+      repository.findOne.mockResolvedValue(
+        Failure(appError("not_found", "Not found")),
+      );
 
       const result = await service.getApiKeyById("user-123", "test-id");
 

@@ -39,7 +39,7 @@ export class ApiKeyService {
     // Check if user already has an API key with this name
     const existingKeys = await this.apiKeyRepository.findAll(userId);
     if (!existingKeys.success) {
-      return Failure(existingKeys.error);
+      return Failure(existingKeys.error.message);
     }
 
     const nameExists = existingKeys.data.some(
@@ -69,7 +69,7 @@ export class ApiKeyService {
   ): Promise<Result<ApiKeyResponseDto[], string>> {
     const result = await this.apiKeyRepository.findAll(userId);
     if (!result.success) {
-      return Failure(result.error);
+      return Failure(result.error.message);
     }
 
     return Ok(result.data.map(toResponseDto));
@@ -84,7 +84,7 @@ export class ApiKeyService {
   ): Promise<Result<ApiKeyResponseDto, string>> {
     const result = await this.apiKeyRepository.findOne(userId, keyId);
     if (!result.success) {
-      return Failure(result.error);
+      return Failure(result.error.message);
     }
 
     return Ok(toResponseDto(result.data));
@@ -144,7 +144,7 @@ export class ApiKeyService {
   ): Promise<Result<{ total: number; active: number }, string>> {
     const result = await this.apiKeyRepository.findAll(userId);
     if (!result.success) {
-      return Failure(result.error);
+      return Failure(result.error.message);
     }
 
     const stats = {
