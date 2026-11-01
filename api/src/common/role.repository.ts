@@ -1,4 +1,4 @@
-import { appError, AppError } from "./app-error";
+import { appError, AppError, READ_FAILED, WRITE_FAILED } from "./app-error";
 import { Result, Ok, Failure } from "./result";
 import { getDatabase, getTables } from "@/database/connection";
 import { eq, and, desc } from "drizzle-orm";
@@ -6,16 +6,6 @@ import Repository from "./repository";
 import pino from "pino";
 
 const logger = pino({ name: "RoleRepository" });
-
-// The driver's message can quote the values written, so it stays in the log.
-export const READ_FAILED = appError(
-  "internal",
-  "Failed to read from the database",
-);
-export const WRITE_FAILED = appError(
-  "internal",
-  "Failed to write to the database",
-);
 
 export abstract class RoleRepository<T> implements Repository<T> {
   protected readonly db = getDatabase();
