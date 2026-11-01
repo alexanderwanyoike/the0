@@ -250,15 +250,15 @@ export class BotStateService {
     botId: string,
     key: string,
   ): Promise<Result<boolean, AppError>> {
+    // Validate bot ID to prevent path traversal
+    if (!this.isValidBotId(botId)) {
+      return Failure(appError("validation", "Invalid bot ID format"));
+    }
+
     // Verify bot ownership
     const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
       return Failure(botAccessError(botResult.error));
-    }
-
-    // Validate bot ID to prevent path traversal
-    if (!this.isValidBotId(botId)) {
-      return Failure(appError("validation", "Invalid bot ID format"));
     }
 
     // Validate key using allowlist regex
