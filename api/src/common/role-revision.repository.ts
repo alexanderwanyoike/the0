@@ -130,37 +130,6 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
     }
   }
 
-  async findByKeyAndVersion(
-    userId: string,
-    key: string,
-    version: string,
-  ): Promise<Result<T, AppError>> {
-    try {
-      const records = await this.db
-        .select()
-        .from(this.table)
-        .where(
-          and(
-            eq(this.table.userId, userId),
-            eq(this.table[this.keyField], key),
-            eq(this.table.version, version),
-          ),
-        );
-
-      if (records.length === 0) {
-        return Failure(appError("not_found", "Not found"));
-      }
-
-      return Ok(this.transformRecordToData(records[0]));
-    } catch (error: unknown) {
-      logger.error(
-        { err: error, keyField: this.keyField },
-        "Error fetching document by key and version",
-      );
-      return Failure(READ_FAILED);
-    }
-  }
-
   // Global methods (not user-scoped) for checking uniqueness
   async getGlobalLatestVersion(key: string): Promise<Result<T, AppError>> {
     try {

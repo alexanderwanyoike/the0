@@ -28,6 +28,8 @@ type BotConfig struct {
 	Metadata map[string]interface{} `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 }
 
+var botNameRegex = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+
 // LoadBotConfig loads and parses the bot-config.yaml file
 func LoadBotConfig() (*BotConfig, error) {
 	if _, err := os.Stat("bot-config.yaml"); os.IsNotExist(err) {
@@ -53,10 +55,9 @@ func ValidateBotConfig(config *BotConfig) error {
 		return fmt.Errorf("bot name is required")
 	}
 
-	// Validate name format (only dashes allowed)
-	nameRegex := regexp.MustCompile(`^[a-z0-9-]+$`)
-	if !nameRegex.MatchString(config.Name) {
-		return fmt.Errorf("bot name must contain only lowercase letters, numbers, and dashes")
+	// Mirrors api/src/custom-bot/custom-bot-name.ts: the API deploys only names that match it.
+	if !botNameRegex.MatchString(config.Name) {
+		return fmt.Errorf("bot name must be lowercase letters and numbers, with single hyphens between them")
 	}
 
 	if config.Version == "" {

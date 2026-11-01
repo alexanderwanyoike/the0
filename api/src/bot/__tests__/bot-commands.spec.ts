@@ -71,16 +71,9 @@ describe("Bot commands", () => {
         error: null,
         data: mockCustomBot,
       }),
-      getUserSpecificVersion: jest.fn().mockResolvedValue({
-        success: true,
-        error: null,
-        data: mockCustomBot,
-      }),
       createCustomBot: jest.fn(),
       updateCustomBot: jest.fn(),
-      getAllUserVersions: jest.fn(),
       getAllGlobalVersions: jest.fn(),
-      getAllUserSpecificVersions: jest.fn(),
     } as unknown as CustomBotService;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -744,9 +737,6 @@ describe("Bot commands", () => {
         const result = await update(actor, "test-id", updateData);
 
         expect(result).toEqual(Ok(existingBot));
-        expect(
-          mockCustomBotService.getUserSpecificVersion,
-        ).not.toHaveBeenCalled();
         expect(repository.updateWithEvents).toHaveBeenCalledWith(
           uid,
           "test-id",
@@ -793,22 +783,6 @@ describe("Bot commands", () => {
               }),
             }),
           ],
-        );
-      });
-
-      it("should store the update event when the Actor uploaded no copy of the custom bot", async () => {
-        mockCustomBotService.getUserSpecificVersion = jest
-          .fn()
-          .mockResolvedValue(Failure(appError("internal", "not found")));
-
-        const result = await update(actor, "test-id", updateData);
-
-        expect(result.success).toBe(true);
-        expect(repository.updateWithEvents).toHaveBeenCalledWith(
-          uid,
-          "test-id",
-          expect.anything(),
-          [expect.objectContaining({ subject: "the0.bot-schedule.updated" })],
         );
       });
 
@@ -988,12 +962,15 @@ describe("Bot commands", () => {
 
         expect(result).toEqual(
           Failure(
-            appError("validation", "Invalid bot type: missing name after '/'"),
+            appError(
+              "validation",
+              "Invalid bot type format. Expected format: type/name",
+            ),
           ),
         );
         expect(logger.warn).toHaveBeenCalledWith(
           { type: "scheduled/ " },
-          "Invalid bot type: missing name after '/'",
+          "Invalid bot type format. Expected format: type/name",
         );
         expect(repository.removeWithEvents).not.toHaveBeenCalled();
       });

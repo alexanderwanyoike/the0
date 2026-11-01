@@ -81,7 +81,6 @@ describe("Custom Bot API Integration Tests", () => {
         isVersionNewer: jest.fn().mockResolvedValue(Ok(true)),
         checkUserOwnership: jest.fn().mockResolvedValue(Ok(true)),
         getAllUserVersions: jest.fn().mockResolvedValue(Ok([])),
-        getSpecificUserVersion: jest.fn().mockResolvedValue(Ok(null)),
       })
       .overrideGuard(AuthCombinedGuard)
       .useValue({

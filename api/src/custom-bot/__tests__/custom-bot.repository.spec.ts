@@ -68,45 +68,6 @@ describe("CustomBotRepository", () => {
     jest.clearAllMocks();
   });
 
-  describe("userBotExists", () => {
-    it("should return true when bot exists", async () => {
-      // Mock the findByKey method directly
-      const originalFindByKey = repository.findByKey;
-      repository.findByKey = jest.fn().mockResolvedValue({
-        success: true,
-        data: [{ id: "test-id", name: "test-bot", userId: "user123" }],
-      });
-
-      const result = await repository.userBotExists("user123", "test-bot");
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBe(true);
-
-      // Restore original method
-      repository.findByKey = originalFindByKey;
-    });
-
-    it("should return false when bot does not exist", async () => {
-      // Mock the findByKey method to return empty array
-      const originalFindByKey = repository.findByKey;
-      repository.findByKey = jest.fn().mockResolvedValue({
-        success: true,
-        data: [],
-      });
-
-      const result = await repository.userBotExists(
-        "user123",
-        "non-existent-bot",
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBe(false);
-
-      // Restore original method
-      repository.findByKey = originalFindByKey;
-    });
-  });
-
   describe("globalBotExists", () => {
     it("should return true when global bot exists", async () => {
       // Mock the findGlobalByKey method directly
@@ -140,57 +101,6 @@ describe("CustomBotRepository", () => {
 
       // Restore original method
       repository.findGlobalByKey = originalFindGlobalByKey;
-    });
-  });
-
-  describe("userVersionExists", () => {
-    it("should return true when specific version exists", async () => {
-      const mockBotData = {
-        id: "test-id",
-        name: "test-bot",
-        version: "1.0.0",
-        userId: "user123",
-      };
-
-      // Mock the specific findByKeyAndVersion method call
-      const originalFindByKeyAndVersion = repository.findByKeyAndVersion;
-      repository.findByKeyAndVersion = jest.fn().mockResolvedValue({
-        success: true,
-        data: mockBotData,
-      });
-
-      const result = await repository.userVersionExists(
-        "user123",
-        "test-bot",
-        "1.0.0",
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBe(true);
-
-      // Restore original method
-      repository.findByKeyAndVersion = originalFindByKeyAndVersion;
-    });
-
-    it("should return false when version does not exist", async () => {
-      // Mock the specific findByKeyAndVersion method call to return not found
-      const originalFindByKeyAndVersion = repository.findByKeyAndVersion;
-      repository.findByKeyAndVersion = jest.fn().mockResolvedValue({
-        success: false,
-        error: appError("not_found", "Not found"),
-      });
-
-      const result = await repository.userVersionExists(
-        "user123",
-        "test-bot",
-        "2.0.0",
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBe(false);
-
-      // Restore original method
-      repository.findByKeyAndVersion = originalFindByKeyAndVersion;
     });
   });
 
@@ -665,41 +575,6 @@ describe("CustomBotRepository", () => {
       const result = await repository.getAllGlobalCustomBots();
 
       expect(result.data).toEqual([]);
-    });
-  });
-
-  describe("getSpecificUserVersion", () => {
-    it("should return specific user version", async () => {
-      const mockBotData = {
-        id: "test-id",
-        name: "test-bot",
-        version: "1.0.0",
-        userId: "user123",
-        config: { name: "test-bot", version: "1.0.0" },
-        filePath: "/local/path/test.zip",
-        createdAt: new Date("2023-01-01"),
-        updatedAt: new Date("2023-01-01"),
-      };
-
-      // Mock the specific findByKeyAndVersion method call
-      const originalFindByKeyAndVersion = repository.findByKeyAndVersion;
-      repository.findByKeyAndVersion = jest.fn().mockResolvedValue({
-        success: true,
-        data: mockBotData,
-      });
-
-      const result = await repository.getSpecificUserVersion(
-        "user123",
-        "test-bot",
-        "1.0.0",
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBeDefined();
-      expect(result.data!.version).toBe("1.0.0");
-
-      // Restore original method
-      repository.findByKeyAndVersion = originalFindByKeyAndVersion;
     });
   });
 

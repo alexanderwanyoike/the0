@@ -210,6 +210,25 @@ describe("/custom-bots responses", () => {
       expect(res.body.message).toMatch(/^Validation failed: /);
     });
 
+    it.each(["-sma-bot", "sma-bot-", "sma--bot"])(
+      "refuses the name %s, which no bot type could name",
+      async (name) => {
+        const res = await publish("post", UPLOADER, customBotConfig({ name }));
+
+        expectRefusal(
+          res,
+          400,
+          "Validation failed: /name must be lowercase letters and numbers, with single hyphens between them",
+        );
+      },
+    );
+
+    it.each(["my-bot", "bot2"])("accepts the name %s", async (name) => {
+      const res = await publish("post", UPLOADER, customBotConfig({ name }));
+
+      expect(res.status).toBe(201);
+    });
+
     it("refuses a name already in the Catalogue, whoever uploaded it", async () => {
       await uploaded();
 
