@@ -90,15 +90,9 @@ export class BotStateService {
     actor: Actor,
     botId: string,
   ): Promise<Result<StateKey[], AppError>> {
-    // Validate bot ID to prevent path traversal
-    if (!this.isValidBotId(botId)) {
-      return Failure(appError("validation", "Invalid bot ID format"));
-    }
-
-    // Verify bot ownership
-    const botResult = await this.botService.findOne(actor, botId);
-    if (!botResult.success) {
-      return Failure(botAccessError(botResult.error));
+    const accessError = await this.checkBotAccess(actor, botId);
+    if (accessError) {
+      return Failure(accessError);
     }
 
     try {
@@ -250,15 +244,9 @@ export class BotStateService {
     botId: string,
     key: string,
   ): Promise<Result<boolean, AppError>> {
-    // Verify bot ownership
-    const botResult = await this.botService.findOne(actor, botId);
-    if (!botResult.success) {
-      return Failure(botAccessError(botResult.error));
-    }
-
-    // Validate bot ID to prevent path traversal
-    if (!this.isValidBotId(botId)) {
-      return Failure(appError("validation", "Invalid bot ID format"));
+    const accessError = await this.checkBotAccess(actor, botId);
+    if (accessError) {
+      return Failure(accessError);
     }
 
     // Validate key using allowlist regex
@@ -324,15 +312,9 @@ export class BotStateService {
     actor: Actor,
     botId: string,
   ): Promise<Result<boolean, AppError>> {
-    // Validate bot ID to prevent path traversal
-    if (!this.isValidBotId(botId)) {
-      return Failure(appError("validation", "Invalid bot ID format"));
-    }
-
-    // Verify bot ownership
-    const botResult = await this.botService.findOne(actor, botId);
-    if (!botResult.success) {
-      return Failure(botAccessError(botResult.error));
+    const accessError = await this.checkBotAccess(actor, botId);
+    if (accessError) {
+      return Failure(accessError);
     }
 
     try {

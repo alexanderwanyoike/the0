@@ -1,7 +1,12 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
-import { appError, AppError } from "@/common/app-error";
+import {
+  appError,
+  AppError,
+  STORAGE_READ_FAILED,
+  STORAGE_WRITE_FAILED,
+} from "@/common/app-error";
 import { Result, Ok, Failure } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
@@ -34,12 +39,9 @@ export class StorageService {
       }
       return Ok(undefined);
     } catch (error) {
-      return Failure(
-        appError(
-          "internal",
-          `Failed to ensure bucket exists: ${error.message}`,
-        ),
-      );
+      return this.failed(error, STORAGE_WRITE_FAILED, {
+        bucket: this.bucketName,
+      });
     }
   }
 
@@ -55,9 +57,7 @@ export class StorageService {
       ) {
         return Ok(false);
       }
-      return Failure(
-        appError("internal", `Error checking file existence: ${error.message}`),
-      );
+      return this.failed(error, STORAGE_READ_FAILED, { filePath });
     }
   }
 
@@ -70,9 +70,7 @@ export class StorageService {
         etag: stat.etag,
       });
     } catch (error) {
-      return Failure(
-        appError("internal", `Error getting file info: ${error.message}`),
-      );
+      return this.failed(error, STORAGE_READ_FAILED, { filePath });
     }
   }
 
@@ -80,20 +78,13 @@ export class StorageService {
     filePath: string,
     requiredFiles: string[],
   ): Promise<Result<boolean, AppError>> {
+    const downloaded = await this.downloadFile(filePath);
+    if (!downloaded.success) {
+      return Failure(downloaded.error);
+    }
+    const buffer = downloaded.data;
+
     try {
-      // Download the ZIP file from MinIO
-      const stream = await this.minioClient.getObject(
-        this.bucketName,
-        filePath,
-      );
-      const chunks: Buffer[] = [];
-
-      // Read stream into buffer
-      for await (const chunk of stream) {
-        chunks.push(chunk);
-      }
-      const buffer = Buffer.concat(chunks);
-
       // Parse ZIP and check for required files
       const zip = new AdmZip(buffer);
       const entries = zip.getEntries();
@@ -144,9 +135,11 @@ export class StorageService {
       this.logger.info({ filePath }, "Uploaded bot file to MinIO");
       return Ok(filePath);
     } catch (error) {
-      return Failure(
-        appError("internal", `Error uploading file: ${error.message}`),
-      );
+      return this.failed(error, STORAGE_WRITE_FAILED, {
+        userId,
+        botName,
+        fileName,
+      });
     }
   }
 
@@ -166,9 +159,7 @@ export class StorageService {
       const buffer = Buffer.concat(chunks);
       return Ok(buffer);
     } catch (error) {
-      return Failure(
-        appError("internal", `Error downloading file: ${error.message}`),
-      );
+      return this.failed(error, STORAGE_READ_FAILED, { filePath });
     }
   }
 
@@ -177,9 +168,7 @@ export class StorageService {
       await this.minioClient.removeObject(this.bucketName, filePath);
       return Ok(undefined);
     } catch (error) {
-      return Failure(
-        appError("internal", `Error deleting file: ${error.message}`),
-      );
+      return this.failed(error, STORAGE_WRITE_FAILED, { filePath });
     }
   }
 
@@ -194,9 +183,7 @@ export class StorageService {
         metadata: stat.metaData,
       });
     } catch (error) {
-      return Failure(
-        appError("internal", `Error getting object metadata: ${error.message}`),
-      );
+      return this.failed(error, STORAGE_READ_FAILED, { filePath });
     }
   }
 
@@ -216,9 +203,7 @@ export class StorageService {
 
       return Ok(objects);
     } catch (error) {
-      return Failure(
-        appError("internal", `Error listing objects: ${error.message}`),
-      );
+      return this.failed(error, STORAGE_READ_FAILED, { prefix });
     }
   }
 
@@ -242,12 +227,7 @@ export class StorageService {
       ) {
         return Failure(appError("not_found", "Frontend bundle not found"));
       }
-      return Failure(
-        appError(
-          "internal",
-          `Error retrieving frontend bundle: ${error.message}`,
-        ),
-      );
+      return this.failed(error, STORAGE_READ_FAILED, { frontendPath });
     }
   }
 
@@ -324,11 +304,10 @@ export class StorageService {
 
       return Ok(frontendStoragePath);
     } catch (error) {
-      return Failure(
-        appError(
-          "internal",
-          `Error extracting frontend bundle: ${error.message}`,
-        ),
+      return this.failed(
+        error,
+        appError("internal", "Failed to extract the frontend bundle"),
+        { zipFilePath },
       );
     }
   }
@@ -359,12 +338,16 @@ export class StorageService {
 
       return Ok(deletedCount);
     } catch (error) {
-      return Failure(
-        appError(
-          "internal",
-          `Error deleting objects with prefix: ${error.message}`,
-        ),
-      );
+      return this.failed(error, STORAGE_WRITE_FAILED, { bucket, prefix });
     }
+  }
+
+  private failed<T>(
+    error: unknown,
+    failure: AppError,
+    context: Record<string, unknown>,
+  ): Result<T, AppError> {
+    this.logger.error({ err: error, ...context }, failure.message);
+    return Failure(failure);
   }
 }

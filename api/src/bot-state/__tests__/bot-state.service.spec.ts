@@ -373,23 +373,20 @@ describe("BotStateService", () => {
   });
 
   describe("deleting a key from stored state", () => {
-    it("looks up ownership before validating the bot ID format", async () => {
+    it("rejects a malformed bot ID before checking ownership", async () => {
       const result = await service.deleteKey(
         actor,
         "../other-bot",
         "portfolio",
       );
 
-      expect(mockBotService.findOne).toHaveBeenCalledWith(
-        actor,
-        "../other-bot",
-      );
       expect(result).toEqual(
         Failure({
           code: "validation",
           message: "Invalid bot ID format",
         }),
       );
+      expect(mockBotService.findOne).not.toHaveBeenCalled();
       expect(mockMinioClient.statObject).not.toHaveBeenCalled();
     });
 

@@ -378,8 +378,8 @@ export class CustomBotController {
     const streamResult =
       await this.storageService.getBotFrontendStream(frontendPath);
 
-    if (!streamResult.success || !streamResult.data) {
-      throw new NotFoundException("Frontend bundle not found");
+    if (!streamResult.success) {
+      throw toHttpException(streamResult.error);
     }
 
     // Serve the JavaScript bundle as a stream to avoid memory issues with large bundles
