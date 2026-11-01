@@ -13,7 +13,7 @@ import {
   SUPPORTED_RUNTIMES,
   COMPILED_RUNTIMES,
 } from "./custom-bot.types";
-import { appError, AppError, WRITE_FAILED } from "@/common/app-error";
+import { appError, AppError, invalid, WRITE_FAILED } from "@/common/app-error";
 import { Result, Failure, Ok } from "@/common/result";
 
 /** A publish request as a client sends it: the config is JSON text. */
@@ -593,6 +593,3 @@ export class CustomBotService {
     });
   }
 }
-
-const invalid = <T>(message: string): Result<T, AppError> =>
-  Failure(appError("validation", message));
