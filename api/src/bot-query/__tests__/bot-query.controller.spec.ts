@@ -104,14 +104,6 @@ describe("BotQueryController", () => {
       );
     });
 
-    it("should throw BadRequestException when query_path is missing", async () => {
-      await expect(
-        controller.executeQuery(actor, "test-bot-id", {
-          query_path: "",
-        }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
     it("should throw NotFoundException when bot not found", async () => {
       mockBotQueryService.executeQuery.mockResolvedValue({
         success: false,

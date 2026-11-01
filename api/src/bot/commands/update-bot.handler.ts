@@ -10,6 +10,7 @@ import { Bot } from "../entities/bot.entity";
 import { UpdateBot } from "./bot-commands";
 import { BotConfigResolver } from "./bot-config.resolver";
 import { BotEventFactory } from "./bot-event-factory";
+import { ownedBotReadError } from "./owned-bot-read-error";
 
 @Injectable()
 export class UpdateBotHandler
@@ -39,7 +40,7 @@ export class UpdateBotHandler
 
     const currentBot = await this.bots.findOne(actor.userId, botId);
     if (!currentBot.success) {
-      return Failure(appError("not_found", "Bot not found"));
+      return Failure(ownedBotReadError(currentBot.error));
     }
     const currentVersion = currentBot.data.config?.version;
     const newVersion = changes.config?.version;
