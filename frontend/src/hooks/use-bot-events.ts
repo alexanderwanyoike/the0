@@ -47,6 +47,30 @@ interface UseBotEventsReturn {
   rawLogs: { date: string; content: string }[];
 }
 
+function bindEventUtils(events: BotEvent[]) {
+  // Dodges 0.2's excess-property check on the extra utilities; inline it on moving to the SDK release with contract.ts.
+  const bound = {
+    since: (duration: string) => eventUtils.since(events, duration),
+    between: (start: Date, end: Date) => eventUtils.between(events, start, end),
+    filterByType: (metricType: string) =>
+      eventUtils.filterByType(events, metricType),
+    logs: () => eventUtils.logs(events),
+    metrics: () => eventUtils.metrics(events),
+    latest: (metricType: string) => eventUtils.latest(events, metricType),
+    getMetricTypes: () => eventUtils.getMetricTypes(events),
+    groupByMetricType: () => eventUtils.groupByMetricType(events),
+    groupByTimeWindow: (window: "1m" | "5m" | "15m" | "1h" | "4h" | "1d") =>
+      eventUtils.groupByTimeWindow(events, window),
+    groupByRun: (gapThreshold?: number) =>
+      eventUtils.groupByRun(events, gapThreshold),
+    latestByType: () => eventUtils.latestByType(events),
+    countByType: () => eventUtils.countByType(events),
+    extractTimeSeries: (metricType: string, valueKey?: string) =>
+      eventUtils.extractTimeSeries(events, metricType, valueKey),
+  };
+  return bound;
+}
+
 /**
  * Hook for consuming bot events with parsing and utilities.
  * Wraps useBotLogs and adds event parsing + time utilities.
@@ -169,30 +193,7 @@ export function useBotEvents({
   }, [rawLogs]);
 
   // Create bound utilities
-  const utils = useMemo<BotEventUtils>(() => {
-    // Dodges 0.2's excess-property check on the extra utilities; inline it on moving to the SDK release with contract.ts.
-    const bound = {
-      since: (duration: string) => eventUtils.since(events, duration),
-      between: (start: Date, end: Date) =>
-        eventUtils.between(events, start, end),
-      filterByType: (metricType: string) =>
-        eventUtils.filterByType(events, metricType),
-      logs: () => eventUtils.logs(events),
-      metrics: () => eventUtils.metrics(events),
-      latest: (metricType: string) => eventUtils.latest(events, metricType),
-      getMetricTypes: () => eventUtils.getMetricTypes(events),
-      groupByMetricType: () => eventUtils.groupByMetricType(events),
-      groupByTimeWindow: (window: "1m" | "5m" | "15m" | "1h" | "4h" | "1d") =>
-        eventUtils.groupByTimeWindow(events, window),
-      groupByRun: (gapThreshold?: number) =>
-        eventUtils.groupByRun(events, gapThreshold),
-      latestByType: () => eventUtils.latestByType(events),
-      countByType: () => eventUtils.countByType(events),
-      extractTimeSeries: (metricType: string, valueKey?: string) =>
-        eventUtils.extractTimeSeries(events, metricType, valueKey),
-    };
-    return bound;
-  }, [events]);
+  const utils = useMemo<BotEventUtils>(() => bindEventUtils(events), [events]);
 
   return {
     events,
