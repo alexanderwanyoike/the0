@@ -48,6 +48,8 @@ describe("/custom-bots responses", () => {
     listObjects: jest.fn(),
     deleteFile: jest.fn(),
     uploadBotFile: jest.fn(),
+    getFrontendPath: jest.fn(),
+    getBotFrontendStream: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -121,6 +123,13 @@ describe("/custom-bots responses", () => {
     const res = await publish("post", UPLOADER, customBotConfig());
     expect(res.status).toBe(201);
     return res.body.data.id as string;
+  };
+
+  const uploadedWithFrontend = async () => {
+    storage.extractAndStoreFrontend.mockResolvedValue(
+      Ok(`${UPLOADER}/sma-bot/1.0.0/frontend.js`),
+    );
+    return uploaded();
   };
 
   const expectRefusal = (
@@ -227,6 +236,25 @@ describe("/custom-bots responses", () => {
 
       expect(res.status).toBe(400);
       expect(res.body.message).toMatch(/^Validation failed: /);
+    });
+
+    it.each(["-sma-bot", "sma-bot-", "sma--bot"])(
+      "refuses the name %s, which no bot type could name",
+      async (name) => {
+        const res = await publish("post", UPLOADER, customBotConfig({ name }));
+
+        expectRefusal(
+          res,
+          400,
+          "Validation failed: /name must be lowercase letters and numbers, with single hyphens between them",
+        );
+      },
+    );
+
+    it.each(["my-bot", "bot2"])("accepts the name %s", async (name) => {
+      const res = await publish("post", UPLOADER, customBotConfig({ name }));
+
+      expect(res.status).toBe(201);
     });
 
     it("refuses a name already in the Catalogue, whoever uploaded it", async () => {
@@ -337,6 +365,29 @@ describe("/custom-bots responses", () => {
 
       expectRefusal(res, 404, "Custom bot not found: missing");
     });
+
+    it("answers a version without a frontend with 404", async () => {
+      const id = await uploaded();
+
+      const res = await api()
+        .get(`/custom-bots/by-id/${id}/frontend`)
+        .set(as(UPLOADER));
+
+      expectRefusal(res, 404, "This bot does not have a custom frontend");
+    });
+
+    it("answers a frontend bundle missing from storage with 404", async () => {
+      const id = await uploadedWithFrontend();
+      storage.getBotFrontendStream.mockResolvedValue(
+        Failure(appError("not_found", "Frontend bundle not found")),
+      );
+
+      const res = await api()
+        .get(`/custom-bots/by-id/${id}/frontend`)
+        .set(as(UPLOADER));
+
+      expectRefusal(res, 404, "Frontend bundle not found");
+    });
   });
 
   describe("delete versions", () => {
@@ -440,10 +491,54 @@ describe("/custom-bots responses", () => {
       expectRefusal(res, 500, "Failed to read from the database");
     });
 
-    it("answers an upload the storage refuses", async () => {
-      storage.uploadBotFile.mockResolvedValue(
-        Failure(appError("internal", "Error uploading file: down")),
+    const driverError = new Error("connect ECONNREFUSED 10.0.0.7:9000");
+
+    // Routes the named calls through the real StorageService over a MinIO
+    // client that cannot be reached, so the response shows what the service
+    // makes of the driver's error.
+    const unreachableStorage = (...methods: (keyof typeof storage)[]) => {
+      const minio = {
+        bucketExists: jest.fn().mockResolvedValue(true),
+        statObject: jest.fn().mockRejectedValue(driverError),
+        getObject: jest.fn().mockRejectedValue(driverError),
+        putObject: jest.fn().mockRejectedValue(driverError),
+      };
+      const logger = createMockLogger();
+      const real = new StorageService(
+        minio as any,
+        { get: (): undefined => undefined } as any,
+        logger as any,
       );
+      for (const method of methods) {
+        storage[method].mockImplementation((...args: unknown[]) =>
+          (real[method] as (...a: unknown[]) => unknown)(...args),
+        );
+      }
+      return logger;
+    };
+
+    const expectDriverErrorLogged = (
+      logger: ReturnType<typeof createMockLogger>,
+    ) =>
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: driverError }),
+        expect.any(String),
+      );
+
+    it("answers a frontend bundle the storage fails to read", async () => {
+      const id = await uploadedWithFrontend();
+      const logger = unreachableStorage("getBotFrontendStream");
+
+      const res = await api()
+        .get(`/custom-bots/by-id/${id}/frontend`)
+        .set(as(UPLOADER));
+
+      expectRefusal(res, 500, "Failed to read from storage");
+      expectDriverErrorLogged(logger);
+    });
+
+    it("answers an upload the storage refuses", async () => {
+      const logger = unreachableStorage("uploadBotFile");
 
       const res = await api()
         .post("/custom-bots/sma-bot/upload")
@@ -451,21 +546,34 @@ describe("/custom-bots responses", () => {
         .field("version", "1.0.0")
         .attach("file", Buffer.from("PK"), "sma-bot.zip");
 
-      expectRefusal(res, 500, "Upload failed: Error uploading file: down");
+      expectRefusal(res, 500, "Upload failed: Failed to write to storage");
+      expectDriverErrorLogged(logger);
     });
 
     it("answers a deploy whose file check fails", async () => {
-      storage.fileExists.mockResolvedValue(
-        Failure(appError("internal", "Error checking file existence: down")),
-      );
+      const logger = unreachableStorage("fileExists");
 
       const res = await publish("post", UPLOADER, customBotConfig());
 
       expectRefusal(
         res,
         500,
-        "File validation failed: Error checking file existence: down",
+        "File validation failed: Failed to read from storage",
       );
+      expectDriverErrorLogged(logger);
+    });
+
+    it("answers a deploy whose ZIP read fails", async () => {
+      const logger = unreachableStorage("validateZipStructure");
+
+      const res = await publish("post", UPLOADER, customBotConfig());
+
+      expectRefusal(
+        res,
+        500,
+        "ZIP validation failed: Failed to read from storage",
+      );
+      expectDriverErrorLogged(logger);
     });
   });
 });

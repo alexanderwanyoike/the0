@@ -122,11 +122,19 @@ describe("/bots/:botId/state responses", () => {
       expectAnswer(res, 400, "Invalid state key");
     });
 
-    it("answers an invalid bot ID with 400", async () => {
-      const res = await api().get("/bots/bad.id/state").set(AS_OWNER);
+    it.each([
+      { request: "a list", method: "get", path: "/state" },
+      { request: "a key read", method: "get", path: "/state/positions" },
+      { request: "a key delete", method: "delete", path: "/state/positions" },
+      { request: "a clear", method: "delete", path: "/state" },
+    ] as const)(
+      "answers $request on an invalid bot ID with 400",
+      async ({ method, path }) => {
+        const res = await api()[method](`/bots/bad.id${path}`).set(AS_OWNER);
 
-      expectAnswer(res, 400, "Invalid bot ID format");
-    });
+        expectAnswer(res, 400, "Invalid bot ID format");
+      },
+    );
   });
 
   it("answers a missing key with 404", async () => {
