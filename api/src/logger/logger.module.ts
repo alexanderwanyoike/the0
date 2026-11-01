@@ -30,7 +30,11 @@ export const requestLogging: Options = {
   customErrorMessage: (req, res, err) => {
     return `${req.method} ${req.url} ${res.statusCode} - ${err.message}`;
   },
-  redact: ["req.headers.authorization", "req.headers.cookie"],
+  redact: [
+    "req.headers.authorization",
+    "req.headers.cookie",
+    'req.headers["x-api-key"]',
+  ],
 };
 
 @Global()
