@@ -1,7 +1,14 @@
-import { IsString, IsOptional, IsObject, IsNumber } from "class-validator";
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsObject,
+  IsNumber,
+} from "class-validator";
 
 export class ExecuteQueryDto {
   @IsString()
+  @IsNotEmpty()
   query_path: string;
 
   @IsOptional()
