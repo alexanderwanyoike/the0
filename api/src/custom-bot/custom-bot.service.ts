@@ -93,6 +93,13 @@ export class CustomBotService {
     const filePath = this.checkFilePath(request.filePath, userId);
     if (!filePath.success) return Failure(filePath.error);
 
+    const parsedConfig = this.parseConfig(request.config);
+    if (!parsedConfig.success) return Failure(parsedConfig.error);
+    const config = parsedConfig.data;
+    if (config.name !== name) {
+      return invalid("Bot name in config must match URL parameter");
+    }
+
     const fileExists = await this.storageService.fileExists(filePath.data);
     if (!fileExists.success) {
       return Failure(
@@ -106,22 +113,30 @@ export class CustomBotService {
       return invalid("File not found at specified file path");
     }
 
-    if (!request.config) {
+    return Ok({ config, filePath: filePath.data });
+  }
+
+  private parseConfig(raw: unknown): Result<CustomBotConfig, AppError> {
+    if (raw === undefined || raw === null || raw === "") {
       return invalid("Config field is required");
     }
-
-    let config: CustomBotConfig;
+    if (typeof raw !== "string") {
+      return invalid("Config must be valid JSON");
+    }
+    let parsed: unknown;
     try {
-      config = JSON.parse(request.config as string);
+      parsed = JSON.parse(raw);
     } catch {
       return invalid("Config must be valid JSON");
     }
-
-    if (config.name !== name) {
-      return invalid("Bot name in config must match URL parameter");
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
+      return invalid("Config must be a JSON object");
     }
-
-    return Ok({ config, filePath: filePath.data });
+    return Ok(parsed as CustomBotConfig);
   }
 
   private checkFilePath(
