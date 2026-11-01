@@ -6,7 +6,13 @@ import { LogsService } from "../logs.service";
 import { LogStreamService } from "../log-stream.service";
 import { LogFanOut } from "../log-fan-out";
 import { NatsService } from "@/nats/nats.service";
-import { AS_OWNER, errorBody, frontDoor, OWNED_BOT } from "@/test/front-door";
+import {
+  AS_OWNER,
+  errorBody,
+  frontDoor,
+  OWNED_BOT,
+  UNREADABLE_BOT,
+} from "@/test/front-door";
 
 describe("/logs responses", () => {
   let app: INestApplication;
@@ -112,6 +118,32 @@ describe("/logs responses", () => {
           .set(AS_OWNER);
 
         expectAnswer(res, 500, `Failed to fetch logs: ${message}`);
+      },
+    );
+  });
+
+  describe("answer a failed ownership lookup as the failure it is", () => {
+    it("answers a read with 500", async () => {
+      minio.getObject.mockClear();
+      const res = await api()
+        .get(`/logs/${UNREADABLE_BOT}?date=20260101`)
+        .set(AS_OWNER);
+
+      expectAnswer(res, 500, "Failed to read from the database");
+      expect(minio.getObject).not.toHaveBeenCalled();
+    });
+
+    it.each(["?history=false", ""])(
+      "ends the stream%s with the failure, before going live",
+      async (query) => {
+        const res = await api()
+          .get(`/logs/${UNREADABLE_BOT}/stream${query}`)
+          .set(AS_OWNER);
+
+        expect(res.text).toContain(
+          'event: error\ndata: {"message":"Failed to read from the database"}',
+        );
+        expect(res.text).not.toContain(": connected");
       },
     );
   });

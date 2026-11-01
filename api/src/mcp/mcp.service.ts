@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { PinoLogger } from "nestjs-pino";
 import { ClassConstructor } from "class-transformer";
-import { MCP_TOOL_NAMES, BotDeployInput, LogsGetInput } from "./mcp.types";
+import { MCP_TOOL_NAMES } from "./mcp.types";
 import {
   BotArguments,
   BotQueryArguments,
@@ -21,8 +21,8 @@ import { LogsService } from "@/logs/logs.service";
 import { utcDay } from "@/logs/log-entry";
 import { BotStateService } from "@/bot-state/bot-state.service";
 import { BotQueryService } from "@/bot-query/bot-query.service";
-import { appError, AppError } from "@/common/app-error";
-import { Failure, Ok, Result } from "@/common/result";
+import { appError, AppError, invalid } from "@/common/app-error";
+import { Ok, Result } from "@/common/result";
 import {
   McpToolResult,
   toMcpToolError,
@@ -116,7 +116,7 @@ export class McpService {
           this.handleBotGet(input, actor),
         );
       case MCP_TOOL_NAMES.BOT_DEPLOY:
-        return this.handleBotDeploy(args as unknown as BotDeployInput, actor);
+        return this.handleBotDeploy(args, actor);
       case MCP_TOOL_NAMES.BOT_UPDATE:
         return this.withArguments(BotUpdateArguments, args, (input) =>
           this.handleBotUpdate(input, actor),
@@ -126,8 +126,8 @@ export class McpService {
           this.handleBotDelete(input, actor),
         );
       case MCP_TOOL_NAMES.LOGS_GET:
-        return this.withArguments(BotArguments, args, () =>
-          this.handleLogsGet(args as unknown as LogsGetInput, actor),
+        return this.withArguments(BotArguments, args, (bot) =>
+          this.handleLogsGet(bot, args, actor),
         );
       case MCP_TOOL_NAMES.LOGS_SUMMARY:
         return this.withArguments(BotArguments, args, (input) =>
@@ -191,13 +191,13 @@ export class McpService {
   }
 
   private async handleBotDeploy(
-    input: BotDeployInput,
+    args: Record<string, unknown>,
     actor: Actor,
   ): Promise<ToolResult> {
     // The tool takes the name inside the config, where REST takes it beside.
     const bot = await validateArguments(CreateBotDto, {
-      name: input.config?.name,
-      config: input.config,
+      name: isRecord(args.config) ? args.config.name : undefined,
+      config: args.config,
     });
     if (!bot.success) return bot;
 
@@ -249,7 +249,8 @@ export class McpService {
 
   // Logs Handlers
   private async handleLogsGet(
-    input: LogsGetInput,
+    bot: BotArguments,
+    args: Record<string, unknown>,
     actor: Actor,
   ): Promise<ToolResult> {
     // An absent key must stay absent: the DTO's number transform turns an
@@ -258,9 +259,9 @@ export class McpService {
       GetLogsQueryDto,
       Object.fromEntries(
         Object.entries({
-          date: input.date,
-          dateRange: input.date_range,
-          limit: input.limit,
+          date: args.date,
+          dateRange: args.date_range,
+          limit: args.limit,
         }).filter(([, value]) => value !== undefined),
       ),
     );
@@ -269,7 +270,7 @@ export class McpService {
     // Cap limit to prevent context overflow
     const limit = Math.min(query.data.limit || 100, 500);
     const result = await this.logsService.getLogs(
-      input.bot_id,
+      bot.bot_id,
       {
         date: query.data.date,
         dateRange: query.data.dateRange,
@@ -281,7 +282,7 @@ export class McpService {
     if (!result.success) return result;
     const entries = result.data.entries;
     return Ok({
-      bot_id: input.bot_id,
+      bot_id: bot.bot_id,
       count: entries.length,
       logs: entries,
     });
@@ -414,5 +415,5 @@ export class McpService {
 
 type ToolResult = Result<unknown, AppError>;
 
-const invalid = (message: string): ToolResult =>
-  Failure(appError("validation", message));
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;

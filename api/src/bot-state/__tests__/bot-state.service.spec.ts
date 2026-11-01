@@ -1,3 +1,4 @@
+import { appError } from "@/common/app-error";
 import { Test, TestingModule } from "@nestjs/testing";
 import { BotStateService, StateKey } from "../bot-state.service";
 import { ConfigService } from "@nestjs/config";
@@ -140,7 +141,7 @@ describe("BotStateService", () => {
     it("should return failure when bot not found", async () => {
       mockBotService.findOne = jest
         .fn()
-        .mockResolvedValue(Failure("Not found"));
+        .mockResolvedValue(Failure(appError("not_found", "Not found")));
 
       const result = await service.listKeys(actor, "nonexistent-bot");
 
@@ -151,7 +152,7 @@ describe("BotStateService", () => {
     it("should verify bot ownership before listing", async () => {
       mockBotService.findOne = jest
         .fn()
-        .mockResolvedValue(Failure("Access denied"));
+        .mockResolvedValue(Failure(appError("not_found", "Not found")));
 
       const result = await service.listKeys(actor, testBotId);
 
@@ -165,7 +166,7 @@ describe("BotStateService", () => {
     it("should return failure when bot not found", async () => {
       mockBotService.findOne = jest
         .fn()
-        .mockResolvedValue(Failure("Not found"));
+        .mockResolvedValue(Failure(appError("not_found", "Not found")));
 
       const result = await service.getKey(
         actor,
@@ -210,7 +211,7 @@ describe("BotStateService", () => {
     it("should return failure when bot not found", async () => {
       mockBotService.findOne = jest
         .fn()
-        .mockResolvedValue(Failure("Not found"));
+        .mockResolvedValue(Failure(appError("not_found", "Not found")));
 
       const result = await service.deleteKey(
         actor,
@@ -710,7 +711,7 @@ describe("BotStateService", () => {
     it("should return failure when bot not found", async () => {
       mockBotService.findOne = jest
         .fn()
-        .mockResolvedValue(Failure("Not found"));
+        .mockResolvedValue(Failure(appError("not_found", "Not found")));
 
       const result = await service.clearState(actor, "nonexistent-bot");
 
@@ -721,7 +722,7 @@ describe("BotStateService", () => {
     it("should verify bot ownership before clearing", async () => {
       mockBotService.findOne = jest
         .fn()
-        .mockResolvedValue(Failure("Access denied"));
+        .mockResolvedValue(Failure(appError("not_found", "Not found")));
 
       const result = await service.clearState(actor, testBotId);
 

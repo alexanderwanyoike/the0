@@ -19,6 +19,7 @@ describe("LogStreamService", () => {
     mockUnsubscribe = jest.fn();
 
     mockLogsService = {
+      checkAccess: jest.fn().mockResolvedValue(Ok(true)),
       getLogs: jest.fn().mockResolvedValue(
         Ok({
           entries: [{ date: "20260210", content: "test log line" }],

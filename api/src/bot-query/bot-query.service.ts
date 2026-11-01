@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { Actor } from "@/auth/actor";
-import { BotService } from "@/bot/bot.service";
+import { botAccessError, BotService } from "@/bot/bot.service";
 import { appError, AppError } from "@/common/app-error";
 import { Result, Ok, Failure, errorMessage } from "@/common/result";
 
@@ -46,7 +46,7 @@ export class BotQueryService {
     // Verify bot exists and user has access
     const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
-      return Failure(appError("not_found", "Bot not found or access denied"));
+      return Failure(botAccessError(botResult.error));
     }
 
     try {

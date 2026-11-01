@@ -1,13 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import pino from "pino";
 import { RoleRevisionRepository } from "@/common/role-revision.repository";
-import { READ_FAILED } from "@/common/role.repository";
+import { READ_FAILED, appError, AppError } from "@/common/app-error";
 import {
   CustomBot,
   CustomBotWithVersions,
   CustomBotVersion,
 } from "./custom-bot.types";
-import { appError, AppError } from "@/common/app-error";
 import { Result, Ok, Failure, errorMessage } from "@/common/result";
 import { isForeignKeyViolation } from "@/common/database-errors";
 import { eq, and, desc, inArray, type SQL } from "drizzle-orm";
