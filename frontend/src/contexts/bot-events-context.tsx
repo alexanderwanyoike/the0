@@ -1,56 +1,18 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, ReactNode } from "react";
-import { useBotEvents, BotEvent, BotEventUtils } from "@/hooks/use-bot-events";
+import React, { useContext, useMemo, ReactNode } from "react";
+import { The0EventsContext, The0EventsContextValue } from "the0-react";
+import { useBotEvents } from "@/hooks/use-bot-events";
 
-interface BotEventsContextValue {
-  /** Parsed bot events */
-  events: BotEvent[];
-  /** True only while there is nothing to render yet. Background refreshes
-   *  keep this false so dashboards don't unmount into a loading screen. */
-  loading: boolean;
-  /** True while a background refresh is in flight (subtle indicators) */
-  isFetching: boolean;
-  /** SSE connection state: true = live, false = degraded to polling,
-   *  undefined = not streaming */
-  connected?: boolean;
-  /** When data last arrived (REST or SSE) */
-  lastUpdate?: Date | null;
-  /** Set only when there is nothing to render (initial load failed).
-   *  Background refresh failures keep this null so a naive `if (error)`
-   *  early-return can't blank a dashboard that has data on screen; they
-   *  surface through toasts and the connection indicator instead. */
-  error: string | null;
-  /** Event utilities bound to current events */
-  utils: BotEventUtils;
-  /** Refresh events */
-  refresh: () => void;
-  /** Bot ID */
+// the0-react registers this context on window, where dashboard bundles,
+// which carry their own copy of the SDK, find it.
+const BotEventsContext = The0EventsContext;
+
+// the0-react 0.2.1 predates botId and the extra utilities this host provides.
+type HostEventsContextValue = The0EventsContextValue & {
   botId: string;
-}
-
-// Shared context - also accessible via the0-react SDK
-declare global {
-  interface Window {
-    __THE0_EVENTS_CONTEXT__?: React.Context<BotEventsContextValue | null>;
-  }
-}
-
-function getSharedContext(): React.Context<BotEventsContextValue | null> {
-  if (typeof window !== "undefined" && window.__THE0_EVENTS_CONTEXT__) {
-    return window.__THE0_EVENTS_CONTEXT__;
-  }
-
-  const context = createContext<BotEventsContextValue | null>(null);
-
-  if (typeof window !== "undefined") {
-    window.__THE0_EVENTS_CONTEXT__ = context;
-  }
-
-  return context;
-}
-
-const BotEventsContext = getSharedContext();
+  utils: ReturnType<typeof useBotEvents>["utils"];
+};
 
 interface BotEventsProviderProps {
   children: ReactNode;
@@ -101,7 +63,7 @@ export function BotEventsProvider({
 
   // Memoized so a provider re-render with unchanged hook output doesn't hand
   // every consumer (each chart in a bot dashboard) a new value object
-  const value = useMemo(
+  const value = useMemo<HostEventsContextValue>(
     () => ({
       events,
       loading,
@@ -137,8 +99,9 @@ export function BotEventsProvider({
  * Hook to access bot events from context.
  * Must be used within a BotEventsProvider.
  */
-export function useBotEventsContext(): BotEventsContextValue {
-  const context = useContext(BotEventsContext);
+export function useBotEventsContext(): HostEventsContextValue {
+  // BotEventsProvider is the only writer of this context in the host
+  const context = useContext(BotEventsContext) as HostEventsContextValue | null;
 
   if (!context) {
     throw new Error(
