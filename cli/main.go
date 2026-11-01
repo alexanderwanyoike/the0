@@ -65,10 +65,7 @@ the0 CLI - Terminal-based trading bot management`,
 		startupVersionCheck()
 	}
 
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
+	os.Exit(cmd.Execute(rootCmd, os.Stderr))
 }
 
 // startupVersionCheck prints a notice if a newer version is cached, and

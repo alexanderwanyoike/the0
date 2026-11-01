@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 	"the0/internal"
@@ -28,8 +27,8 @@ Examples:
   the0 bot query my-bot /status --params '{"symbol":"BTC"}'
   the0 bot query my-bot /positions --timeout 60`,
 		Args: cobra.ExactArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
-			executeBotQuery(args[0], args[1], paramsJSON, timeout, raw)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return executeBotQuery(args[0], args[1], paramsJSON, timeout, raw)
 		},
 	}
 
@@ -40,12 +39,11 @@ Examples:
 	return cmd
 }
 
-func executeBotQuery(botID, queryPath, paramsJSON string, timeout int, raw bool) {
+func executeBotQuery(botID, queryPath, paramsJSON string, timeout int, raw bool) error {
 	// Parse params JSON
 	var params map[string]interface{}
 	if err := json.Unmarshal([]byte(paramsJSON), &params); err != nil {
-		logger.Error("Invalid params JSON: %v", err)
-		os.Exit(1)
+		return fmt.Errorf("Invalid params JSON: %w", err)
 	}
 
 	// Ensure query_path starts with /
@@ -61,8 +59,7 @@ func executeBotQuery(botID, queryPath, paramsJSON string, timeout int, raw bool)
 	auth, err := internal.GetAuthTokenWithRetry()
 	if err != nil {
 		logger.StopSpinnerWithError("Authentication failed")
-		logger.Error("%v", err)
-		os.Exit(1)
+		return err
 	}
 
 	// Execute query
@@ -76,8 +73,7 @@ func executeBotQuery(botID, queryPath, paramsJSON string, timeout int, raw bool)
 	result, err := apiClient.ExecuteBotQuery(auth, botID, request)
 	if err != nil {
 		logger.StopSpinnerWithError(failureTitle("Query failed", err))
-		logger.Error("%v", err)
-		os.Exit(1)
+		return err
 	}
 
 	logger.StopSpinner()
@@ -87,19 +83,18 @@ func executeBotQuery(botID, queryPath, paramsJSON string, timeout int, raw bool)
 		// Raw JSON output
 		jsonBytes, err := json.Marshal(result.Data)
 		if err != nil {
-			logger.Error("Failed to format result: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("Failed to format result: %w", err)
 		}
 		fmt.Println(string(jsonBytes))
 	} else {
 		// Pretty print
 		jsonBytes, err := json.MarshalIndent(result.Data, "", "  ")
 		if err != nil {
-			logger.Error("Failed to format result: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("Failed to format result: %w", err)
 		}
 		logger.Success("Query executed successfully")
 		logger.Newline()
 		fmt.Println(string(jsonBytes))
 	}
+	return nil
 }
