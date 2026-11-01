@@ -47,6 +47,8 @@ describe("/custom-bots responses", () => {
     listObjects: jest.fn(),
     deleteFile: jest.fn(),
     uploadBotFile: jest.fn(),
+    getFrontendPath: jest.fn(),
+    getBotFrontendStream: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -119,6 +121,13 @@ describe("/custom-bots responses", () => {
     const res = await publish("post", UPLOADER, customBotConfig());
     expect(res.status).toBe(201);
     return res.body.data.id as string;
+  };
+
+  const uploadedWithFrontend = async () => {
+    storage.extractAndStoreFrontend.mockResolvedValue(
+      Ok(`${UPLOADER}/sma-bot/1.0.0/frontend.js`),
+    );
+    return uploaded();
   };
 
   const expectRefusal = (
@@ -296,6 +305,29 @@ describe("/custom-bots responses", () => {
 
       expectRefusal(res, 404, "Custom bot not found: missing");
     });
+
+    it("answers a version without a frontend with 404", async () => {
+      const id = await uploaded();
+
+      const res = await api()
+        .get(`/custom-bots/by-id/${id}/frontend`)
+        .set(as(UPLOADER));
+
+      expectRefusal(res, 404, "This bot does not have a custom frontend");
+    });
+
+    it("answers a frontend bundle missing from storage with 404", async () => {
+      const id = await uploadedWithFrontend();
+      storage.getBotFrontendStream.mockResolvedValue(
+        Failure(appError("not_found", "Frontend bundle not found")),
+      );
+
+      const res = await api()
+        .get(`/custom-bots/by-id/${id}/frontend`)
+        .set(as(UPLOADER));
+
+      expectRefusal(res, 404, "Frontend bundle not found");
+    });
   });
 
   describe("delete versions", () => {
@@ -397,6 +429,19 @@ describe("/custom-bots responses", () => {
       const res = await api().get(path).set(as(UPLOADER));
 
       expectRefusal(res, 500, "Failed to read from the database");
+    });
+
+    it("answers a frontend bundle the storage fails to read", async () => {
+      const id = await uploadedWithFrontend();
+      storage.getBotFrontendStream.mockResolvedValue(
+        Failure(appError("internal", "Error retrieving frontend bundle: down")),
+      );
+
+      const res = await api()
+        .get(`/custom-bots/by-id/${id}/frontend`)
+        .set(as(UPLOADER));
+
+      expectRefusal(res, 500, "Error retrieving frontend bundle: down");
     });
 
     it("answers an upload the storage refuses", async () => {
