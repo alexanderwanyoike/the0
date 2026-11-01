@@ -741,7 +741,7 @@ describe("McpService", () => {
       it("should surface access errors", async () => {
         botStateService.listKeys.mockResolvedValue(
           Failure({
-            code: "BOT_NOT_FOUND",
+            code: "not_found",
             message: "Bot not found or access denied",
           }),
         );
@@ -800,7 +800,7 @@ describe("McpService", () => {
 
       it("should surface invalid key errors", async () => {
         botStateService.getKey.mockResolvedValue(
-          Failure({ code: "INVALID_KEY", message: "Invalid state key" }),
+          Failure({ code: "validation", message: "Invalid state key" }),
         );
 
         const result = await service.handleToolCall(
@@ -877,7 +877,7 @@ describe("McpService", () => {
       it("should surface query failures", async () => {
         botQueryService.executeQuery.mockResolvedValue(
           Failure({
-            code: "QUERY_FAILED",
+            code: "validation",
             message: "Query failed: bot not running",
           }),
         );

@@ -1,8 +1,12 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { BotStateController } from "../bot-state.controller";
-import { BotStateService, BotStateErrorCode } from "../bot-state.service";
+import { BotStateService } from "../bot-state.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
-import { NotFoundException, BadRequestException } from "@nestjs/common";
+import {
+  NotFoundException,
+  BadRequestException,
+  InternalServerErrorException,
+} from "@nestjs/common";
 import { Ok, Failure } from "@/common/result";
 import { mockActor } from "@/test/mock-actor";
 
@@ -58,7 +62,7 @@ describe("BotStateController", () => {
     it("should throw NotFoundException when bot not found", async () => {
       mockBotStateService.listKeys!.mockResolvedValue(
         Failure({
-          code: BotStateErrorCode.BOT_NOT_FOUND,
+          code: "not_found",
           message: "Bot not found or access denied",
         }),
       );
@@ -68,16 +72,16 @@ describe("BotStateController", () => {
       );
     });
 
-    it("should throw BadRequestException on storage errors", async () => {
+    it("should throw InternalServerErrorException on storage errors", async () => {
       mockBotStateService.listKeys!.mockResolvedValue(
         Failure({
-          code: BotStateErrorCode.STORAGE_ERROR,
+          code: "internal",
           message: "Failed to list state keys",
         }),
       );
 
       await expect(controller.listKeys(actor, testBotId)).rejects.toThrow(
-        BadRequestException,
+        InternalServerErrorException,
       );
     });
   });
@@ -101,7 +105,7 @@ describe("BotStateController", () => {
     it("should throw NotFoundException when key not found", async () => {
       mockBotStateService.getKey!.mockResolvedValue(
         Failure({
-          code: BotStateErrorCode.KEY_NOT_FOUND,
+          code: "not_found",
           message: "State key not found",
         }),
       );
@@ -114,7 +118,7 @@ describe("BotStateController", () => {
     it("should throw NotFoundException when bot not found", async () => {
       mockBotStateService.getKey!.mockResolvedValue(
         Failure({
-          code: BotStateErrorCode.BOT_NOT_FOUND,
+          code: "not_found",
           message: "Bot not found or access denied",
         }),
       );
@@ -127,7 +131,7 @@ describe("BotStateController", () => {
     it("should throw BadRequestException for invalid key", async () => {
       mockBotStateService.getKey!.mockResolvedValue(
         Failure({
-          code: BotStateErrorCode.INVALID_KEY,
+          code: "validation",
           message: "Invalid state key",
         }),
       );
@@ -171,7 +175,7 @@ describe("BotStateController", () => {
     it("should throw NotFoundException when bot not found", async () => {
       mockBotStateService.deleteKey!.mockResolvedValue(
         Failure({
-          code: BotStateErrorCode.BOT_NOT_FOUND,
+          code: "not_found",
           message: "Bot not found or access denied",
         }),
       );
@@ -184,7 +188,7 @@ describe("BotStateController", () => {
     it("should throw BadRequestException for invalid key", async () => {
       mockBotStateService.deleteKey!.mockResolvedValue(
         Failure({
-          code: BotStateErrorCode.INVALID_KEY,
+          code: "validation",
           message: "Invalid state key",
         }),
       );
@@ -213,7 +217,7 @@ describe("BotStateController", () => {
     it("should throw NotFoundException when bot not found", async () => {
       mockBotStateService.clearState!.mockResolvedValue(
         Failure({
-          code: BotStateErrorCode.BOT_NOT_FOUND,
+          code: "not_found",
           message: "Bot not found or access denied",
         }),
       );
@@ -223,16 +227,16 @@ describe("BotStateController", () => {
       );
     });
 
-    it("should throw BadRequestException on storage errors", async () => {
+    it("should throw InternalServerErrorException on storage errors", async () => {
       mockBotStateService.clearState!.mockResolvedValue(
         Failure({
-          code: BotStateErrorCode.STORAGE_ERROR,
+          code: "internal",
           message: "Failed to clear state",
         }),
       );
 
       await expect(controller.clearState(actor, testBotId)).rejects.toThrow(
-        BadRequestException,
+        InternalServerErrorException,
       );
     });
   });

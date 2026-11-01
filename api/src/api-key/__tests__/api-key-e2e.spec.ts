@@ -1,5 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { appError } from "@/common/app-error";
+import { appError, READ_FAILED } from "@/common/app-error";
 import { INestApplication, ValidationPipe } from "@nestjs/common";
 import request from "supertest";
 
@@ -204,7 +204,9 @@ describe("ApiKeyController (e2e)", () => {
   });
 
   it("/api-keys/:id (DELETE) should return 404 for non-existent key", async () => {
-    mockRepository.deleteApiKey.mockResolvedValue(Failure("API key not found"));
+    mockRepository.deleteApiKey.mockResolvedValue(
+      Failure(appError("not_found", "API key not found")),
+    );
 
     return request(app.getHttpServer())
       .delete("/api-keys/non-existent-id")
@@ -213,6 +215,36 @@ describe("ApiKeyController (e2e)", () => {
         expect(res.body.message).toBe("API key not found");
       });
   });
+
+  it.each([
+    {
+      lookup: "finds no key",
+      failure: appError("not_found", "Not found"),
+      status: 404,
+      message: "API key not found",
+    },
+    {
+      lookup: "fails at the database",
+      failure: READ_FAILED,
+      status: 500,
+      message: "Failed to read from the database",
+    },
+  ])(
+    "/api-keys/:id (DELETE) should answer $status when the lookup $lookup",
+    async ({ failure, status, message }) => {
+      mockRepository.deleteApiKey.mockImplementationOnce(
+        ApiKeyRepository.prototype.deleteApiKey,
+      );
+      mockRepository.findOne.mockResolvedValueOnce(Failure(failure));
+
+      return request(app.getHttpServer())
+        .delete("/api-keys/test-key-id")
+        .expect(status)
+        .expect((res) => {
+          expect(res.body.message).toBe(message);
+        });
+    },
+  );
 
   it("/api-keys/stats/summary (GET) should return statistics", async () => {
     const apiKeys = [mockApiKey, { ...mockApiKey, id: "test-key-id-2" }];
@@ -228,6 +260,20 @@ describe("ApiKeyController (e2e)", () => {
         expect(typeof res.body.active).toBe("number");
         expect(res.body.total).toBe(2);
         expect(res.body.active).toBe(2);
+      });
+  });
+
+  it("/api-keys (POST) should answer a repository error with 500", async () => {
+    mockRepository.findAll.mockResolvedValue(
+      Failure(appError("internal", "Failed to read from the database")),
+    );
+
+    return request(app.getHttpServer())
+      .post("/api-keys")
+      .send({ name: "cli" })
+      .expect(500)
+      .expect((res) => {
+        expect(res.body.message).toBe("Failed to read from the database");
       });
   });
 

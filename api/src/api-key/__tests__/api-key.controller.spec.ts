@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { appError } from "@/common/app-error";
 import { HttpException, HttpStatus } from "@nestjs/common";
 import { ApiKeyController } from "@/api-key/api-key.controller";
 import { ApiKeyService } from "@/api-key/api-key.service";
@@ -67,7 +68,7 @@ describe("ApiKeyController", () => {
     it("should throw BadRequestException on service failure", async () => {
       const createDto: CreateApiKeyDto = { name: "Test API Key" };
       service.createApiKey.mockResolvedValue(
-        Failure("API key name already exists"),
+        Failure(appError("validation", "API key name already exists")),
       );
 
       await expect(
@@ -96,7 +97,9 @@ describe("ApiKeyController", () => {
     });
 
     it("should throw InternalServerErrorException on service failure", async () => {
-      service.getUserApiKeys.mockResolvedValue(Failure("Database error"));
+      service.getUserApiKeys.mockResolvedValue(
+        Failure(appError("internal", "Database error")),
+      );
 
       await expect(controller.getApiKeys(mockRequest)).rejects.toThrow(
         new HttpException(
@@ -122,7 +125,9 @@ describe("ApiKeyController", () => {
     });
 
     it("should throw NotFoundException when API key not found", async () => {
-      service.getApiKeyById.mockResolvedValue(Failure("Not found"));
+      service.getApiKeyById.mockResolvedValue(
+        Failure(appError("not_found", "Not found")),
+      );
 
       await expect(
         controller.getApiKeyById(mockRequest, "test-id"),
@@ -150,7 +155,9 @@ describe("ApiKeyController", () => {
     });
 
     it("should throw NotFoundException when API key not found", async () => {
-      service.deleteApiKey.mockResolvedValue(Failure("API key not found"));
+      service.deleteApiKey.mockResolvedValue(
+        Failure(appError("not_found", "API key not found")),
+      );
 
       await expect(
         controller.deleteApiKey(mockRequest, "test-id"),
@@ -179,7 +186,9 @@ describe("ApiKeyController", () => {
     });
 
     it("should throw InternalServerErrorException on service failure", async () => {
-      service.getApiKeyStats.mockResolvedValue(Failure("Database error"));
+      service.getApiKeyStats.mockResolvedValue(
+        Failure(appError("internal", "Database error")),
+      );
 
       await expect(controller.getApiKeyStats(mockRequest)).rejects.toThrow(
         new HttpException(

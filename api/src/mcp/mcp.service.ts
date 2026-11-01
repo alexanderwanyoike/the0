@@ -299,7 +299,7 @@ export class McpService {
       actor.userId,
     );
     if (!result.success) {
-      throw new Error(result.error || "Failed to get logs");
+      throw new Error(result.error.message || "Failed to get logs");
     }
     const entries = result.data?.entries || [];
     return {
@@ -320,7 +320,7 @@ export class McpService {
       actor.userId,
     );
     if (!result.success) {
-      throw new Error(result.error || "Failed to get logs for summary");
+      throw new Error(result.error.message || "Failed to get logs for summary");
     }
 
     const logs = result.data?.entries || [];
