@@ -4,7 +4,6 @@ import { StorageService } from "../storage.service";
 import { Ok, Failure } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
-import { EventEmitter } from "events";
 import AdmZip from "adm-zip";
 import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
@@ -13,18 +12,6 @@ describe("StorageService", () => {
   let service: StorageService;
   let configService: jest.Mocked<ConfigService>;
   let mockMinioClient: jest.Mocked<Minio.Client>;
-
-  // Helper to create mock stream
-  const createMockStream = (content: Buffer) => {
-    const stream = new EventEmitter();
-    setTimeout(() => {
-      if (content) {
-        stream.emit("data", content);
-      }
-      stream.emit("end");
-    }, 0);
-    return stream;
-  };
 
   // Sample ZIP file buffer for testing
   const createSampleZipBuffer = () => {
@@ -208,16 +195,21 @@ describe("StorageService", () => {
 
     it("should handle corrupted ZIP files", async () => {
       const corruptBuffer = Buffer.from("not a zip file");
-      mockMinioClient.getObject.mockResolvedValue(
-        createMockStream(corruptBuffer) as any,
-      );
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          yield corruptBuffer;
+        },
+      };
+      mockMinioClient.getObject.mockResolvedValue(mockStream as any);
 
       const result = await service.validateZipStructure("test/corrupt.zip", [
         "main.js",
       ]);
 
       expect(result.success).toBe(false);
-      expect(result.error.message).toContain("Error validating ZIP structure");
+      expect(result.error.message).toContain(
+        "Invalid or unsupported zip format",
+      );
     });
   });
 
