@@ -1,11 +1,42 @@
 package internal
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/fatih/color"
 )
+
+func TestBuildFrontendIfNeeded_WithoutDockerSaysDockerIsNeeded(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	var out bytes.Buffer
+	previous := color.Output
+	color.Output = &out
+	t.Cleanup(func() { color.Output = previous })
+
+	projectPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(projectPath, "frontend"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectPath, "frontend", "package.json"), []byte(`{"name": "frontend"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := BuildFrontendIfNeeded(projectPath); err == nil {
+		t.Fatal("BuildFrontendIfNeeded() error = nil, want Docker reported missing")
+	}
+
+	// Every deploy rebuilds the bundle, so a bundle built beforehand changes nothing.
+	if strings.Contains(out.String(), "pre-build") {
+		t.Errorf("hint = %q, want no advice to pre-build the frontend", out.String())
+	}
+	if !strings.Contains(out.String(), "Solution: Install Docker") {
+		t.Errorf("hint = %q, want it to say to install Docker", out.String())
+	}
+}
 
 func TestBuildFrontendIfNeeded_BuildsWheneverFrontendPackageJSONExists(t *testing.T) {
 	// With no docker on PATH, a build attempt fails fast with the Docker
