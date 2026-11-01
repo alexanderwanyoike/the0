@@ -30,7 +30,6 @@ export class CustomBotService {
     private readonly logger: PinoLogger,
   ) {}
 
-  /** Publishes the first version of a new Custom bot, as its Uploader. */
   async publishFirstVersion(
     userId: string,
     name: string,
@@ -86,11 +85,6 @@ export class CustomBotService {
     }
   }
 
-  /**
-   * The checks a publish request passes before its config is read as a
-   * Custom bot: the upload must be the caller's own and exist, and the
-   * config must be JSON naming the Custom bot being published.
-   */
   private async parsePublishRequest(
     userId: string,
     name: string,
@@ -207,7 +201,6 @@ export class CustomBotService {
     );
   }
 
-  /** Publishes a new version of a Custom bot; only its Uploader may. */
   async publishVersion(
     userId: string,
     name: string,
