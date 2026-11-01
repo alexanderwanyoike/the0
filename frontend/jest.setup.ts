@@ -194,9 +194,6 @@ jest.mock("next/image", () => ({
   },
 }));
 
-// Mock environment variables commonly used in tests
-process.env.JWT_SECRET = "test-jwt-secret-key-for-testing-only";
-
 // Mock console methods to reduce noise in tests
 const originalError = console.error;
 const originalWarn = console.warn;
