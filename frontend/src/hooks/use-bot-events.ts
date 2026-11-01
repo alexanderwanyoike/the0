@@ -34,7 +34,7 @@ interface UseBotEventsReturn {
   /** Error message if any */
   error: string | null;
   /** Event utilities bound to current events */
-  utils: BotEventUtils;
+  utils: ReturnType<typeof bindEventUtils>;
   /** Refresh events */
   refresh: () => void;
   /** Update date filter */
@@ -68,7 +68,7 @@ function bindEventUtils(events: BotEvent[]) {
     extractTimeSeries: (metricType: string, valueKey?: string) =>
       eventUtils.extractTimeSeries(events, metricType, valueKey),
   };
-  return bound;
+  return bound satisfies BotEventUtils;
 }
 
 /**
@@ -193,7 +193,7 @@ export function useBotEvents({
   }, [rawLogs]);
 
   // Create bound utilities
-  const utils = useMemo<BotEventUtils>(() => bindEventUtils(events), [events]);
+  const utils = useMemo(() => bindEventUtils(events), [events]);
 
   return {
     events,

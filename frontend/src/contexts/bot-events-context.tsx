@@ -8,6 +8,12 @@ import { useBotEvents } from "@/hooks/use-bot-events";
 // which carry their own copy of the SDK, find it.
 const BotEventsContext = The0EventsContext;
 
+// the0-react 0.2.1 predates botId and the extra utilities this host provides.
+type HostEventsContextValue = The0EventsContextValue & {
+  botId: string;
+  utils: ReturnType<typeof useBotEvents>["utils"];
+};
+
 interface BotEventsProviderProps {
   children: ReactNode;
   botId: string;
@@ -57,7 +63,7 @@ export function BotEventsProvider({
 
   // Memoized so a provider re-render with unchanged hook output doesn't hand
   // every consumer (each chart in a bot dashboard) a new value object
-  const value = useMemo(
+  const value = useMemo<HostEventsContextValue>(
     () => ({
       events,
       loading,
@@ -93,8 +99,9 @@ export function BotEventsProvider({
  * Hook to access bot events from context.
  * Must be used within a BotEventsProvider.
  */
-export function useBotEventsContext(): The0EventsContextValue {
-  const context = useContext(BotEventsContext);
+export function useBotEventsContext(): HostEventsContextValue {
+  // BotEventsProvider is the only writer of this context in the host
+  const context = useContext(BotEventsContext) as HostEventsContextValue | null;
 
   if (!context) {
     throw new Error(
