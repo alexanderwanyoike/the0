@@ -75,7 +75,6 @@ const ownedBot = (userId: string, id: string) => {
     : Failure(appError("not_found", "Not found"));
 };
 
-/** Nest's body for an HTTP error. */
 export const errorBody = (statusCode: number, message: string) => ({
   statusCode,
   message,
