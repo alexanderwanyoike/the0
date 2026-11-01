@@ -40,9 +40,7 @@ func serverMessage(status int, body []byte) string {
 	var parsed struct {
 		Message json.RawMessage `json:"message"`
 		Error   json.RawMessage `json:"error"`
-		Data    struct {
-			Error string `json:"error"`
-		} `json:"data"`
+		Data    json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(body, &parsed); err == nil {
 		for _, raw := range []json.RawMessage{parsed.Message, parsed.Error} {
@@ -50,8 +48,11 @@ func serverMessage(status int, body []byte) string {
 				return msg
 			}
 		}
-		if parsed.Data.Error != "" {
-			return parsed.Data.Error
+		var data struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(parsed.Data, &data) == nil && data.Error != "" {
+			return data.Error
 		}
 	}
 	if text := strings.TrimSpace(string(body)); text != "" {

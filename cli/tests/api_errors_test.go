@@ -103,6 +103,36 @@ func TestAPIClient_ErrorsCarryTheServersMessage(t *testing.T) {
 			wantErr: "API error 409: State changed while deleting, try again",
 		},
 		{
+			name: "the message is read when data is a list",
+			call: func(c *internal.APIClient, auth *internal.Auth) error {
+				_, err := c.DeployBotInstance(auth, &internal.BotDeployRequest{Name: "b"})
+				return err
+			},
+			status:  400,
+			body:    `{"success":false,"message":"Invalid configuration","data":["symbol is required"]}`,
+			wantErr: "API error 400: Invalid configuration",
+		},
+		{
+			name: "the message is read when data is a string",
+			call: func(c *internal.APIClient, auth *internal.Auth) error {
+				_, err := c.DeployBotInstance(auth, &internal.BotDeployRequest{Name: "b"})
+				return err
+			},
+			status:  400,
+			body:    `{"success":false,"message":"Invalid configuration","data":"symbol is required"}`,
+			wantErr: "API error 400: Invalid configuration",
+		},
+		{
+			name: "the error inside data is used when there is no message",
+			call: func(c *internal.APIClient, auth *internal.Auth) error {
+				_, err := c.ListBots(auth)
+				return err
+			},
+			status:  400,
+			body:    `{"success":false,"data":{"error":"invalid version format"}}`,
+			wantErr: "API error 400: invalid version format",
+		},
+		{
 			name: "the error field is used when there is no message",
 			call: func(c *internal.APIClient, auth *internal.Auth) error {
 				_, err := c.ListBots(auth)
