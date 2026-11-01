@@ -11,6 +11,7 @@ import { AuthService } from "@/auth/auth.service";
 import { appError } from "@/common/app-error";
 import { Failure, Ok } from "@/common/result";
 import { botsTable } from "@/database/schema/bots";
+import { customBotsTable } from "@/database/schema/custom-bots";
 import { usersTable } from "@/database/schema/users";
 import { mockBotConfig } from "@/test/mock-bot";
 import { createMockLogger } from "@/test/mock-logger";
@@ -88,6 +89,7 @@ describe("/custom-bots responses", () => {
 
   beforeEach(async () => {
     jest.restoreAllMocks();
+    jest.clearAllMocks();
     storage.fileExists.mockResolvedValue(Ok(true));
     storage.validateZipStructure.mockResolvedValue(Ok(true));
     storage.extractAndStoreFrontend.mockResolvedValue(Ok(null));
@@ -169,7 +171,33 @@ describe("/custom-bots responses", () => {
         .send({ config: "{", filePath: `${UPLOADER}/sma-bot/1.0.0.zip` });
 
       expectRefusal(res, 400, "Config must be valid JSON");
+      expect(storage.fileExists).not.toHaveBeenCalled();
     });
+
+    it("refuses a config sent as a JSON value instead of JSON text", async () => {
+      const res = await api()
+        .post("/custom-bots/sma-bot")
+        .set(as(UPLOADER))
+        .send({ config: 5, filePath: `${UPLOADER}/sma-bot/1.0.0.zip` });
+
+      expectRefusal(res, 400, "Config must be valid JSON");
+      expect(storage.fileExists).not.toHaveBeenCalled();
+    });
+
+    it.each(["null", "5", "[]", '"sma-bot"'])(
+      "refuses a config that is not a JSON object: %s",
+      async (config) => {
+        const res = await api()
+          .post("/custom-bots/sma-bot")
+          .set(as(UPLOADER))
+          .send({ config, filePath: `${UPLOADER}/sma-bot/1.0.0.zip` });
+
+        expectRefusal(res, 400, "Config must be a JSON object");
+        expect(storage.fileExists).not.toHaveBeenCalled();
+        expect(storage.validateZipStructure).not.toHaveBeenCalled();
+        expect(await db().select().from(customBotsTable)).toEqual([]);
+      },
+    );
 
     it("refuses a config named differently from the path", async () => {
       const res = await api()
@@ -239,6 +267,19 @@ describe("/custom-bots responses", () => {
   });
 
   describe("publish a new version", () => {
+    it("refuses a config that is not a JSON object", async () => {
+      await uploaded();
+      storage.fileExists.mockClear();
+
+      const res = await api()
+        .put("/custom-bots/sma-bot")
+        .set(as(UPLOADER))
+        .send({ config: "null", filePath: `${UPLOADER}/sma-bot/1.1.0.zip` });
+
+      expectRefusal(res, 400, "Config must be a JSON object");
+      expect(storage.fileExists).not.toHaveBeenCalled();
+    });
+
     it("refuses a user who is not the Uploader", async () => {
       await uploaded();
 

@@ -1,6 +1,6 @@
 import { appError } from "@/common/app-error";
 import { CustomBotRepository } from "../custom-bot.repository";
-import { CustomBot, CustomBotConfig } from "../custom-bot.types";
+import { CustomBot } from "../custom-bot.types";
 
 // Mock Drizzle database and dependencies
 jest.mock("@/database/connection", () => ({
@@ -578,41 +578,6 @@ describe("CustomBotRepository", () => {
     });
   });
 
-  describe("getSpecificGlobalVersion", () => {
-    it("should return specific global version", async () => {
-      const mockBotData = {
-        id: "global-test-id",
-        name: "global-bot",
-        version: "1.0.0",
-        userId: "user456",
-        config: { name: "global-bot", version: "1.0.0" },
-        filePath: "/local/path/global-test.zip",
-        createdAt: new Date("2023-01-01"),
-        updatedAt: new Date("2023-01-01"),
-      };
-
-      // Mock the specific findGlobalByKeyAndVersion method call
-      const originalFindGlobalByKeyAndVersion =
-        repository.findGlobalByKeyAndVersion;
-      repository.findGlobalByKeyAndVersion = jest.fn().mockResolvedValue({
-        success: true,
-        data: mockBotData,
-      });
-
-      const result = await repository.getSpecificGlobalVersion(
-        "global-bot",
-        "1.0.0",
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBeDefined();
-      expect(result.data!.version).toBe("1.0.0");
-
-      // Restore original method
-      repository.findGlobalByKeyAndVersion = originalFindGlobalByKeyAndVersion;
-    });
-  });
-
   describe("countInstancesByCustomBotId", () => {
     it("should return count of bot instances referencing a custom bot", async () => {
       const mockBotsTable = {
@@ -737,70 +702,6 @@ describe("CustomBotRepository", () => {
         reason: "error",
         message: "Constraint violation",
       });
-    });
-  });
-
-  describe("isVersionNewer", () => {
-    it("should return true for newer major version", () => {
-      const result = repository.isVersionNewer("1.0.0", "2.0.0");
-      expect(result).toBe(true);
-    });
-
-    it("should return true for newer minor version", () => {
-      const result = repository.isVersionNewer("1.0.0", "1.1.0");
-      expect(result).toBe(true);
-    });
-
-    it("should return true for newer patch version", () => {
-      const result = repository.isVersionNewer("1.0.0", "1.0.1");
-      expect(result).toBe(true);
-    });
-
-    it("should return false for same version", () => {
-      const result = repository.isVersionNewer("1.0.0", "1.0.0");
-      expect(result).toBe(false);
-    });
-
-    it("should return false for older version", () => {
-      const result = repository.isVersionNewer("2.0.0", "1.0.0");
-      expect(result).toBe(false);
-    });
-  });
-
-  describe("createNewGlobalVersion", () => {
-    it("should create new version successfully", async () => {
-      const config: CustomBotConfig = {
-        name: "test-bot",
-        version: "1.0.0",
-        description: "Test bot",
-        author: "Test Author",
-        type: "scheduled",
-        runtime: "python3.11",
-        entrypoints: { bot: "main.py" },
-        schema: { bot: {} },
-        readme: "Test readme",
-        metadata: { tags: ["test"], license: "MIT" },
-      };
-      const botData = {
-        name: "test-bot",
-        version: "1.0.0",
-        config: config,
-        userId: "user123",
-        filePath: "/local/path/test.zip",
-      };
-
-      // Mock successful database operations
-      mockDb.from.mockReturnValue(mockDb);
-      mockDb.orderBy.mockResolvedValue([{ ...botData, id: "new-id" }]);
-
-      const result = await repository.createNewGlobalVersion(
-        "user123",
-        botData,
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBeDefined();
-      expect(mockDb.insert).toHaveBeenCalled();
     });
   });
 

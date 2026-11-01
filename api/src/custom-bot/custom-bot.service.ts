@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { PinoLogger } from "nestjs-pino";
+import * as semver from "semver";
 import { CustomBotRepository } from "./custom-bot.repository";
 import { StorageService } from "@/custom-bot/storage.service";
 import { validateCustomBotConfigPayload } from "./custom-bot.schema";
@@ -12,8 +13,14 @@ import {
   SUPPORTED_RUNTIMES,
   COMPILED_RUNTIMES,
 } from "./custom-bot.types";
-import { appError, AppError, WRITE_FAILED } from "@/common/app-error";
+import { appError, AppError, invalid, WRITE_FAILED } from "@/common/app-error";
 import { Result, Failure, Ok } from "@/common/result";
+
+/** A publish request as a client sends it: the config is JSON text. */
+export interface PublishRequest {
+  config: unknown;
+  filePath: unknown;
+}
 
 @Injectable()
 export class CustomBotService {
@@ -23,11 +30,14 @@ export class CustomBotService {
     private readonly logger: PinoLogger,
   ) {}
 
-  async createCustomBot(
+  async publishFirstVersion(
     userId: string,
-    config: CustomBotConfig,
-    filePath: string,
+    name: string,
+    request: PublishRequest,
   ): Promise<Result<CustomBot, AppError>> {
+    const parsed = await this.parsePublishRequest(userId, name, request);
+    if (!parsed.success) return Failure(parsed.error);
+    const { config, filePath } = parsed.data;
     try {
       // Validate config structure
       const validation = validateCustomBotConfigPayload(config);
@@ -75,6 +85,80 @@ export class CustomBotService {
     }
   }
 
+  private async parsePublishRequest(
+    userId: string,
+    name: string,
+    request: PublishRequest,
+  ): Promise<Result<{ config: CustomBotConfig; filePath: string }, AppError>> {
+    const filePath = this.checkFilePath(request.filePath, userId);
+    if (!filePath.success) return Failure(filePath.error);
+
+    const parsedConfig = this.parseConfig(request.config);
+    if (!parsedConfig.success) return Failure(parsedConfig.error);
+    const config = parsedConfig.data;
+    if (config.name !== name) {
+      return invalid("Bot name in config must match URL parameter");
+    }
+
+    const fileExists = await this.storageService.fileExists(filePath.data);
+    if (!fileExists.success) {
+      return Failure(
+        appError(
+          fileExists.error.code,
+          `File validation failed: ${fileExists.error.message}`,
+        ),
+      );
+    }
+    if (!fileExists.data) {
+      return invalid("File not found at specified file path");
+    }
+
+    return Ok({ config, filePath: filePath.data });
+  }
+
+  private parseConfig(raw: unknown): Result<CustomBotConfig, AppError> {
+    if (raw === undefined || raw === null || raw === "") {
+      return invalid("Config field is required");
+    }
+    if (typeof raw !== "string") {
+      return invalid("Config must be valid JSON");
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return invalid("Config must be valid JSON");
+    }
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
+      return invalid("Config must be a JSON object");
+    }
+    return Ok(parsed as CustomBotConfig);
+  }
+
+  private checkFilePath(
+    filePath: unknown,
+    userId: string,
+  ): Result<string, AppError> {
+    if (typeof filePath !== "string") {
+      return invalid("filePath must be a string");
+    }
+    const trimmed = filePath.trim();
+    if (trimmed === "") {
+      return invalid("filePath is required");
+    }
+    if (trimmed.includes("..") || trimmed.includes("//")) {
+      return invalid("Invalid file path");
+    }
+    if (!trimmed.startsWith(`${userId}/`)) {
+      return invalid("File path must belong to the authenticated user");
+    }
+    return Ok(trimmed);
+  }
+
   private async storeVersion(
     userId: string,
     config: CustomBotConfig,
@@ -114,34 +198,34 @@ export class CustomBotService {
       );
     }
 
-    const result = await this.customBotRepository.createNewGlobalVersion(
+    const result = await this.customBotRepository.create({
       userId,
-      {
-        name: finalConfig.name,
-        version: finalConfig.version,
-        config: finalConfig,
-        filePath,
-        status: "active",
-      },
-    );
+      name: finalConfig.name,
+      version: finalConfig.version,
+      config: finalConfig,
+      filePath,
+      status: "active",
+    });
     if (!result.success) {
       return Failure(result.error);
     }
 
-    return this.customBotRepository.getSpecificGlobalVersion(
+    return this.customBotRepository.findGlobalByKeyAndVersion(
       config.name,
       config.version,
     );
   }
 
-  async updateCustomBot(
+  async publishVersion(
     userId: string,
     name: string,
-    config: CustomBotConfig,
-    filePath: string,
+    request: PublishRequest,
   ): Promise<Result<CustomBot, AppError>> {
+    const parsed = await this.parsePublishRequest(userId, name, request);
+    if (!parsed.success) return Failure(parsed.error);
+    const { config, filePath } = parsed.data;
     try {
-      const configCheck = this.checkUpdateConfig(name, config);
+      const configCheck = this.checkUpdateConfig(config);
       if (!configCheck.success) return Failure(configCheck.error);
 
       const ownerCheck = await this.checkUserOwnsExistingBot(userId, name);
@@ -162,25 +246,13 @@ export class CustomBotService {
     }
   }
 
-  private checkUpdateConfig(
-    name: string,
-    config: CustomBotConfig,
-  ): Result<null, AppError> {
+  private checkUpdateConfig(config: CustomBotConfig): Result<null, AppError> {
     const validation = validateCustomBotConfigPayload(config);
     if (!validation.valid) {
       return Failure(
         appError(
           "validation",
           `Validation failed: ${validation.errors?.join(", ")}`,
-        ),
-      );
-    }
-
-    if (config.name !== name) {
-      return Failure(
-        appError(
-          "validation",
-          "Bot name in config must match the URL parameter",
         ),
       );
     }
@@ -235,7 +307,7 @@ export class CustomBotService {
     }
 
     const latestVersion = latestResult.data.version;
-    if (!this.customBotRepository.isVersionNewer(latestVersion, version)) {
+    if (!semver.gt(version, latestVersion)) {
       return Failure(
         appError(
           "validation",
@@ -279,35 +351,31 @@ export class CustomBotService {
     }
   }
 
-  async getAllGlobalVersions(
+  async findVersions(
     name: string,
   ): Promise<Result<CustomBotWithVersions, AppError>> {
     return await this.customBotRepository.getAllGlobalVersions(name);
   }
 
-  async getGlobalSpecificVersion(
+  async findVersion(
     name: string,
     version: string,
   ): Promise<Result<CustomBot, AppError>> {
-    return await this.customBotRepository.getSpecificGlobalVersion(
+    return await this.customBotRepository.findGlobalByKeyAndVersion(
       name,
       version,
     );
   }
 
-  async getGlobalLatestVersion(
-    name: string,
-  ): Promise<Result<CustomBot, AppError>> {
+  async findLatestVersion(name: string): Promise<Result<CustomBot, AppError>> {
     return await this.customBotRepository.getGlobalLatestVersion(name);
   }
 
-  async getAllGlobalCustomBots(): Promise<
-    Result<CustomBotWithVersions[], AppError>
-  > {
+  async listCatalogue(): Promise<Result<CustomBotWithVersions[], AppError>> {
     return await this.customBotRepository.getAllGlobalCustomBots();
   }
 
-  async getById(id: string): Promise<Result<CustomBot, AppError>> {
+  async findVersionById(id: string): Promise<Result<CustomBot, AppError>> {
     return await this.customBotRepository.findOneById(id);
   }
 
@@ -354,7 +422,7 @@ export class CustomBotService {
     }
 
     const versionResult =
-      await this.customBotRepository.getSpecificGlobalVersion(name, version);
+      await this.customBotRepository.findGlobalByKeyAndVersion(name, version);
     if (!versionResult.success) {
       return Failure(versionResult.error);
     }

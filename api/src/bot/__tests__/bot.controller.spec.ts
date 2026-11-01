@@ -72,14 +72,14 @@ describe("BotController - Enhanced Tests", () => {
   };
 
   const mockCustomBotService = {
-    getGlobalSpecificVersion: jest.fn().mockResolvedValue({
+    findVersion: jest.fn().mockResolvedValue({
       success: true,
       error: null,
       data: mockCustomBot,
     }),
     createCustomBot: jest.fn(),
     updateCustomBot: jest.fn(),
-    getAllGlobalVersions: jest.fn(),
+    findVersions: jest.fn(),
     checkOrphaned: jest
       .fn()
       .mockResolvedValue(
@@ -241,13 +241,11 @@ describe("BotController - Enhanced Tests", () => {
     });
 
     it("should throw BadRequestException when custom bot not found", async () => {
-      mockCustomBotService.getGlobalSpecificVersion = jest
-        .fn()
-        .mockResolvedValue({
-          success: false,
-          error: appError("not_found", "Bot not found"),
-          data: null,
-        });
+      mockCustomBotService.findVersion = jest.fn().mockResolvedValue({
+        success: false,
+        error: appError("not_found", "Bot not found"),
+        data: null,
+      });
 
       await expect(controller.create(actor, validBot)).rejects.toThrow(
         BadRequestException,
@@ -401,13 +399,11 @@ describe("BotController - Enhanced Tests", () => {
       const updatedBot = mockBot({ id: "test-id", ...updateData });
 
       // Reset the mock to return success for this test
-      mockCustomBotService.getGlobalSpecificVersion = jest
-        .fn()
-        .mockResolvedValue({
-          success: true,
-          error: null,
-          data: mockCustomBot,
-        });
+      mockCustomBotService.findVersion = jest.fn().mockResolvedValue({
+        success: true,
+        error: null,
+        data: mockCustomBot,
+      });
 
       jest.spyOn(repository, "updateWithEvents").mockResolvedValue({
         success: true,
@@ -455,13 +451,11 @@ describe("BotController - Enhanced Tests", () => {
     });
 
     it("should throw BadRequestException for invalid bot type on update", async () => {
-      mockCustomBotService.getGlobalSpecificVersion = jest
-        .fn()
-        .mockResolvedValue({
-          success: false,
-          error: appError("not_found", "Bot type not found"),
-          data: null,
-        });
+      mockCustomBotService.findVersion = jest.fn().mockResolvedValue({
+        success: false,
+        error: appError("not_found", "Bot type not found"),
+        data: null,
+      });
 
       await expect(
         controller.update(actor, "test-id", updateData),
