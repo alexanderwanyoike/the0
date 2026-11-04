@@ -72,12 +72,13 @@ func VendorDependenciesIfNeeded(projectPath, runtime string) error {
 		return fmt.Errorf("docker unavailable but dependencies detected - installation required")
 	}
 
-	vm, err := NewVendorManager(projectPath)
+	runner, err := NewDockerRunner()
 	if err != nil {
 		red.Printf("Failed to initialize dependency installer: %v\n", err)
 		red.Println("Cannot deploy bot without installed dependencies")
 		return fmt.Errorf("vendor manager initialization failed: %v", err)
 	}
+	vm := NewVendorManager(projectPath, runner)
 	defer vm.Close()
 	vm.runtime = runtime
 

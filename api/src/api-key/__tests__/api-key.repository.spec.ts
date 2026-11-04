@@ -1,3 +1,4 @@
+import { appError } from "@/common/app-error";
 import { Test, TestingModule } from "@nestjs/testing";
 import { ApiKeyRepository } from "../api-key.repository";
 import { Ok, Failure } from "../../common/result";
@@ -122,7 +123,9 @@ describe("ApiKeyRepository", () => {
 
       const result = await repository.findByKey("the0_key");
 
-      expect(result).toEqual(Failure("API key lookup failed"));
+      expect(result).toEqual(
+        Failure(appError("internal", "API key lookup failed")),
+      );
     });
   });
 

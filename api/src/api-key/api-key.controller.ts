@@ -5,12 +5,11 @@ import {
   Delete,
   Body,
   Param,
-  HttpStatus,
-  HttpException,
   UseGuards,
   Request,
 } from "@nestjs/common";
 import { ApiKeyService } from "@/api-key/api-key.service";
+import { toHttpException } from "@/common/http-error";
 import { CreateApiKeyDto } from "@/api-key/dto/create-api-key.dto";
 import { AuthGuard } from "@nestjs/passport";
 import { ApiKeyCreatedResponseDto } from "@/api-key/dto/api-key-created-response.dto";
@@ -48,14 +47,7 @@ export class ApiKeyController {
     );
 
     if (!result.success) {
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.BAD_REQUEST,
-          message: result.error,
-          error: "Bad Request",
-        },
-        HttpStatus.BAD_REQUEST,
-      );
+      throw toHttpException(result.error);
     }
 
     return result.data;
@@ -75,14 +67,7 @@ export class ApiKeyController {
     const result = await this.apiKeyService.getUserApiKeys(userId);
 
     if (!result.success) {
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: result.error,
-          error: "Internal Server Error",
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw toHttpException(result.error);
     }
 
     return result.data;
@@ -101,21 +86,7 @@ export class ApiKeyController {
     const result = await this.apiKeyService.getApiKeyById(userId, keyId);
 
     if (!result.success) {
-      const status =
-        result.error === "Not found"
-          ? HttpStatus.NOT_FOUND
-          : HttpStatus.INTERNAL_SERVER_ERROR;
-      throw new HttpException(
-        {
-          statusCode: status,
-          message: result.error,
-          error:
-            status === HttpStatus.NOT_FOUND
-              ? "Not Found"
-              : "Internal Server Error",
-        },
-        status,
-      );
+      throw toHttpException(result.error);
     }
 
     return result.data;
@@ -134,21 +105,7 @@ export class ApiKeyController {
     const result = await this.apiKeyService.deleteApiKey(userId, keyId);
 
     if (!result.success) {
-      const status =
-        result.error === "API key not found"
-          ? HttpStatus.NOT_FOUND
-          : HttpStatus.INTERNAL_SERVER_ERROR;
-      throw new HttpException(
-        {
-          statusCode: status,
-          message: result.error,
-          error:
-            status === HttpStatus.NOT_FOUND
-              ? "Not Found"
-              : "Internal Server Error",
-        },
-        status,
-      );
+      throw toHttpException(result.error);
     }
 
     return { message: "API key deleted successfully" };
@@ -164,14 +121,7 @@ export class ApiKeyController {
     const result = await this.apiKeyService.getApiKeyStats(userId);
 
     if (!result.success) {
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: result.error,
-          error: "Internal Server Error",
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw toHttpException(result.error);
     }
 
     return result.data;

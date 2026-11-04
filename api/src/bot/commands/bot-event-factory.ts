@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { PinoLogger } from "nestjs-pino";
+import { AppError } from "@/common/app-error";
 import { Failure, Ok, Result } from "@/common/result";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { CustomBot } from "@/custom-bot/custom-bot.types";
@@ -7,7 +8,7 @@ import { BotConfig } from "@/database/schema/bots";
 import { BOT_TOPICS, SCHEDULED_BOT_TOPICS } from "../bot.constants";
 import { BotEvent } from "../bot-event-outbox";
 import { Bot } from "../entities/bot.entity";
-import { customBotNameOf } from "./custom-bot-name";
+import { parseBotType } from "../bot-type";
 
 type BotTopics = { CREATED: string; UPDATED: string; DELETED: string };
 
@@ -45,7 +46,7 @@ export class BotEventFactory {
    * the scheduled subject: the runtime ignores a delete for a bot it does
    * not hold, and must not keep running one it does.
    */
-  async deleted(bot: Bot): Promise<Result<BotEvent[], string>> {
+  async deleted(bot: Bot): Promise<Result<BotEvent[], AppError>> {
     const payload = { id: bot.id, config: bot.config };
     const configType = bot.config?.type;
     const configVersion = bot.config?.version;
@@ -53,17 +54,16 @@ export class BotEventFactory {
       return Ok(deletedOnEverySubject(bot.id, payload));
     }
 
-    const name = customBotNameOf(configType);
-    if (!name.success) {
-      this.logger.warn({ type: configType }, name.error);
-      return Failure(name.error);
+    const botType = parseBotType(configType);
+    if (!botType.success) {
+      this.logger.warn({ type: configType }, botType.error.message);
+      return Failure(botType.error);
     }
 
-    const customBotResult =
-      await this.customBotService.getGlobalSpecificVersion(
-        name.data,
-        configVersion,
-      );
+    const customBotResult = await this.customBotService.findVersion(
+      botType.data.customBotName,
+      configVersion,
+    );
     if (!customBotResult.success) {
       return Ok(deletedOnEverySubject(bot.id, payload));
     }

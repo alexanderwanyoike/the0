@@ -66,6 +66,13 @@ func TestAPIClient_ListBots(t *testing.T) {
 			expectedError: false,
 		},
 		{
+			name:          "bare array, as the api answers today",
+			statusCode:    200,
+			responseBody:  `[{"id": "bot-1", "name": "a"}, {"id": "bot-2", "name": "b"}]`,
+			expectedBots:  2,
+			expectedError: false,
+		},
+		{
 			name:          "invalid auth",
 			statusCode:    401,
 			responseBody:  `{"error": "Unauthorized"}`,
@@ -188,7 +195,7 @@ func TestAPIClient_DeployBotInstance(t *testing.T) {
 				},
 			},
 			expectedError: true,
-			errorContains: "validation error",
+			errorContains: "Invalid configuration",
 		},
 		{
 			name:          "invalid auth",
@@ -204,7 +211,7 @@ func TestAPIClient_DeployBotInstance(t *testing.T) {
 			responseBody:  `{"error": "Bad Request"}`,
 			request:       &internal.BotDeployRequest{Name: "test-bot", Config: map[string]interface{}{"name": "test-bot"}},
 			expectedError: true,
-			errorContains: "validation error",
+			errorContains: "Bad Request",
 		},
 	}
 
@@ -303,7 +310,7 @@ func TestAPIClient_UpdateBotInstance(t *testing.T) {
 			botID:         "bot_nonexistent",
 			request:       &internal.BotUpdateRequest{Name: "test-bot", Config: map[string]interface{}{"name": "test-bot"}},
 			expectedError: true,
-			errorContains: "bot not found",
+			errorContains: "Bot not found",
 		},
 		{
 			name:          "invalid auth",
@@ -321,7 +328,7 @@ func TestAPIClient_UpdateBotInstance(t *testing.T) {
 			botID:         "bot_123",
 			request:       &internal.BotUpdateRequest{Name: "test-bot", Config: map[string]interface{}{"name": "test-bot"}},
 			expectedError: true,
-			errorContains: "validation error",
+			errorContains: "Invalid configuration",
 		},
 	}
 
@@ -407,7 +414,7 @@ func TestAPIClient_DeleteBotInstance(t *testing.T) {
 			responseBody:  `{"error": "Bot not found"}`,
 			botID:         "bot_nonexistent",
 			expectedError: true,
-			errorContains: "bot not found",
+			errorContains: "Bot not found",
 		},
 		{
 			name:          "invalid auth",
@@ -423,7 +430,7 @@ func TestAPIClient_DeleteBotInstance(t *testing.T) {
 			responseBody:  `{"error": "Internal Server Error"}`,
 			botID:         "bot_123",
 			expectedError: true,
-			errorContains: "deletion failed:",
+			errorContains: "Internal Server Error",
 		},
 	}
 
@@ -629,7 +636,7 @@ func TestAPIClient_UploadFileDirect(t *testing.T) {
 			statusCode:    400,
 			responseBody:  `{"error": "Bad Request"}`,
 			expectedError: true,
-			errorContains: "validation error",
+			errorContains: "Bad Request",
 		},
 		{
 			name:          "server error",
@@ -638,7 +645,7 @@ func TestAPIClient_UploadFileDirect(t *testing.T) {
 			statusCode:    500,
 			responseBody:  `{"error": "Internal Server Error"}`,
 			expectedError: true,
-			errorContains: "upload failed:",
+			errorContains: "Internal Server Error",
 		},
 		{
 			name:       "API success false",

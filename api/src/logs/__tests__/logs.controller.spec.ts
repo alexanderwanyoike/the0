@@ -1,4 +1,5 @@
 import { LogsController } from "../logs.controller";
+import { appError } from "@/common/app-error";
 import { LogsService } from "../logs.service";
 import { LogStreamService } from "../log-stream.service";
 import { Ok, Failure } from "@/common/result";
@@ -107,7 +108,7 @@ describe("LogsController", () => {
 
     it("should throw NotFoundException for not found errors", async () => {
       (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
-        Failure("Bot not found or access denied"),
+        Failure(appError("not_found", "Bot not found or access denied")),
       );
 
       await expect(
@@ -121,7 +122,7 @@ describe("LogsController", () => {
 
     it("should throw BadRequestException for other errors", async () => {
       (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
-        Failure("Invalid date format"),
+        Failure(appError("validation", "Invalid date format")),
       );
 
       await expect(

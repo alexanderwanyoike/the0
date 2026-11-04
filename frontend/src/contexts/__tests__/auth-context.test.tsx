@@ -14,16 +14,8 @@ jest.mock("next/navigation", () => ({
 jest.mock("@/lib/auth/jwt-auth.service");
 
 // Mock all auth utility setters
-jest.mock("@/lib/axios-interceptor", () => ({
-  setAuthService: jest.fn(),
-}));
-
 jest.mock("@/lib/auth-fetch", () => ({
   setAuthFetchService: jest.fn(),
-}));
-
-jest.mock("@/lib/api-client", () => ({
-  setApiClientService: jest.fn(),
 }));
 
 jest.mock("@/lib/sse/sse-auth", () => ({
@@ -61,15 +53,8 @@ const mockUser: AuthUser = {
 
 // Test component to access auth context
 function TestComponent() {
-  const {
-    user,
-    loading,
-    login,
-    logout,
-    refreshUser,
-    token,
-    authService,
-  } = useAuth();
+  const { user, loading, login, logout, refreshUser, token, authService } =
+    useAuth();
 
   return (
     <div>
@@ -165,11 +150,8 @@ describe("AuthContext", () => {
     });
 
     it("should register auth service with all utilities", async () => {
-      const setAuthService = require("@/lib/axios-interceptor").setAuthService;
       const setAuthFetchService =
         require("@/lib/auth-fetch").setAuthFetchService;
-      const setApiClientService =
-        require("@/lib/api-client").setApiClientService;
       const setSSEAuthService = require("@/lib/sse/sse-auth").setSSEAuthService;
 
       mockAuthService.getToken.mockReturnValue(null);
@@ -181,9 +163,7 @@ describe("AuthContext", () => {
       );
 
       await waitFor(() => {
-        expect(setAuthService).toHaveBeenCalled();
         expect(setAuthFetchService).toHaveBeenCalled();
-        expect(setApiClientService).toHaveBeenCalled();
         expect(setSSEAuthService).toHaveBeenCalled();
       });
     });

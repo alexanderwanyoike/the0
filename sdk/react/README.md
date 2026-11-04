@@ -61,6 +61,7 @@ Returns the events context with:
 - `error: string | null` - Error message if any
 - `refresh: () => void` - Manual refresh function
 - `utils: BotEventUtils` - Utility functions (see below)
+- `botId?: string` - The bot whose events these are
 
 ### Event Utilities
 
@@ -79,6 +80,10 @@ interface BotEventUtils {
   latest(metricType: string): BotEvent | null;
   groupByMetricType(): Record<string, BotEvent[]>;
   groupByRun(gapThresholdMs?: number): BotEvent[][];
+  groupByTimeWindow?(window: '1m' | '5m' | '15m' | '1h' | '4h' | '1d'): BotEvent[][];
+  latestByType?(): Record<string, BotEvent>;
+  countByType?(): Record<string, number>;
+  getMetricTypes?(): string[];
 
   // Charting
   extractTimeSeries(metricType: string, valueKey?: string):

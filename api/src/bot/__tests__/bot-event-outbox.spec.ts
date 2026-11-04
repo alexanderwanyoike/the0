@@ -1,4 +1,5 @@
 import { BotRepository } from "../bot.repository";
+import { appError } from "@/common/app-error";
 import { BotEvent } from "../bot-event-outbox";
 import { Failure } from "@/common/result";
 import { customBotsTable } from "@/database/schema/custom-bots";
@@ -198,7 +199,7 @@ describe("BotRepository writes with events", () => {
         event("bot-1", "the0.bot-schedule.deleted"),
       ]);
 
-      expect(updated).toEqual(Failure("Not found"));
+      expect(updated).toEqual(Failure(appError("not_found", "Not found")));
       expect(removed.success).toBe(true);
       expect(await botRows()).toHaveLength(1);
       expect(await outboxRows()).toEqual([]);

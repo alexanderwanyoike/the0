@@ -1,5 +1,7 @@
 import { Injectable } from "@nestjs/common";
+import pino from "pino";
 import { RoleRevisionRepository } from "@/common/role-revision.repository";
+import { READ_FAILED, appError, AppError } from "@/common/app-error";
 import {
   CustomBot,
   CustomBotWithVersions,
@@ -8,7 +10,8 @@ import {
 import { Result, Ok, Failure, errorMessage } from "@/common/result";
 import { isForeignKeyViolation } from "@/common/database-errors";
 import { eq, and, desc, inArray, type SQL } from "drizzle-orm";
-import * as semver from "semver";
+
+const logger = pino({ name: "CustomBotRepository" });
 
 export type RemoveVersionsFailure =
   | { reason: "in-use" }
@@ -22,22 +25,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     super("name"); // Use 'name' as the revision key field
   }
 
-  async userBotExists(
-    userId: string,
-    name: string,
-  ): Promise<Result<boolean, string>> {
-    try {
-      const result = await this.findByKey(userId, name);
-      if (!result.success) {
-        return Failure(result.error);
-      }
-      return Ok(result.data.length > 0);
-    } catch (error: unknown) {
-      return Failure(errorMessage(error));
-    }
-  }
-
-  async globalBotExists(name: string): Promise<Result<boolean, string>> {
+  async globalBotExists(name: string): Promise<Result<boolean, AppError>> {
     try {
       const result = await this.findGlobalByKey(name);
       if (!result.success) {
@@ -45,38 +33,25 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       }
       return Ok(result.data.length > 0);
     } catch (error: unknown) {
-      return Failure(errorMessage(error));
-    }
-  }
-
-  async userVersionExists(
-    userId: string,
-    name: string,
-    version: string,
-  ): Promise<Result<boolean, string>> {
-    try {
-      const result = await this.findByKeyAndVersion(userId, name, version);
-      return Ok(result.success);
-    } catch (error: unknown) {
-      return Failure(errorMessage(error));
+      return Failure(READ_FAILED);
     }
   }
 
   async globalVersionExists(
     name: string,
     version: string,
-  ): Promise<Result<boolean, string>> {
+  ): Promise<Result<boolean, AppError>> {
     try {
       const result = await this.findGlobalByKeyAndVersion(name, version);
       return Ok(result.success);
     } catch (error: unknown) {
-      return Failure(errorMessage(error));
+      return Failure(READ_FAILED);
     }
   }
 
   async getUserCustomBots(
     userId: string,
-  ): Promise<Result<CustomBotWithVersions[], string>> {
+  ): Promise<Result<CustomBotWithVersions[], AppError>> {
     try {
       // Get all custom bots for the user
       const result = await this.findAll(userId);
@@ -90,14 +65,14 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
 
       return Ok(groupByName(result.data));
     } catch (error: unknown) {
-      return Failure(errorMessage(error));
+      return Failure(READ_FAILED);
     }
   }
 
   async getAllUserVersions(
     userId: string,
     name: string,
-  ): Promise<Result<CustomBotWithVersions, string>> {
+  ): Promise<Result<CustomBotWithVersions, AppError>> {
     try {
       const result = await this.findByKey(userId, name);
       if (!result.success) {
@@ -105,19 +80,19 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       }
 
       if (result.data.length === 0) {
-        return Failure("Bot not found");
+        return Failure(appError("not_found", "Bot not found"));
       }
 
       // findByKey already orders by createdAt desc.
       return Ok(toBotWithVersions(result.data));
     } catch (error: unknown) {
-      return Failure(errorMessage(error));
+      return Failure(READ_FAILED);
     }
   }
 
   async getAllGlobalVersions(
     name: string,
-  ): Promise<Result<CustomBotWithVersions, string>> {
+  ): Promise<Result<CustomBotWithVersions, AppError>> {
     try {
       const result = await this.findGlobalByKey(name);
       if (!result.success) {
@@ -125,67 +100,38 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       }
 
       if (result.data.length === 0) {
-        return Failure("Bot not found");
+        return Failure(appError("not_found", "Bot not found"));
       }
 
       // findGlobalByKey already orders by createdAt desc.
       return Ok(toBotWithVersions(result.data));
     } catch (error: unknown) {
-      return Failure(errorMessage(error));
+      return Failure(READ_FAILED);
     }
-  }
-
-  async getSpecificUserVersion(
-    userId: string,
-    name: string,
-    version: string,
-  ): Promise<Result<CustomBot, string>> {
-    return this.findByKeyAndVersion(userId, name, version);
-  }
-
-  async getSpecificGlobalVersion(
-    name: string,
-    version: string,
-  ): Promise<Result<CustomBot, string>> {
-    return this.findGlobalByKeyAndVersion(name, version);
-  }
-
-  async createNewGlobalVersion(
-    userId: string,
-    botData: Partial<CustomBot>,
-  ): Promise<Result<CustomBot, string>> {
-    return this.create({
-      ...botData,
-      userId,
-    });
-  }
-
-  isVersionNewer(currentVersion: string, newVersion: string): boolean {
-    return semver.gt(newVersion, currentVersion);
   }
 
   async checkUserOwnership(
     userId: string,
     name: string,
-  ): Promise<Result<boolean, string>> {
+  ): Promise<Result<boolean, AppError>> {
     const result = await this.findGlobalByKey(name);
     if (!result.success) {
       return Failure(result.error);
     }
     const bots = result.data;
     if (bots.length === 0) {
-      return Failure("Bot not found");
+      return Failure(appError("not_found", "Bot not found"));
     }
     const bot = bots[0];
     if (bot.userId !== userId) {
-      return Failure("Insufficient permissions");
+      return Failure(appError("forbidden", "Insufficient permissions"));
     }
     return Ok(true);
   }
 
   async countInstancesByCustomBotId(
     customBotId: string,
-  ): Promise<Result<number, string>> {
+  ): Promise<Result<number, AppError>> {
     try {
       const records = await this.db
         .select()
@@ -194,13 +140,14 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
 
       return Ok(records.length);
     } catch (error: unknown) {
-      return Failure(errorMessage(error));
+      logger.error({ err: error }, "Error counting custom bot instances");
+      return Failure(READ_FAILED);
     }
   }
 
   async countInstancesByCustomBotIds(
     ids: string[],
-  ): Promise<Result<Map<string, number>, string>> {
+  ): Promise<Result<Map<string, number>, AppError>> {
     try {
       if (ids.length === 0) {
         return Ok(new Map());
@@ -222,7 +169,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
 
       return Ok(counts);
     } catch (error: unknown) {
-      return Failure(errorMessage(error));
+      logger.error({ err: error }, "Error counting custom bot instances");
+      return Failure(READ_FAILED);
     }
   }
 
@@ -259,7 +207,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
   }
 
   async getAllGlobalCustomBots(): Promise<
-    Result<CustomBotWithVersions[], string>
+    Result<CustomBotWithVersions[], AppError>
   > {
     try {
       // Get all custom bots from the database
@@ -280,7 +228,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
         ),
       );
     } catch (error: unknown) {
-      return Failure(errorMessage(error));
+      logger.error({ err: error }, "Error fetching the Catalogue");
+      return Failure(READ_FAILED);
     }
   }
 }

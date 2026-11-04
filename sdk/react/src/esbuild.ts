@@ -7,6 +7,7 @@
  */
 
 import type { Plugin } from "esbuild";
+import { THE0_GLOBALS } from "./contract";
 
 /**
  * esbuild plugin that transforms React imports to use window globals.
@@ -56,19 +57,19 @@ export const reactGlobalPlugin: Plugin = {
 
     // Load handlers return code that uses window globals
     build.onLoad({ filter: /.*/, namespace: "the0-react-global" }, () => ({
-      contents: `module.exports = window.__THE0_REACT__;`,
+      contents: `module.exports = window.${THE0_GLOBALS.react};`,
       loader: "js",
     }));
 
     build.onLoad({ filter: /.*/, namespace: "the0-react-dom-global" }, () => ({
-      contents: `module.exports = window.__THE0_REACT_DOM__;`,
+      contents: `module.exports = window.${THE0_GLOBALS.reactDom};`,
       loader: "js",
     }));
 
     build.onLoad(
       { filter: /.*/, namespace: "the0-react-dom-client-global" },
       () => ({
-        contents: `module.exports = window.__THE0_REACT_DOM__;`,
+        contents: `module.exports = window.${THE0_GLOBALS.reactDom};`,
         loader: "js",
       })
     );
@@ -76,7 +77,7 @@ export const reactGlobalPlugin: Plugin = {
     build.onLoad(
       { filter: /.*/, namespace: "the0-react-jsx-runtime-global" },
       () => ({
-        contents: `module.exports = window.__THE0_REACT_JSX__;`,
+        contents: `module.exports = window.${THE0_GLOBALS.jsxRuntime};`,
         loader: "js",
       })
     );

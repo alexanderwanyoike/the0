@@ -99,7 +99,7 @@ describe("CustomBotService deleting versions", () => {
       expect(await botIds()).toEqual(["bot-1"]);
       expect(await versionIds()).toEqual(["cb-1", "cb-2"]);
       expect(result.success).toBe(false);
-      expect(result.error).toBe(
+      expect(result.error.message).toBe(
         "Cannot delete version 1.0.0: active instance(s) reference it",
       );
       expect(storage.listObjects).not.toHaveBeenCalled();
@@ -130,7 +130,7 @@ describe("CustomBotService deleting versions", () => {
       expect(await botIds()).toEqual(["bot-1"]);
       expect(await versionIds()).toEqual(["cb-1", "cb-2"]);
       expect(result.success).toBe(false);
-      expect(result.error).toBe(
+      expect(result.error.message).toBe(
         "Cannot delete: versions with active instance(s)",
       );
       expect(storage.listObjects).not.toHaveBeenCalled();

@@ -34,7 +34,7 @@ schema:
 readme: README.md
 ```
 
-The `name` field serves as a unique identifier and must use lowercase letters with hyphens. This name appears in the UI and forms part of the URL path when users browse custom bots.
+The `name` field serves as a unique identifier and must be 3 to 50 lowercase letters and numbers, with single hyphens between them (`sma-crossover` or `bot2`, not `-bot`, `bot-` or `my--bot`). This name appears in the UI and forms part of the URL path when users browse custom bots.
 
 The `type` field determines the execution model. Set it to `realtime` for bots that run continuously with an event loop, or `scheduled` for bots that execute once and exit (triggered by cron expressions on bot instances).
 

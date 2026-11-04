@@ -6,7 +6,6 @@ import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { useDashboardBots } from "@/contexts/dashboard-bots-context";
 import { BotService, Bot as ApiBotType } from "@/lib/api/api-client";
-import { getErrorMessage } from "@/lib/axios";
 import { maskSensitiveConfig } from "@/lib/mask-config";
 import {
   IntervalValue,
@@ -24,21 +23,32 @@ export interface DetailBot extends ApiBotType {
   customBotId?: string;
 }
 
+class BotLoadError extends Error {
+  constructor(
+    message: string,
+    readonly statusCode: number,
+  ) {
+    super(message);
+  }
+}
+
 async function loadOwnedBot(botId: string, userId: string): Promise<DetailBot> {
   const result = await BotService.getBot(botId);
   if (!result.success) {
-    throw new Error(result.error.message || "Failed to fetch bot");
+    throw new BotLoadError(
+      result.error.message || "Failed to fetch bot",
+      result.error.statusCode,
+    );
   }
   const botData = result.data as DetailBot;
   const botUserId = botData.userId || botData.user_id;
-  if (botUserId !== userId) throw new Error("Unauthorized access");
+  if (botUserId !== userId) throw new BotLoadError("Unauthorized access", 403);
   return botData;
 }
 
 const isGoneOrForbidden = (error: unknown) =>
-  error instanceof Error &&
-  (error.message === "Bot not found" ||
-    error.message === "Unauthorized access");
+  error instanceof BotLoadError &&
+  (error.statusCode === 404 || error.statusCode === 403);
 
 /** Loads the bot for the signed-in owner and exposes its detail actions. */
 export function useOwnedBot(botId: string) {
@@ -133,7 +143,7 @@ export function useOwnedBot(botId: string) {
       console.error("Error updating bot enabled status:", error);
       toast({
         title: "Update Failed",
-        description: getErrorMessage(error),
+        description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
     } finally {

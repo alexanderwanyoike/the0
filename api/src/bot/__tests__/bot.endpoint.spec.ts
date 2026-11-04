@@ -7,6 +7,7 @@ import { BotRepository } from "../bot.repository";
 import { BotService } from "../bot.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { AuthService } from "@/auth/auth.service";
+import { appError } from "@/common/app-error";
 import { Failure, Ok } from "@/common/result";
 import { CommandBus } from "@/command-bus/command-bus";
 import { mockBot } from "@/test/mock-bot";
@@ -26,7 +27,7 @@ describe("/bot routes", () => {
     findOne: jest.fn(async (userId: string, id: string) =>
       userId === ownersBot.userId && id === ownersBot.id
         ? Ok(ownersBot)
-        : Failure("Bot not found"),
+        : Failure(appError("not_found", "Not found")),
     ),
   };
 

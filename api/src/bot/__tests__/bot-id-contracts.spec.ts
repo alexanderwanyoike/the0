@@ -1,12 +1,10 @@
 import { createId } from "@paralleldrive/cuid2";
+import { appError } from "@/common/app-error";
 import { unsetConfig } from "@/test/mock-config";
 import { PinoLogger } from "nestjs-pino";
 import * as Minio from "minio";
 import { BotService } from "@/bot/bot.service";
-import {
-  BotStateErrorCode,
-  BotStateService,
-} from "@/bot-state/bot-state.service";
+import { BotStateService } from "@/bot-state/bot-state.service";
 import { Failure } from "@/common/result";
 import { isValidBotId } from "@/logs/bot-id";
 import { loadContract } from "@/test/contracts";
@@ -40,7 +38,11 @@ describe("bot ID contracts", () => {
     let service: BotStateService;
 
     beforeEach(() => {
-      botService = { findOne: jest.fn().mockResolvedValue(Failure("none")) };
+      botService = {
+        findOne: jest
+          .fn()
+          .mockResolvedValue(Failure(appError("not_found", "Not found"))),
+      };
       service = new BotStateService(
         {} as Minio.Client,
         unsetConfig(),
@@ -52,7 +54,7 @@ describe("bot ID contracts", () => {
     it.each(valid)("looks %j up", async (id) => {
       const result = await service.listKeys(mockActor(), id);
 
-      expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
+      expect(result.error?.code).toBe("not_found");
       expect(botService.findOne).toHaveBeenCalledWith(expect.anything(), id);
     });
 
@@ -60,7 +62,7 @@ describe("bot ID contracts", () => {
       const result = await service.listKeys(mockActor(), id);
 
       expect(result.error).toEqual({
-        code: BotStateErrorCode.STORAGE_ERROR,
+        code: "validation",
         message: "Invalid bot ID format",
       });
       expect(botService.findOne).not.toHaveBeenCalled();

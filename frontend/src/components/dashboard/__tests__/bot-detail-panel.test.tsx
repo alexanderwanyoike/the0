@@ -222,6 +222,46 @@ describe("BotDetailPanel", () => {
       });
     });
 
+    describe("when the bot cannot be loaded", () => {
+      // Fake timers keep a redirect scheduled by an earlier test from
+      // landing in these.
+      beforeEach(() => {
+        jest.useFakeTimers();
+        mockPush.mockClear();
+      });
+      afterEach(() => jest.useRealTimers());
+
+      async function loadFailing(error: {
+        message: string;
+        statusCode: number;
+      }) {
+        mockGetBot.mockResolvedValue({ success: false, error } as any);
+        render(<BotDetailPanel botId="bot-123" />);
+        await waitFor(() => expect(mockToast).toHaveBeenCalled());
+        act(() => {
+          jest.advanceTimersByTime(2000);
+        });
+      }
+
+      it.each([
+        [404, "Not found"],
+        [403, "Forbidden"],
+      ])(
+        "returns to the dashboard when the api answers %i",
+        async (statusCode, message) => {
+          await loadFailing({ message, statusCode });
+
+          expect(mockPush).toHaveBeenCalledWith("/dashboard");
+        },
+      );
+
+      it("stays on the bot when the api fails for another reason", async () => {
+        await loadFailing({ message: "Bot not found", statusCode: 500 });
+
+        expect(mockPush).not.toHaveBeenCalledWith("/dashboard");
+      });
+    });
+
     it("rejects unauthorized access", async () => {
       mockGetBot.mockResolvedValue({
         success: true,
@@ -349,6 +389,7 @@ describe("BotDetailPanel", () => {
         expect(mockToast).toHaveBeenCalledWith(
           expect.objectContaining({
             title: "Update Failed",
+            description: "nope",
             variant: "destructive",
           }),
         );

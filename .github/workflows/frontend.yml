@@ -11,6 +11,9 @@ on:
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend.yml'
+      # The dashboard bundle test builds these against the host.
+      - 'sdk/react/src/**'
+      - 'example-bots/typescript-price-alerts/frontend/**'
   workflow_dispatch:
 
 env:

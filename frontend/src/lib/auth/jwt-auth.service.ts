@@ -22,6 +22,12 @@ export class JwtAuthService {
         body: JSON.stringify(credentials),
       });
 
+      // The proxy's own wording is about "the API", which means nothing on
+      // a login form, and a gateway in front of it may not answer JSON.
+      if (response.status === 502 || response.status === 504) {
+        return { success: false, error: "Authentication service unavailable" };
+      }
+
       const data: AuthApiResponse<AuthResponse> = await response.json();
 
       if (!response.ok) {

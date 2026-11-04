@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -45,26 +46,24 @@ func newEnvAddCmd() *cobra.Command {
 		Use:   "add <name>",
 		Short: "Add a new environment",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 			if url == "" {
-				logger.Error("--url is required")
-				os.Exit(1)
+				return errors.New("--url is required")
 			}
 			if apiKey == "" {
 				key, err := promptForAPIKey()
 				if err != nil {
-					logger.Error("%v", err)
-					os.Exit(1)
+					return err
 				}
 				apiKey = key
 			}
 
 			if err := addEnvironment(name, url, apiKey); err != nil {
-				logger.Error("%v", err)
-				os.Exit(1)
+				return err
 			}
 			logger.Success("Environment %q added", name)
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&url, "url", "", "API base URL (e.g. http://localhost:3000)")
@@ -78,21 +77,19 @@ func newEnvUseCmd() *cobra.Command {
 		Use:   "use <name>",
 		Short: "Switch the active environment",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			envs, err := internal.LoadEnvironments()
 			if err != nil {
-				logger.Error("%v", err)
-				os.Exit(1)
+				return err
 			}
 			if err := envs.Use(args[0]); err != nil {
-				logger.Error("%v", err)
-				os.Exit(1)
+				return err
 			}
 			if err := internal.SaveEnvironments(envs); err != nil {
-				logger.Error("%v", err)
-				os.Exit(1)
+				return err
 			}
 			logger.Success("Active environment: %s", args[0])
+			return nil
 		},
 	}
 }
@@ -101,15 +98,14 @@ func newEnvListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List all environments",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			envs, err := internal.LoadEnvironments()
 			if err != nil {
-				logger.Error("%v", err)
-				os.Exit(1)
+				return err
 			}
 			if len(envs.Environments) == 0 {
 				logger.Print("No environments defined. Run `the0 env add <name> --url <url>` to create one.")
-				return
+				return nil
 			}
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			fmt.Fprintln(w, "ACTIVE\tNAME\tURL")
@@ -121,6 +117,7 @@ func newEnvListCmd() *cobra.Command {
 				fmt.Fprintf(w, "%s\t%s\t%s\n", marker, name, env.URL)
 			}
 			_ = w.Flush()
+			return nil
 		},
 	}
 }
@@ -131,25 +128,23 @@ func newEnvRemoveCmd() *cobra.Command {
 		Aliases: []string{"rm"},
 		Short:   "Remove an environment",
 		Args:    cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			envs, err := internal.LoadEnvironments()
 			if err != nil {
-				logger.Error("%v", err)
-				os.Exit(1)
+				return err
 			}
 			wasActive := envs.Active == args[0]
 			if err := envs.Remove(args[0]); err != nil {
-				logger.Error("%v", err)
-				os.Exit(1)
+				return err
 			}
 			if err := internal.SaveEnvironments(envs); err != nil {
-				logger.Error("%v", err)
-				os.Exit(1)
+				return err
 			}
 			logger.Success("Environment %q removed", args[0])
 			if wasActive {
 				logger.Info("No active environment; run `the0 env use <name>` to pick one.")
 			}
+			return nil
 		},
 	}
 }
@@ -158,23 +153,22 @@ func newEnvCurrentCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "current",
 		Short: "Show the active environment",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			envs, err := internal.LoadEnvironments()
 			if err != nil {
-				logger.Error("%v", err)
-				os.Exit(1)
+				return err
 			}
 			if envs.Active == "" {
 				logger.Print("No active environment. Legacy fallback in use (URL: %s).", internal.GetAPIBaseURL())
-				return
+				return nil
 			}
 			env, ok := envs.Environments[envs.Active]
 			if !ok {
-				logger.Error("active environment %q is not defined", envs.Active)
-				os.Exit(1)
+				return fmt.Errorf("active environment %q is not defined", envs.Active)
 			}
 			logger.Print("Active: %s", envs.Active)
 			logger.Print("URL:    %s", env.URL)
+			return nil
 		},
 	}
 }

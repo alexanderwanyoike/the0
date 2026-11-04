@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { appError } from "@/common/app-error";
 import { BotRepository } from "../bot.repository";
 import { BotValidator } from "../bot.validator";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
@@ -65,21 +66,14 @@ describe("Bot commands", () => {
 
   beforeEach(async () => {
     mockCustomBotService = {
-      getGlobalSpecificVersion: jest.fn().mockResolvedValue({
-        success: true,
-        error: null,
-        data: mockCustomBot,
-      }),
-      getUserSpecificVersion: jest.fn().mockResolvedValue({
+      findVersion: jest.fn().mockResolvedValue({
         success: true,
         error: null,
         data: mockCustomBot,
       }),
       createCustomBot: jest.fn(),
       updateCustomBot: jest.fn(),
-      getAllUserVersions: jest.fn(),
-      getAllGlobalVersions: jest.fn(),
-      getAllUserSpecificVersions: jest.fn(),
+      findVersions: jest.fn(),
     } as unknown as CustomBotService;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -199,7 +193,7 @@ describe("Bot commands", () => {
       const result = await deploy(actor, invalidTypeBot);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Invalid bot type format");
+      expect(result.error.message).toContain("Invalid bot type format");
     });
 
     it("should validate semantic version format", async () => {
@@ -214,24 +208,22 @@ describe("Bot commands", () => {
       const result = await deploy(actor, invalidVersionBot);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Invalid version format");
+      expect(result.error.message).toContain("Invalid version format");
     });
 
     // Feature gate tests removed for OSS version
 
     it("should fail when custom bot type not found", async () => {
-      mockCustomBotService.getGlobalSpecificVersion = jest
-        .fn()
-        .mockResolvedValue({
-          success: false,
-          error: "Not found",
-          data: null,
-        });
+      mockCustomBotService.findVersion = jest.fn().mockResolvedValue({
+        success: false,
+        error: appError("not_found", "Not found"),
+        data: null,
+      });
 
       const result = await deploy(actor, validBotData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("not found");
+      expect(result.error.message).toContain("not found");
     });
 
     it("should fail when bot config validation fails", async () => {
@@ -244,18 +236,18 @@ describe("Bot commands", () => {
       const result = await deploy(actor, validBotData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Missing required field");
+      expect(result.error.message).toContain("Missing required field");
     });
 
     it("should fail when the repository cannot store the bot", async () => {
       jest
         .spyOn(repository, "createWithEvents")
-        .mockResolvedValue(Failure("db down"));
+        .mockResolvedValue(Failure(appError("internal", "db down")));
       jest.spyOn(repository, "findOne");
 
       const result = await deploy(actor, validBotData);
 
-      expect(result).toEqual(Failure("db down"));
+      expect(result).toEqual(Failure(appError("internal", "db down")));
       expect(relay.publishCommitted).not.toHaveBeenCalled();
       expect(repository.findOne).not.toHaveBeenCalled();
     });
@@ -305,14 +297,12 @@ describe("Bot commands", () => {
       });
 
       it("should skip the event for an unknown bot type", async () => {
-        mockCustomBotService.getGlobalSpecificVersion = jest
-          .fn()
-          .mockResolvedValue(
-            Ok({
-              ...mockCustomBot,
-              config: { ...mockCustomBot.config, type: "other" },
-            }),
-          );
+        mockCustomBotService.findVersion = jest.fn().mockResolvedValue(
+          Ok({
+            ...mockCustomBot,
+            config: { ...mockCustomBot.config, type: "other" },
+          }),
+        );
 
         const result = await deploy(actor, validBotData);
 
@@ -357,7 +347,9 @@ describe("Bot commands", () => {
 
     it("cannot update or delete a bot the Actor's user does not own", async () => {
       validator.validate = jest.fn().mockReturnValue(Ok(null));
-      jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
+      jest
+        .spyOn(repository, "findOne")
+        .mockResolvedValue(Failure(appError("not_found", "missing")));
       jest
         .spyOn(repository, "updateWithEvents")
         .mockResolvedValue(Ok(mockBot()));
@@ -378,8 +370,8 @@ describe("Bot commands", () => {
       });
       const removed = await remove(otherUser, "test-id");
 
-      expect(updated).toEqual(Failure("Bot not found"));
-      expect(removed).toEqual(Failure("Bot not found"));
+      expect(updated).toEqual(Failure(appError("not_found", "Bot not found")));
+      expect(removed).toEqual(Failure(appError("not_found", "Bot not found")));
       expect(repository.findOne).toHaveBeenCalledWith(
         "other-user-id",
         "test-id",
@@ -451,13 +443,11 @@ describe("Bot commands", () => {
         version: "1.1.0",
       };
 
-      mockCustomBotService.getGlobalSpecificVersion = jest
-        .fn()
-        .mockResolvedValue({
-          success: true,
-          error: null,
-          data: newCustomBot,
-        });
+      mockCustomBotService.findVersion = jest.fn().mockResolvedValue({
+        success: true,
+        error: null,
+        data: newCustomBot,
+      });
 
       const patchUpdateData = {
         name: "Updated Bot",
@@ -498,13 +488,11 @@ describe("Bot commands", () => {
         config: { ...mockCustomBot.config, hasFrontend: true },
       };
 
-      mockCustomBotService.getGlobalSpecificVersion = jest
-        .fn()
-        .mockResolvedValue({
-          success: true,
-          error: null,
-          data: newCustomBotWithFrontend,
-        });
+      mockCustomBotService.findVersion = jest.fn().mockResolvedValue({
+        success: true,
+        error: null,
+        data: newCustomBotWithFrontend,
+      });
 
       const patchUpdateData = {
         name: "Updated Bot",
@@ -567,13 +555,11 @@ describe("Bot commands", () => {
         version: "2.0.0",
       };
 
-      mockCustomBotService.getGlobalSpecificVersion = jest
-        .fn()
-        .mockResolvedValue({
-          success: true,
-          error: null,
-          data: newCustomBotV2,
-        });
+      mockCustomBotService.findVersion = jest.fn().mockResolvedValue({
+        success: true,
+        error: null,
+        data: newCustomBotV2,
+      });
 
       const updateSpy = jest.spyOn(repository, "updateWithEvents");
 
@@ -590,8 +576,8 @@ describe("Bot commands", () => {
       const result = await update(actor, "test-id", majorUpdateData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Major version upgrade");
-      expect(result.error).toContain("requires delete and redeploy");
+      expect(result.error.message).toContain("Major version upgrade");
+      expect(result.error.message).toContain("requires delete and redeploy");
       expect(updateSpy).not.toHaveBeenCalled();
     });
 
@@ -602,13 +588,11 @@ describe("Bot commands", () => {
         version: "1.3.0",
       };
 
-      mockCustomBotService.getGlobalSpecificVersion = jest
-        .fn()
-        .mockResolvedValue({
-          success: true,
-          error: null,
-          data: newCustomBot,
-        });
+      mockCustomBotService.findVersion = jest.fn().mockResolvedValue({
+        success: true,
+        error: null,
+        data: newCustomBot,
+      });
 
       const minorUpdateData = {
         name: "Updated Bot",
@@ -638,13 +622,11 @@ describe("Bot commands", () => {
         version: "1.0.1",
       };
 
-      mockCustomBotService.getGlobalSpecificVersion = jest
-        .fn()
-        .mockResolvedValue({
-          success: true,
-          error: null,
-          data: newCustomBot,
-        });
+      mockCustomBotService.findVersion = jest.fn().mockResolvedValue({
+        success: true,
+        error: null,
+        data: newCustomBot,
+      });
 
       const patchUpdateData = {
         name: "Updated Bot",
@@ -677,34 +659,36 @@ describe("Bot commands", () => {
       const result = await update(actor, "test-id", updateData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Invalid configuration");
+      expect(result.error.message).toContain("Invalid configuration");
     });
 
     it("should handle repository update failures", async () => {
       jest.spyOn(repository, "updateWithEvents").mockResolvedValue({
         success: false,
-        error: "Update failed",
+        error: appError("internal", "Update failed"),
         data: null,
       });
 
       const result = await update(actor, "test-id", updateData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Update failed");
+      expect(result.error).toEqual(appError("internal", "Update failed"));
     });
 
     it("should fail when the bot to update does not exist", async () => {
-      jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
+      jest
+        .spyOn(repository, "findOne")
+        .mockResolvedValue(Failure(appError("not_found", "missing")));
       jest.spyOn(repository, "updateWithEvents");
 
       const result = await update(actor, "test-id", updateData);
 
-      expect(result).toEqual(Failure("Bot not found"));
+      expect(result).toEqual(Failure(appError("not_found", "Bot not found")));
       expect(repository.updateWithEvents).not.toHaveBeenCalled();
     });
 
     it("should rotate customBotId when the current version is unknown", async () => {
-      mockCustomBotService.getGlobalSpecificVersion = jest
+      mockCustomBotService.findVersion = jest
         .fn()
         .mockResolvedValue(Ok({ ...mockCustomBot, id: "cb-new" }));
       jest.spyOn(repository, "findOne").mockResolvedValue(
@@ -739,9 +723,6 @@ describe("Bot commands", () => {
         const result = await update(actor, "test-id", updateData);
 
         expect(result).toEqual(Ok(existingBot));
-        expect(
-          mockCustomBotService.getUserSpecificVersion,
-        ).not.toHaveBeenCalled();
         expect(repository.updateWithEvents).toHaveBeenCalledWith(
           uid,
           "test-id",
@@ -771,7 +752,7 @@ describe("Bot commands", () => {
       });
 
       it("should send an empty filePath when the custom bot has none", async () => {
-        mockCustomBotService.getGlobalSpecificVersion = jest
+        mockCustomBotService.findVersion = jest
           .fn()
           .mockResolvedValue(Ok({ ...mockCustomBot, filePath: undefined }));
 
@@ -791,31 +772,13 @@ describe("Bot commands", () => {
         );
       });
 
-      it("should store the update event when the Actor uploaded no copy of the custom bot", async () => {
-        mockCustomBotService.getUserSpecificVersion = jest
-          .fn()
-          .mockResolvedValue(Failure("not found"));
-
-        const result = await update(actor, "test-id", updateData);
-
-        expect(result.success).toBe(true);
-        expect(repository.updateWithEvents).toHaveBeenCalledWith(
-          uid,
-          "test-id",
-          expect.anything(),
-          [expect.objectContaining({ subject: "the0.bot-schedule.updated" })],
-        );
-      });
-
       it("should skip the event for an unknown bot type", async () => {
-        mockCustomBotService.getGlobalSpecificVersion = jest
-          .fn()
-          .mockResolvedValue(
-            Ok({
-              ...mockCustomBot,
-              config: { ...mockCustomBot.config, type: "other" },
-            }),
-          );
+        mockCustomBotService.findVersion = jest.fn().mockResolvedValue(
+          Ok({
+            ...mockCustomBot,
+            config: { ...mockCustomBot.config, type: "other" },
+          }),
+        );
 
         const result = await update(actor, "test-id", updateData);
 
@@ -836,7 +799,7 @@ describe("Bot commands", () => {
       it("should not ask the relay to publish when the repository update fails", async () => {
         jest
           .spyOn(repository, "updateWithEvents")
-          .mockResolvedValue(Failure("nope"));
+          .mockResolvedValue(Failure(appError("not_found", "nope")));
 
         await update(actor, "test-id", updateData);
 
@@ -925,16 +888,19 @@ describe("Bot commands", () => {
     });
 
     it("should handle removal failures", async () => {
+      jest
+        .spyOn(repository, "findOne")
+        .mockResolvedValue(Ok(mockBot({ id: "test-id", userId: uid })));
       jest.spyOn(repository, "removeWithEvents").mockResolvedValue({
         success: false,
-        error: "Bot not found",
+        error: appError("not_found", "Bot not found"),
         data: null,
       });
 
       const result = await remove(actor, "test-id");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Bot not found");
+      expect(result.error).toEqual(appError("not_found", "Bot not found"));
     });
 
     describe("lifecycle", () => {
@@ -958,11 +924,13 @@ describe("Bot commands", () => {
       });
 
       it("should fail when the bot does not exist", async () => {
-        jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
+        jest
+          .spyOn(repository, "findOne")
+          .mockResolvedValue(Failure(appError("not_found", "missing")));
 
         const result = await remove(actor, "test-id");
 
-        expect(result).toEqual(Failure("Bot not found"));
+        expect(result).toEqual(Failure(appError("not_found", "Bot not found")));
         expect(repository.removeWithEvents).not.toHaveBeenCalled();
       });
 
@@ -977,11 +945,16 @@ describe("Bot commands", () => {
         const result = await remove(actor, "test-id");
 
         expect(result).toEqual(
-          Failure("Invalid bot type: missing name after '/'"),
+          Failure(
+            appError(
+              "validation",
+              "Invalid bot type format. Expected format: type/name",
+            ),
+          ),
         );
         expect(logger.warn).toHaveBeenCalledWith(
           { type: "scheduled/ " },
-          "Invalid bot type: missing name after '/'",
+          "Invalid bot type format. Expected format: type/name",
         );
         expect(repository.removeWithEvents).not.toHaveBeenCalled();
       });
@@ -990,9 +963,10 @@ describe("Bot commands", () => {
         const result = await remove(actor, "test-id");
 
         expect(result).toEqual(Ok({}));
-        expect(
-          mockCustomBotService.getGlobalSpecificVersion,
-        ).toHaveBeenCalledWith("test-bot", "1.0.0");
+        expect(mockCustomBotService.findVersion).toHaveBeenCalledWith(
+          "test-bot",
+          "1.0.0",
+        );
         expect(repository.removeWithEvents).toHaveBeenCalledWith(
           uid,
           "test-id",
@@ -1008,9 +982,9 @@ describe("Bot commands", () => {
       });
 
       it("should announce the delete on both subjects when the custom bot version is gone", async () => {
-        mockCustomBotService.getGlobalSpecificVersion = jest
+        mockCustomBotService.findVersion = jest
           .fn()
-          .mockResolvedValue(Failure("not found"));
+          .mockResolvedValue(Failure(appError("internal", "not found")));
 
         const result = await remove(actor, "test-id");
 
@@ -1038,9 +1012,7 @@ describe("Bot commands", () => {
         const result = await remove(actor, "test-id");
 
         expect(result).toEqual(Ok({}));
-        expect(
-          mockCustomBotService.getGlobalSpecificVersion,
-        ).not.toHaveBeenCalled();
+        expect(mockCustomBotService.findVersion).not.toHaveBeenCalled();
         expect(repository.removeWithEvents).toHaveBeenCalledWith(
           uid,
           "test-id",
@@ -1055,18 +1027,18 @@ describe("Bot commands", () => {
       it("should neither check orphans nor ask the relay to publish when removal fails", async () => {
         jest
           .spyOn(repository, "removeWithEvents")
-          .mockResolvedValue(Failure("db down"));
+          .mockResolvedValue(Failure(appError("internal", "db down")));
 
         const result = await remove(actor, "test-id");
 
-        expect(result).toEqual(Failure("db down"));
+        expect(result).toEqual(Failure(appError("internal", "db down")));
         expect(mockCustomBotService.checkOrphaned).not.toHaveBeenCalled();
         expect(relay.publishCommitted).not.toHaveBeenCalled();
       });
 
       it("should warn and continue when the orphan check fails", async () => {
         (mockCustomBotService.checkOrphaned as jest.Mock).mockResolvedValue(
-          Failure("lookup failed"),
+          Failure(appError("internal", "lookup failed")),
         );
 
         const result = await remove(actor, "test-id");
@@ -1076,7 +1048,7 @@ describe("Bot commands", () => {
           {
             botId: "test-id",
             customBotId: "cb-123",
-            error: "lookup failed",
+            error: appError("internal", "lookup failed"),
           },
           "Failed to check if custom bot version is orphaned",
         );

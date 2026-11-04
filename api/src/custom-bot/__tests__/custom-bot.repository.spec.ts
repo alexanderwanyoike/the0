@@ -1,5 +1,6 @@
+import { appError } from "@/common/app-error";
 import { CustomBotRepository } from "../custom-bot.repository";
-import { CustomBot, CustomBotConfig } from "../custom-bot.types";
+import { CustomBot } from "../custom-bot.types";
 
 // Mock Drizzle database and dependencies
 jest.mock("@/database/connection", () => ({
@@ -67,45 +68,6 @@ describe("CustomBotRepository", () => {
     jest.clearAllMocks();
   });
 
-  describe("userBotExists", () => {
-    it("should return true when bot exists", async () => {
-      // Mock the findByKey method directly
-      const originalFindByKey = repository.findByKey;
-      repository.findByKey = jest.fn().mockResolvedValue({
-        success: true,
-        data: [{ id: "test-id", name: "test-bot", userId: "user123" }],
-      });
-
-      const result = await repository.userBotExists("user123", "test-bot");
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBe(true);
-
-      // Restore original method
-      repository.findByKey = originalFindByKey;
-    });
-
-    it("should return false when bot does not exist", async () => {
-      // Mock the findByKey method to return empty array
-      const originalFindByKey = repository.findByKey;
-      repository.findByKey = jest.fn().mockResolvedValue({
-        success: true,
-        data: [],
-      });
-
-      const result = await repository.userBotExists(
-        "user123",
-        "non-existent-bot",
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBe(false);
-
-      // Restore original method
-      repository.findByKey = originalFindByKey;
-    });
-  });
-
   describe("globalBotExists", () => {
     it("should return true when global bot exists", async () => {
       // Mock the findGlobalByKey method directly
@@ -142,57 +104,6 @@ describe("CustomBotRepository", () => {
     });
   });
 
-  describe("userVersionExists", () => {
-    it("should return true when specific version exists", async () => {
-      const mockBotData = {
-        id: "test-id",
-        name: "test-bot",
-        version: "1.0.0",
-        userId: "user123",
-      };
-
-      // Mock the specific findByKeyAndVersion method call
-      const originalFindByKeyAndVersion = repository.findByKeyAndVersion;
-      repository.findByKeyAndVersion = jest.fn().mockResolvedValue({
-        success: true,
-        data: mockBotData,
-      });
-
-      const result = await repository.userVersionExists(
-        "user123",
-        "test-bot",
-        "1.0.0",
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBe(true);
-
-      // Restore original method
-      repository.findByKeyAndVersion = originalFindByKeyAndVersion;
-    });
-
-    it("should return false when version does not exist", async () => {
-      // Mock the specific findByKeyAndVersion method call to return not found
-      const originalFindByKeyAndVersion = repository.findByKeyAndVersion;
-      repository.findByKeyAndVersion = jest.fn().mockResolvedValue({
-        success: false,
-        error: "Not found",
-      });
-
-      const result = await repository.userVersionExists(
-        "user123",
-        "test-bot",
-        "2.0.0",
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBe(false);
-
-      // Restore original method
-      repository.findByKeyAndVersion = originalFindByKeyAndVersion;
-    });
-  });
-
   describe("globalVersionExists", () => {
     it("should return true when global version exists", async () => {
       const mockBotData = {
@@ -225,7 +136,7 @@ describe("CustomBotRepository", () => {
         repository.findGlobalByKeyAndVersion;
       repository.findGlobalByKeyAndVersion = jest.fn().mockResolvedValue({
         success: false,
-        error: "Not found",
+        error: appError("not_found", "Not found"),
       });
 
       const result = await repository.globalVersionExists("test-bot", "2.0.0");
@@ -437,13 +348,13 @@ describe("CustomBotRepository", () => {
       const originalFindAll = repository.findAll;
       repository.findAll = jest.fn().mockResolvedValue({
         success: false,
-        error: "Database connection failed",
+        error: appError("internal", "Database connection failed"),
       });
 
       const result = await repository.getUserCustomBots("user123");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Database connection failed");
+      expect(result.error.message).toBe("Database connection failed");
 
       // Restore original method
       repository.findAll = originalFindAll;
@@ -459,7 +370,7 @@ describe("CustomBotRepository", () => {
       const result = await repository.getUserCustomBots("user123");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Unexpected error");
+      expect(result.error.message).toBe("Failed to read from the database");
 
       // Restore original method
       repository.findAll = originalFindAll;
@@ -529,7 +440,7 @@ describe("CustomBotRepository", () => {
       repository.findByKey = originalFindByKey;
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Bot not found");
+      expect(result.error.message).toBe("Bot not found");
     });
   });
 
@@ -591,7 +502,7 @@ describe("CustomBotRepository", () => {
       repository.findGlobalByKey = originalFindGlobalByKey;
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Bot not found");
+      expect(result.error.message).toBe("Bot not found");
     });
   });
 
@@ -667,76 +578,6 @@ describe("CustomBotRepository", () => {
     });
   });
 
-  describe("getSpecificUserVersion", () => {
-    it("should return specific user version", async () => {
-      const mockBotData = {
-        id: "test-id",
-        name: "test-bot",
-        version: "1.0.0",
-        userId: "user123",
-        config: { name: "test-bot", version: "1.0.0" },
-        filePath: "/local/path/test.zip",
-        createdAt: new Date("2023-01-01"),
-        updatedAt: new Date("2023-01-01"),
-      };
-
-      // Mock the specific findByKeyAndVersion method call
-      const originalFindByKeyAndVersion = repository.findByKeyAndVersion;
-      repository.findByKeyAndVersion = jest.fn().mockResolvedValue({
-        success: true,
-        data: mockBotData,
-      });
-
-      const result = await repository.getSpecificUserVersion(
-        "user123",
-        "test-bot",
-        "1.0.0",
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBeDefined();
-      expect(result.data!.version).toBe("1.0.0");
-
-      // Restore original method
-      repository.findByKeyAndVersion = originalFindByKeyAndVersion;
-    });
-  });
-
-  describe("getSpecificGlobalVersion", () => {
-    it("should return specific global version", async () => {
-      const mockBotData = {
-        id: "global-test-id",
-        name: "global-bot",
-        version: "1.0.0",
-        userId: "user456",
-        config: { name: "global-bot", version: "1.0.0" },
-        filePath: "/local/path/global-test.zip",
-        createdAt: new Date("2023-01-01"),
-        updatedAt: new Date("2023-01-01"),
-      };
-
-      // Mock the specific findGlobalByKeyAndVersion method call
-      const originalFindGlobalByKeyAndVersion =
-        repository.findGlobalByKeyAndVersion;
-      repository.findGlobalByKeyAndVersion = jest.fn().mockResolvedValue({
-        success: true,
-        data: mockBotData,
-      });
-
-      const result = await repository.getSpecificGlobalVersion(
-        "global-bot",
-        "1.0.0",
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBeDefined();
-      expect(result.data!.version).toBe("1.0.0");
-
-      // Restore original method
-      repository.findGlobalByKeyAndVersion = originalFindGlobalByKeyAndVersion;
-    });
-  });
-
   describe("countInstancesByCustomBotId", () => {
     it("should return count of bot instances referencing a custom bot", async () => {
       const mockBotsTable = {
@@ -744,12 +585,10 @@ describe("CustomBotRepository", () => {
       };
       mockTables.bots = mockBotsTable;
 
-      mockDb.where.mockResolvedValue([
-        { id: "bot-1" },
-        { id: "bot-2" },
-      ]);
+      mockDb.where.mockResolvedValue([{ id: "bot-1" }, { id: "bot-2" }]);
 
-      const result = await repository.countInstancesByCustomBotId("custom-bot-id-1");
+      const result =
+        await repository.countInstancesByCustomBotId("custom-bot-id-1");
 
       expect(result.success).toBe(true);
       expect(result.data).toBe(2);
@@ -763,7 +602,9 @@ describe("CustomBotRepository", () => {
 
       mockDb.where.mockResolvedValue([]);
 
-      const result = await repository.countInstancesByCustomBotId("unused-custom-bot-id");
+      const result = await repository.countInstancesByCustomBotId(
+        "unused-custom-bot-id",
+      );
 
       expect(result.success).toBe(true);
       expect(result.data).toBe(0);
@@ -777,10 +618,11 @@ describe("CustomBotRepository", () => {
 
       mockDb.where.mockRejectedValue(new Error("Database error"));
 
-      const result = await repository.countInstancesByCustomBotId("custom-bot-id-1");
+      const result =
+        await repository.countInstancesByCustomBotId("custom-bot-id-1");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Database error");
+      expect(result.error.message).toBe("Failed to read from the database");
     });
   });
 
@@ -797,7 +639,11 @@ describe("CustomBotRepository", () => {
         { customBotId: "cb-2" },
       ]);
 
-      const result = await repository.countInstancesByCustomBotIds(["cb-1", "cb-2", "cb-3"]);
+      const result = await repository.countInstancesByCustomBotIds([
+        "cb-1",
+        "cb-2",
+        "cb-3",
+      ]);
 
       expect(result.success).toBe(true);
       expect(result.data!.get("cb-1")).toBe(2);
@@ -859,70 +705,6 @@ describe("CustomBotRepository", () => {
     });
   });
 
-  describe("isVersionNewer", () => {
-    it("should return true for newer major version", () => {
-      const result = repository.isVersionNewer("1.0.0", "2.0.0");
-      expect(result).toBe(true);
-    });
-
-    it("should return true for newer minor version", () => {
-      const result = repository.isVersionNewer("1.0.0", "1.1.0");
-      expect(result).toBe(true);
-    });
-
-    it("should return true for newer patch version", () => {
-      const result = repository.isVersionNewer("1.0.0", "1.0.1");
-      expect(result).toBe(true);
-    });
-
-    it("should return false for same version", () => {
-      const result = repository.isVersionNewer("1.0.0", "1.0.0");
-      expect(result).toBe(false);
-    });
-
-    it("should return false for older version", () => {
-      const result = repository.isVersionNewer("2.0.0", "1.0.0");
-      expect(result).toBe(false);
-    });
-  });
-
-  describe("createNewGlobalVersion", () => {
-    it("should create new version successfully", async () => {
-      const config: CustomBotConfig = {
-        name: "test-bot",
-        version: "1.0.0",
-        description: "Test bot",
-        author: "Test Author",
-        type: "scheduled",
-        runtime: "python3.11",
-        entrypoints: { bot: "main.py" },
-        schema: { bot: {} },
-        readme: "Test readme",
-        metadata: { tags: ["test"], license: "MIT" },
-      };
-      const botData = {
-        name: "test-bot",
-        version: "1.0.0",
-        config: config,
-        userId: "user123",
-        filePath: "/local/path/test.zip",
-      };
-
-      // Mock successful database operations
-      mockDb.from.mockReturnValue(mockDb);
-      mockDb.orderBy.mockResolvedValue([{ ...botData, id: "new-id" }]);
-
-      const result = await repository.createNewGlobalVersion(
-        "user123",
-        botData,
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBeDefined();
-      expect(mockDb.insert).toHaveBeenCalled();
-    });
-  });
-
   describe("checkUserOwnership", () => {
     it("should return true if user owns the bot", async () => {
       const mockBotData = {
@@ -967,7 +749,7 @@ describe("CustomBotRepository", () => {
       repository.findGlobalByKey = originalFindGlobalByKey;
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Insufficient permissions");
+      expect(result.error.message).toBe("Insufficient permissions");
     });
 
     it("should return error if bot is not found", async () => {
@@ -987,7 +769,7 @@ describe("CustomBotRepository", () => {
       repository.findGlobalByKey = originalFindGlobalByKey;
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Bot not found");
+      expect(result.error.message).toBe("Bot not found");
     });
   });
 });

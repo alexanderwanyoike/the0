@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { appError } from "@/common/app-error";
 import { BotService } from "../bot.service";
 import { BotRepository } from "../bot.repository";
 import { Ok, Failure } from "@/common/result";
@@ -46,14 +47,14 @@ describe("BotService", () => {
     it("should handle repository errors", async () => {
       jest.spyOn(repository, "findAll").mockResolvedValue({
         success: false,
-        error: "Database error",
+        error: appError("internal", "Database error"),
         data: null,
       });
 
       const result = await service.findAll(actor);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Database error");
+      expect(result.error).toEqual(appError("internal", "Database error"));
     });
   });
 
@@ -77,14 +78,14 @@ describe("BotService", () => {
     it("should handle bot not found", async () => {
       jest.spyOn(repository, "findOne").mockResolvedValue({
         success: false,
-        error: "Bot not found",
+        error: appError("not_found", "Bot not found"),
         data: null,
       });
 
       const result = await service.findOne(actor, "nonexistent-id");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Bot not found");
+      expect(result.error).toEqual(appError("not_found", "Bot not found"));
     });
   });
 
@@ -97,7 +98,9 @@ describe("BotService", () => {
 
     it("reads bots as the Actor's user, whatever the channel", async () => {
       jest.spyOn(repository, "findAll").mockResolvedValue(Ok([]));
-      jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
+      jest
+        .spyOn(repository, "findOne")
+        .mockResolvedValue(Failure(appError("not_found", "missing")));
 
       await service.findAll(mcpActor);
       await service.findOne(mcpActor, "test-id");

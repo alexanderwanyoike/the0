@@ -97,10 +97,6 @@ function storeTokenForSSE(token: string): void {
     // Store token in a secure, httpOnly cookie that the server can read
     // This is typically handled by the authentication system, but we ensure it's available
 
-    // For client-side, we rely on the existing authentication system
-    // The server-side SSE endpoints will use the same withAdminAuth middleware
-    // which should have access to the JWT token through the existing auth flow
-
     // Note: In a production environment, you might want to set a specific
     // SSE authentication cookie here, but for this implementation we rely
     // on the existing authentication infrastructure

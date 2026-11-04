@@ -28,7 +28,7 @@ func NewLoginCmd() *cobra.Command {
 		Use:   "login",
 		Short: "Set or update your API key",
 		Long:  "Connect to the0 platform with your API key",
-		Run:   authLogin,
+		RunE:  authLogin,
 	}
 }
 
@@ -37,7 +37,7 @@ func NewStatusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Check if your API key is valid",
 		Long:  "Verify your connection to the0 platform",
-		Run:   authStatus,
+		RunE:  authStatus,
 	}
 }
 
@@ -46,18 +46,17 @@ func NewLogoutCmd() *cobra.Command {
 		Use:   "logout",
 		Short: "Remove saved API key",
 		Long:  "Clear your saved credentials from this device",
-		Run:   authLogout,
+		RunE:  authLogout,
 	}
 }
 
-func authLogin(cmd *cobra.Command, args []string) {
+func authLogin(cmd *cobra.Command, args []string) error {
 	logger.StartSpinner("Logging in")
 
 	auth, err := internal.PromptForNewAPIKey()
 	if err != nil {
 		logger.StopSpinnerWithError("Login failed")
-		logger.Error("%v", err)
-		os.Exit(1)
+		return err
 	}
 
 	logger.UpdateSpinner("Verifying API key")
@@ -68,21 +67,22 @@ func authLogin(cmd *cobra.Command, args []string) {
 		logger.StopSpinnerWithError("Authentication failed")
 		logger.Error("%v", err)
 		logger.Print("Check your API key and permissions")
-		os.Exit(1)
+		return errReported
 	}
 
 	logger.StopSpinnerWithSuccess("Logged in successfully")
 	logger.Verbose("API key saved to ~/.the0/auth.json")
+	return nil
 }
 
-func authStatus(cmd *cobra.Command, args []string) {
+func authStatus(cmd *cobra.Command, args []string) error {
 	logger.StartSpinner("Checking authentication status")
 
 	auth, err := internal.LoadAuth()
 	if err != nil {
 		logger.StopSpinnerWithError("Not logged in")
 		logger.Print("Run 'the0 auth login' to authenticate")
-		os.Exit(1)
+		return errReported
 	}
 
 	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
@@ -90,25 +90,26 @@ func authStatus(cmd *cobra.Command, args []string) {
 		logger.StopSpinnerWithError("Connection failed")
 		logger.Error("%v", err)
 		logger.Print("Run 'the0 auth login' to reconnect")
-		os.Exit(1)
+		return errReported
 	}
 
 	logger.StopSpinnerWithSuccess("Authenticated")
 	logger.Print("  Connected since: %s", auth.CreatedAt.Format("2006-01-02 15:04:05"))
+	return nil
 }
 
-func authLogout(cmd *cobra.Command, args []string) {
+func authLogout(cmd *cobra.Command, args []string) error {
 	if err := internal.RemoveAuth(); err != nil {
 		if os.IsNotExist(err) {
 			logger.Info("No credentials found")
 		} else {
-			logger.Error("Failed to clear credentials: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("Failed to clear credentials: %w", err)
 		}
 	} else {
 		logger.Success("Logged out successfully")
 		logger.Verbose("Credentials removed from ~/.the0/auth.json")
 	}
+	return nil
 }
 
 // NewSecretsCmd creates the secrets subcommand for managing build secrets
@@ -138,7 +139,7 @@ func NewSecretsShowCmd() *cobra.Command {
 		Use:   "show",
 		Short: "Show configured build secrets",
 		Long:  "Display currently configured build secrets (tokens are masked)",
-		Run:   secretsShow,
+		RunE:  secretsShow,
 	}
 }
 
@@ -163,7 +164,7 @@ Examples:
   the0 auth secrets set npm-token npm_xxxxxxxxxxxx
   the0 auth secrets set nuget-token oy2xxxxxxxxxxxxx`,
 		Args: cobra.ExactArgs(2),
-		Run:  secretsSet,
+		RunE: secretsSet,
 	}
 }
 
@@ -172,15 +173,15 @@ func NewSecretsClearCmd() *cobra.Command {
 		Use:   "clear",
 		Short: "Clear all build secrets",
 		Long:  "Remove all saved build secrets from this device",
-		Run:   secretsClear,
+		RunE:  secretsClear,
 	}
 }
 
-func secretsShow(cmd *cobra.Command, args []string) {
+func secretsShow(cmd *cobra.Command, args []string) error {
 	secrets, err := internal.LoadBuildSecrets()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load secrets: %v\n", err)
-		os.Exit(1)
+		return errReported
 	}
 
 	fmt.Println("Build Secrets:")
@@ -213,6 +214,7 @@ func secretsShow(cmd *cobra.Command, args []string) {
 
 	fmt.Println("\nThese secrets are passed as environment variables during builds.")
 	fmt.Println("Use 'the0 auth secrets set <name> <value>' to configure.")
+	return nil
 }
 
 func printSecret(name, value, envVar string) {
@@ -223,14 +225,14 @@ func printSecret(name, value, envVar string) {
 	}
 }
 
-func secretsSet(cmd *cobra.Command, args []string) {
+func secretsSet(cmd *cobra.Command, args []string) error {
 	secretName := args[0]
 	secretValue := args[1]
 
 	secrets, err := internal.LoadBuildSecrets()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load existing secrets: %v\n", err)
-		os.Exit(1)
+		return errReported
 	}
 
 	var envVar string
@@ -261,24 +263,26 @@ func secretsSet(cmd *cobra.Command, args []string) {
 		fmt.Println("Available secrets:")
 		fmt.Println("  github-token, pip-index-url, npm-token, nuget-token,")
 		fmt.Println("  cargo-registry-token, maven-user, maven-token")
-		os.Exit(1)
+		return errReported
 	}
 
 	if err := internal.SaveBuildSecrets(secrets); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to save secret: %v\n", err)
-		os.Exit(1)
+		return errReported
 	}
 
 	fmt.Printf("✓ Secret '%s' saved\n", secretName)
 	fmt.Printf("  Value: %s\n", internal.MaskToken(secretValue))
 	fmt.Printf("  Env:   %s\n", envVar)
+	return nil
 }
 
-func secretsClear(cmd *cobra.Command, args []string) {
+func secretsClear(cmd *cobra.Command, args []string) error {
 	if err := internal.ClearBuildSecrets(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to clear secrets: %v\n", err)
-		os.Exit(1)
+		return errReported
 	}
 
 	fmt.Println("✓ All build secrets cleared")
+	return nil
 }

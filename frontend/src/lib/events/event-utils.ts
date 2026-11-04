@@ -35,7 +35,7 @@ function parseDuration(duration: string): number {
  * Events without timestamps are excluded.
  * @example since(events, '1h') // Events from last hour
  */
-export function since(events: BotEvent[], duration: string): BotEvent[] {
+export function since<E extends BotEvent>(events: E[], duration: string): E[] {
   const ms = parseDuration(duration);
   const cutoff = new Date(Date.now() - ms);
   return events.filter((e) => e.timestamp && e.timestamp >= cutoff);
@@ -45,11 +45,11 @@ export function since(events: BotEvent[], duration: string): BotEvent[] {
  * Filter events between two dates.
  * Events without timestamps are excluded.
  */
-export function between(
-  events: BotEvent[],
+export function between<E extends BotEvent>(
+  events: E[],
   start: Date,
   end: Date,
-): BotEvent[] {
+): E[] {
   return events.filter(
     (e) => e.timestamp && e.timestamp >= start && e.timestamp <= end,
   );
@@ -59,10 +59,10 @@ export function between(
  * Filter events by metric type.
  * @example filterByType(events, 'trade') // Only trade metrics
  */
-export function filterByType(
-  events: BotEvent[],
+export function filterByType<E extends BotEvent>(
+  events: E[],
   metricType: string,
-): BotEvent[] {
+): E[] {
   return events.filter(
     (e) => e.type === "metric" && e.metricType === metricType,
   );
@@ -71,24 +71,24 @@ export function filterByType(
 /**
  * Get only log events (non-metrics).
  */
-export function logs(events: BotEvent[]): BotEvent[] {
+export function logs<E extends BotEvent>(events: E[]): E[] {
   return events.filter((e) => e.type === "log");
 }
 
 /**
  * Get only metric events.
  */
-export function metrics(events: BotEvent[]): BotEvent[] {
+export function metrics<E extends BotEvent>(events: E[]): E[] {
   return events.filter((e) => e.type === "metric");
 }
 
 /**
  * Get the latest event of a specific metric type.
  */
-export function latest(
-  events: BotEvent[],
+export function latest<E extends BotEvent>(
+  events: E[],
   metricType: string,
-): BotEvent | null {
+): E | null {
   const filtered = filterByType(events, metricType);
   if (filtered.length === 0) return null;
   return filtered[filtered.length - 1];
@@ -110,10 +110,10 @@ export function getMetricTypes(events: BotEvent[]): string[] {
 /**
  * Group events by metric type.
  */
-export function groupByMetricType(
-  events: BotEvent[],
-): Record<string, BotEvent[]> {
-  const groups: Record<string, BotEvent[]> = {};
+export function groupByMetricType<E extends BotEvent>(
+  events: E[],
+): Record<string, E[]> {
+  const groups: Record<string, E[]> = {};
 
   for (const event of events) {
     if (event.type === "metric" && event.metricType) {
@@ -134,10 +134,10 @@ type TimeWindow = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
  * Returns array of event arrays, one per window.
  * Events without timestamps are excluded.
  */
-export function groupByTimeWindow(
-  events: BotEvent[],
+export function groupByTimeWindow<E extends BotEvent>(
+  events: E[],
   window: TimeWindow,
-): BotEvent[][] {
+): E[][] {
   // Filter out events without timestamps
   const validEvents = events.filter((e) => e.timestamp !== null);
   if (validEvents.length === 0) return [];
@@ -152,7 +152,7 @@ export function groupByTimeWindow(
   };
 
   const ms = windowMs[window];
-  const groups: Map<number, BotEvent[]> = new Map();
+  const groups: Map<number, E[]> = new Map();
 
   for (const event of validEvents) {
     const windowStart = Math.floor(event.timestamp!.getTime() / ms) * ms;
@@ -173,10 +173,10 @@ export function groupByTimeWindow(
  * Events without timestamps are excluded.
  * @param gapThreshold - Minimum gap in ms to consider a new run (default: 5 minutes)
  */
-export function groupByRun(
-  events: BotEvent[],
+export function groupByRun<E extends BotEvent>(
+  events: E[],
   gapThreshold: number = 5 * 60 * 1000,
-): BotEvent[][] {
+): E[][] {
   // Filter out events without timestamps
   const validEvents = events.filter((e) => e.timestamp !== null);
   if (validEvents.length === 0) return [];
@@ -186,8 +186,8 @@ export function groupByRun(
     (a, b) => a.timestamp!.getTime() - b.timestamp!.getTime(),
   );
 
-  const runs: BotEvent[][] = [];
-  let currentRun: BotEvent[] = [sorted[0]];
+  const runs: E[][] = [];
+  let currentRun: E[] = [sorted[0]];
 
   for (let i = 1; i < sorted.length; i++) {
     const gap =
@@ -212,8 +212,10 @@ export function groupByRun(
  * Get the latest value for each metric type.
  * Useful for dashboard snapshots.
  */
-export function latestByType(events: BotEvent[]): Record<string, BotEvent> {
-  const result: Record<string, BotEvent> = {};
+export function latestByType<E extends BotEvent>(
+  events: E[],
+): Record<string, E> {
+  const result: Record<string, E> = {};
   const types = getMetricTypes(events);
 
   for (const type of types) {

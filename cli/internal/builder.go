@@ -67,19 +67,20 @@ func BuildCompiledLanguagesIfNeeded(projectPath string) error {
 		// Check Docker availability
 		if err := CheckDockerInstalled(); err != nil {
 			red.Printf("Docker required for %s build: %v\n", builder.Name(), err)
-			red.Printf("Solution: Install Docker or pre-build the project\n")
+			red.Printf("Solution: Install Docker and try again: %s projects are built in Docker on every deploy\n", builder.Name())
 			return fmt.Errorf("docker unavailable for %s build", builder.Name())
 		}
 
-		vm, err := NewVendorManager(projectPath)
+		runner, err := NewDockerRunner()
 		if err != nil {
 			return fmt.Errorf("failed to initialize vendor manager: %v", err)
 		}
+		vm := NewVendorManager(projectPath, runner)
 		defer vm.Close()
 
 		if err := vm.CheckDockerRunning(); err != nil {
 			red.Printf("Docker daemon not running: %v\n", err)
-			red.Printf("Solution: Start Docker or pre-build the project\n")
+			red.Printf("Solution: Start Docker and try again\n")
 			return fmt.Errorf("docker daemon not running for %s build", builder.Name())
 		}
 

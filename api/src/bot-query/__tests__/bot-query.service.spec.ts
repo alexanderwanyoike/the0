@@ -1,7 +1,8 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { appError } from "@/common/app-error";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
-import { BotQueryService, BotQueryErrorCode } from "../bot-query.service";
+import { BotQueryService } from "../bot-query.service";
 import { BotService } from "@/bot/bot.service";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockBot as createMockBot, mockBotConfig } from "@/test/mock-bot";
@@ -105,11 +106,11 @@ describe("BotQueryService", () => {
       );
     });
 
-    it("should return BOT_NOT_FOUND when bot does not exist", async () => {
+    it("should refuse a bot the Actor cannot see", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: false,
         data: null,
-        error: "Bot not found",
+        error: appError("not_found", "Bot not found"),
       });
 
       const result = await service.executeQuery(actor, "nonexistent-bot", {
@@ -117,7 +118,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotQueryErrorCode.BOT_NOT_FOUND);
+      expect(result.error?.code).toBe("not_found");
       expect(result.error?.message).toBe("Bot not found or access denied");
       expect(mockFetch).not.toHaveBeenCalled();
     });
@@ -126,7 +127,7 @@ describe("BotQueryService", () => {
       mockBotService.findOne.mockResolvedValue({
         success: false,
         data: null,
-        error: "Bot not found",
+        error: appError("not_found", "Bot not found"),
       });
 
       await service.executeQuery(actor, "someone-elses-bot", {
@@ -140,7 +141,7 @@ describe("BotQueryService", () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it("should return BOT_NOT_FOUND when runtime returns 404", async () => {
+    it("should report a bot the runtime does not hold as not found", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
         data: testBot,
@@ -158,11 +159,11 @@ describe("BotQueryService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotQueryErrorCode.BOT_NOT_FOUND);
+      expect(result.error?.code).toBe("not_found");
       expect(result.error?.message).toBe("Bot not found in runtime");
     });
 
-    it("should return NO_QUERY_ENTRYPOINT when the bot defines no queries", async () => {
+    it("should report a bot that defines no queries as unprocessable", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
         data: testBot,
@@ -183,13 +184,13 @@ describe("BotQueryService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotQueryErrorCode.NO_QUERY_ENTRYPOINT);
+      expect(result.error?.code).toBe("unprocessable");
       expect(result.error?.message).toBe(
         "This bot defines no queries. Add a query entrypoint (entrypoints.query in bot-config.yaml) to answer them.",
       );
     });
 
-    it("should return QUERY_FAILED when runtime returns error", async () => {
+    it("should report the runtime's error answer as a refused query", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
         data: testBot,
@@ -207,11 +208,11 @@ describe("BotQueryService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotQueryErrorCode.QUERY_FAILED);
+      expect(result.error?.code).toBe("validation");
       expect(result.error?.message).toContain("Internal server error");
     });
 
-    it("should return TIMEOUT when request times out", async () => {
+    it("should report a query that runs too long as a timeout", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
         data: testBot,
@@ -228,11 +229,11 @@ describe("BotQueryService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotQueryErrorCode.TIMEOUT);
+      expect(result.error?.code).toBe("timeout");
       expect(result.error?.message).toContain("timed out after 5 seconds");
     });
 
-    it("should return RUNTIME_UNAVAILABLE when connection refused", async () => {
+    it("should report a refused connection as an unavailable runtime", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
         data: testBot,
@@ -248,7 +249,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotQueryErrorCode.RUNTIME_UNAVAILABLE);
+      expect(result.error?.code).toBe("unavailable");
       expect(result.error?.message).toContain("runtime is not available");
     });
 
@@ -404,7 +405,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.error).toEqual({
-        code: BotQueryErrorCode.QUERY_FAILED,
+        code: "validation",
         message: "Query failed: Internal server error",
       });
       expect(mockLogger.error).toHaveBeenCalledWith(
@@ -453,7 +454,7 @@ describe("BotQueryService", () => {
       const result = await pending;
 
       expect(result.error).toEqual({
-        code: BotQueryErrorCode.TIMEOUT,
+        code: "timeout",
         message: "Query timed out after 2 seconds",
       });
     });
@@ -481,7 +482,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.error).toEqual({
-        code: BotQueryErrorCode.RUNTIME_UNAVAILABLE,
+        code: "unavailable",
         message:
           "Bot runtime is not available. Ensure the bot-runner service is running.",
       });
@@ -503,7 +504,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.error).toEqual({
-        code: BotQueryErrorCode.QUERY_FAILED,
+        code: "internal",
         message: "Query failed: socket hang up",
       });
       expect(mockLogger.error).toHaveBeenCalledWith(
@@ -527,7 +528,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.error).toEqual({
-        code: BotQueryErrorCode.QUERY_FAILED,
+        code: "internal",
         message: "Query failed: Unexpected token",
       });
     });

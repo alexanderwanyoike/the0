@@ -1,4 +1,5 @@
 import { LogsService, LogsQuery, LogEntry } from "../logs.service";
+import { appError } from "@/common/app-error";
 import { ConfigService } from "@nestjs/config";
 import { BotService } from "@/bot/bot.service";
 import { PinoLogger } from "nestjs-pino";
@@ -1871,8 +1872,8 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error).toMatch(/cursor/i);
-      expect(result.error).not.toMatch(/not found/i);
+      expect(result.error.message).toMatch(/cursor/i);
+      expect(result.error.code).toBe("validation");
     });
 
     it("should reject a position cursor whose offset is not a safe byte offset", async () => {
@@ -1884,7 +1885,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error).toMatch(/offset is too large/i);
+      expect(result.error.message).toMatch(/offset is too large/i);
       expect(mockMinioClient.getPartialObject).not.toHaveBeenCalled();
     });
     it("should reject a malformed cursor", async () => {
@@ -1896,7 +1897,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error).toMatch(/cursor/i);
+      expect(result.error.message).toMatch(/cursor/i);
     });
 
     it("should refuse before combined with offset", async () => {
@@ -1908,7 +1909,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error).toMatch(/offset/);
+      expect(result.error.message).toMatch(/offset/);
     });
 
     it("should report nextCursor on an offset page that has more", async () => {
@@ -2186,7 +2187,9 @@ describe("LogsService", () => {
     it("should refuse a caller who is not the bot's owner", async () => {
       const ownerOnly = {
         findOneByUserId: jest.fn(async (uid: string) =>
-          uid === userId ? Ok({ id: "bot-1" }) : Failure("Bot not found"),
+          uid === userId
+            ? Ok({ id: "bot-1" })
+            : Failure(appError("not_found", "Bot not found")),
         ),
       };
       const ownerOnlyService = new LogsService(
@@ -2203,12 +2206,12 @@ describe("LogsService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("access denied");
+      expect(result.error.message).toContain("access denied");
     });
 
     it("should return failure when bot is not found", async () => {
       (mockBotService.findOneByUserId as jest.Mock).mockResolvedValue(
-        Failure("not found"),
+        Failure(appError("not_found", "not found")),
       );
 
       const result = await getLogs("bot-999", {
@@ -2218,7 +2221,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("not found");
+      expect(result.error.message).toContain("not found");
     });
 
     it("should check ownership against an explicit userId", async () => {
@@ -2245,7 +2248,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Invalid date");
+      expect(result.error.message).toContain("Invalid date");
     });
   });
 
@@ -2263,7 +2266,9 @@ describe("LogsService", () => {
         offset: 0,
       });
 
-      expect(result).toEqual(Failure("Failed to fetch logs: access denied"));
+      expect(result).toEqual(
+        Failure(appError("internal", "Failed to fetch logs: access denied")),
+      );
       expect(mockLogger.error).toHaveBeenCalledWith(
         { err: error },
         "Error fetching logs",
@@ -2280,7 +2285,9 @@ describe("LogsService", () => {
         offset: 0,
       });
 
-      expect(result).toEqual(Failure("Failed to fetch logs: access denied"));
+      expect(result).toEqual(
+        Failure(appError("internal", "Failed to fetch logs: access denied")),
+      );
       expect(mockLogger.error).toHaveBeenCalledWith(
         { err: error },
         "Error fetching logs",
@@ -2297,7 +2304,9 @@ describe("LogsService", () => {
         offset: 0,
       });
 
-      expect(result).toEqual(Failure("Failed to fetch logs: access denied"));
+      expect(result).toEqual(
+        Failure(appError("internal", "Failed to fetch logs: access denied")),
+      );
       expect(mockLogger.error).toHaveBeenCalledWith(
         { err: error },
         "Error fetching latest logs",

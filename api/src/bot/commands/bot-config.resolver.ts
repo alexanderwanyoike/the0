@@ -1,12 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import * as semver from "semver";
+import { AppError, invalid } from "@/common/app-error";
 import { Failure, Ok, Result } from "@/common/result";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { CustomBot } from "@/custom-bot/custom-bot.types";
 import { BotConfig } from "@/database/schema/bots";
-import { BOT_TYPE_PATTERN } from "../bot.constants";
+import { parseBotType } from "../bot-type";
 import { BotValidator } from "../bot.validator";
-import { customBotNameOf } from "./custom-bot-name";
 
 /** Finds the Custom bot version a Bot config names and validates the config against it. */
 @Injectable()
@@ -16,34 +16,34 @@ export class BotConfigResolver {
     private readonly botValidator: BotValidator,
   ) {}
 
-  async resolve(config: BotConfig): Promise<Result<CustomBot, string>> {
+  async resolve(config: BotConfig): Promise<Result<CustomBot, AppError>> {
     const { type, version } = config;
 
     if (!type) {
-      return Failure("Bot type is required");
+      return invalid("Bot type is required");
     }
 
     if (!version) {
-      return Failure("Bot version is required");
+      return invalid("Bot version is required");
     }
 
-    if (!BOT_TYPE_PATTERN.test(type)) {
-      return Failure("Invalid bot type format. Expected format: type/name");
+    const botType = parseBotType(type);
+    if (!botType.success) {
+      return Failure(botType.error);
     }
 
     if (!semver.valid(version)) {
-      return Failure("Invalid version format. Expected format: x.y.z");
+      return invalid("Invalid version format. Expected format: x.y.z");
     }
 
-    const name = customBotNameOf(type);
-    if (!name.success) {
-      return Failure(name.error);
-    }
-
-    const customBotResult =
-      await this.customBotService.getGlobalSpecificVersion(name.data, version);
+    const customBotResult = await this.customBotService.findVersion(
+      botType.data.customBotName,
+      version,
+    );
     if (!customBotResult.success) {
-      return Failure(`Bot type '${type}' not found`);
+      return customBotResult.error.code === "not_found"
+        ? invalid(`Bot type '${type}' not found`)
+        : Failure(customBotResult.error);
     }
 
     const customBot = customBotResult.data;
@@ -52,7 +52,7 @@ export class BotConfigResolver {
       customBot,
     );
     if (!validationResult.success) {
-      return Failure(validationResult.error.join(", ") || "Invalid bot config");
+      return invalid(validationResult.error.join(", ") || "Invalid bot config");
     }
 
     return Ok(customBot);

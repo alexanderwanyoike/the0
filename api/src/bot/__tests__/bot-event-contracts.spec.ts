@@ -108,11 +108,11 @@ const onTheWire = (events: BotEvent[]) =>
   }));
 
 describe("bot event contracts", () => {
-  let customBotService: { getGlobalSpecificVersion: jest.Mock };
+  let customBotService: { findVersion: jest.Mock };
   let factory: BotEventFactory;
 
   beforeEach(() => {
-    customBotService = { getGlobalSpecificVersion: jest.fn() };
+    customBotService = { findVersion: jest.fn() };
     factory = new BotEventFactory(
       customBotService as unknown as CustomBotService,
       createMockLogger() as unknown as PinoLogger,
@@ -172,9 +172,7 @@ describe("bot event contracts", () => {
         smaCrossover("g3i7k1m5o9q3s7u1w5y9a3c7", "1.3.0"),
       ],
     ])("publishes %s", async (name, botId, storedConfig, versionInUse) => {
-      customBotService.getGlobalSpecificVersion.mockResolvedValue(
-        Ok(versionInUse),
-      );
+      customBotService.findVersion.mockResolvedValue(Ok(versionInUse));
 
       const events = await factory.deleted(
         mockBot({ id: botId, config: { ...storedConfig, hasFrontend: false } }),

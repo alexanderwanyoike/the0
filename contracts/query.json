@@ -37,7 +37,7 @@
       },
       "api": {
         "error": {
-          "code": "BOT_NOT_FOUND",
+          "code": "not_found",
           "message": "Bot not found in runtime"
         }
       }
@@ -53,7 +53,7 @@
       },
       "api": {
         "error": {
-          "code": "NO_QUERY_ENTRYPOINT",
+          "code": "unprocessable",
           "message": "This bot defines no queries. Add a query entrypoint (entrypoints.query in bot-config.yaml) to answer them."
         }
       }
@@ -69,7 +69,7 @@
       },
       "api": {
         "error": {
-          "code": "QUERY_FAILED",
+          "code": "validation",
           "message": "Query failed: {body}"
         }
       }
@@ -85,7 +85,7 @@
       },
       "api": {
         "error": {
-          "code": "QUERY_FAILED",
+          "code": "validation",
           "message": "Query failed: {body}"
         }
       }
@@ -102,7 +102,7 @@
       },
       "api": {
         "error": {
-          "code": "QUERY_FAILED",
+          "code": "validation",
           "message": "Query failed: {body}"
         }
       }
@@ -119,7 +119,7 @@
       },
       "api": {
         "error": {
-          "code": "QUERY_FAILED",
+          "code": "validation",
           "message": "Query failed: {body}"
         }
       }

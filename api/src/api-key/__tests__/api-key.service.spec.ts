@@ -1,4 +1,5 @@
 import { ServiceUnavailableException } from "@nestjs/common";
+import { appError } from "@/common/app-error";
 import { Test, TestingModule } from "@nestjs/testing";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { ApiKeyRepository } from "@/api-key/api-key.repository";
@@ -130,17 +131,21 @@ describe("ApiKeyService", () => {
       const result = await service.createApiKey("user-123", createDto);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("An API key with this name already exists");
+      expect(result.error.message).toBe(
+        "An API key with this name already exists",
+      );
     });
 
     it("should handle repository errors", async () => {
       const createDto: CreateApiKeyDto = { name: "Test API Key" };
-      repository.findAll.mockResolvedValue(Failure("Database error"));
+      repository.findAll.mockResolvedValue(
+        Failure(appError("internal", "Database error")),
+      );
 
       const result = await service.createApiKey("user-123", createDto);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Database error");
+      expect(result.error.message).toBe("Database error");
     });
   });
 
@@ -166,12 +171,14 @@ describe("ApiKeyService", () => {
     });
 
     it("should handle repository errors", async () => {
-      repository.findAll.mockResolvedValue(Failure("Database error"));
+      repository.findAll.mockResolvedValue(
+        Failure(appError("internal", "Database error")),
+      );
 
       const result = await service.getUserApiKeys("user-123");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Database error");
+      expect(result.error.message).toBe("Database error");
     });
   });
 
@@ -196,12 +203,14 @@ describe("ApiKeyService", () => {
     });
 
     it("should handle not found", async () => {
-      repository.findOne.mockResolvedValue(Failure("Not found"));
+      repository.findOne.mockResolvedValue(
+        Failure(appError("not_found", "Not found")),
+      );
 
       const result = await service.getApiKeyById("user-123", "test-id");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Not found");
+      expect(result.error.message).toBe("Not found");
     });
   });
 
@@ -219,12 +228,14 @@ describe("ApiKeyService", () => {
     });
 
     it("should handle repository errors", async () => {
-      repository.deleteApiKey.mockResolvedValue(Failure("API key not found"));
+      repository.deleteApiKey.mockResolvedValue(
+        Failure(appError("not_found", "API key not found")),
+      );
 
       const result = await service.deleteApiKey("user-123", "test-id");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("API key not found");
+      expect(result.error.message).toBe("API key not found");
     });
   });
 
@@ -249,19 +260,19 @@ describe("ApiKeyService", () => {
       const result = await service.validateApiKey("the0_abcdef123456789");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("API key owner is inactive");
+      expect(result.error.message).toBe("API key owner is inactive");
       expect(repository.updateLastUsed).not.toHaveBeenCalled();
     });
 
     it("should handle invalid API key", async () => {
       repository.findByKey.mockResolvedValue(
-        Failure("API key not found or inactive"),
+        Failure(appError("not_found", "API key not found or inactive")),
       );
 
       const result = await service.validateApiKey("invalid-key");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("API key not found or inactive");
+      expect(result.error.message).toBe("API key not found or inactive");
     });
 
     it("reports an unreachable database as unavailable when looking up the key", async () => {

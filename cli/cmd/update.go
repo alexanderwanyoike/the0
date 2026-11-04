@@ -20,8 +20,8 @@ func NewUpdateCmd(currentVersion string) *cobra.Command {
 		Use:   "update",
 		Short: "Update the0 CLI to the latest version",
 		Long:  "Check for and install the latest version of the0 CLI from GitHub Releases",
-		Run: func(cmd *cobra.Command, args []string) {
-			runUpdate(currentVersion, checkOnly, yes)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runUpdate(currentVersion, checkOnly, yes)
 		},
 	}
 
@@ -31,7 +31,7 @@ func NewUpdateCmd(currentVersion string) *cobra.Command {
 	return cmd
 }
 
-func runUpdate(currentVersion string, checkOnly bool, yes bool) {
+func runUpdate(currentVersion string, checkOnly bool, yes bool) error {
 	updater := internal.NewUpdater(currentVersion)
 
 	logger.StartSpinner("Checking for updates")
@@ -39,8 +39,7 @@ func runUpdate(currentVersion string, checkOnly bool, yes bool) {
 	release, err := updater.CheckLatestRelease()
 	if err != nil {
 		logger.StopSpinnerWithError("Failed to check for updates")
-		logger.Error("%v", err)
-		os.Exit(1)
+		return err
 	}
 
 	latestVersion := internal.ExtractVersionFromTag(release.TagName)
@@ -48,8 +47,7 @@ func runUpdate(currentVersion string, checkOnly bool, yes bool) {
 	isNewer, err := internal.CompareVersions(currentVersion, latestVersion)
 	if err != nil {
 		logger.StopSpinnerWithError("Failed to compare versions")
-		logger.Error("%v", err)
-		os.Exit(1)
+		return err
 	}
 
 	// Update the cache regardless of outcome
@@ -61,7 +59,7 @@ func runUpdate(currentVersion string, checkOnly bool, yes bool) {
 	if !isNewer {
 		logger.StopSpinnerWithSuccess("Already up to date")
 		logger.Print("  Current version: %s", internal.NormalizeVersion(currentVersion))
-		return
+		return nil
 	}
 
 	logger.StopSpinner()
@@ -69,7 +67,7 @@ func runUpdate(currentVersion string, checkOnly bool, yes bool) {
 
 	if checkOnly {
 		logger.Print("  Run 'the0 update' to install")
-		return
+		return nil
 	}
 
 	// Confirm unless --yes
@@ -80,7 +78,7 @@ func runUpdate(currentVersion string, checkOnly bool, yes bool) {
 		answer = strings.TrimSpace(strings.ToLower(answer))
 		if answer != "y" && answer != "yes" {
 			logger.Print("  Update cancelled")
-			return
+			return nil
 		}
 	}
 
@@ -93,7 +91,7 @@ func runUpdate(currentVersion string, checkOnly bool, yes bool) {
 		for _, asset := range release.Assets {
 			logger.Print("    - %s", asset.Name)
 		}
-		os.Exit(1)
+		return errReported
 	}
 
 	// Find checksums file
@@ -105,8 +103,7 @@ func runUpdate(currentVersion string, checkOnly bool, yes bool) {
 	binaryData, err := updater.DownloadAsset(binaryAsset.BrowserDownloadURL)
 	if err != nil {
 		logger.StopSpinnerWithError("Download failed")
-		logger.Error("%v", err)
-		os.Exit(1)
+		return err
 	}
 
 	logger.StopSpinnerWithSuccess(fmt.Sprintf("Downloaded %s (%.1f MB)", binaryName, float64(len(binaryData))/(1024*1024)))
@@ -120,14 +117,12 @@ func runUpdate(currentVersion string, checkOnly bool, yes bool) {
 		checksumData, err := updater.DownloadAsset(checksumAsset.BrowserDownloadURL)
 		if err != nil {
 			logger.StopSpinnerWithError("Failed to download checksums")
-			logger.Error("%v", err)
-			os.Exit(1)
+			return err
 		}
 
 		if err := internal.VerifyChecksum(binaryData, checksumData, binaryName); err != nil {
 			logger.StopSpinnerWithError("Checksum verification failed")
-			logger.Error("%v", err)
-			os.Exit(1)
+			return err
 		}
 
 		logger.StopSpinnerWithSuccess("Checksum verified")
@@ -140,8 +135,9 @@ func runUpdate(currentVersion string, checkOnly bool, yes bool) {
 		logger.StopSpinnerWithError("Installation failed")
 		logger.Error("%v", err)
 		logger.Print("  You may need to run with elevated permissions")
-		os.Exit(1)
+		return errReported
 	}
 
 	logger.StopSpinnerWithSuccess(fmt.Sprintf("Updated to %s", latestVersion))
+	return nil
 }

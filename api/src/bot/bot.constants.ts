@@ -1,6 +1,3 @@
-export const BOT_TYPE_PATTERN =
-  /^[a-z0-9]+(-[a-z0-9]+)*\/[a-z0-9]+(-[a-z0-9]+)*$/;
-
 // NATS topics for bot events (match runtime expectations)
 export const BOT_TOPICS = {
   CREATED: "the0.bot.created",

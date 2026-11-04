@@ -8,7 +8,7 @@ import {
   CanActivate,
 } from "@nestjs/common";
 import { BotQueryController } from "../bot-query.controller";
-import { BotQueryService, BotQueryErrorCode } from "../bot-query.service";
+import { BotQueryService } from "../bot-query.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { mockActor } from "@/test/mock-actor";
 
@@ -104,20 +104,12 @@ describe("BotQueryController", () => {
       );
     });
 
-    it("should throw BadRequestException when query_path is missing", async () => {
-      await expect(
-        controller.executeQuery(actor, "test-bot-id", {
-          query_path: "",
-        }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
     it("should throw NotFoundException when bot not found", async () => {
       mockBotQueryService.executeQuery.mockResolvedValue({
         success: false,
         data: null,
         error: {
-          code: BotQueryErrorCode.BOT_NOT_FOUND,
+          code: "not_found",
           message: "Bot not found",
         },
       });
@@ -135,7 +127,7 @@ describe("BotQueryController", () => {
         success: false,
         data: null,
         error: {
-          code: BotQueryErrorCode.NO_QUERY_ENTRYPOINT,
+          code: "unprocessable",
           message,
         },
       });
@@ -152,7 +144,7 @@ describe("BotQueryController", () => {
         success: false,
         data: null,
         error: {
-          code: BotQueryErrorCode.RUNTIME_UNAVAILABLE,
+          code: "unavailable",
           message: "Runtime unavailable",
         },
       });
@@ -169,7 +161,7 @@ describe("BotQueryController", () => {
         success: false,
         data: null,
         error: {
-          code: BotQueryErrorCode.TIMEOUT,
+          code: "timeout",
           message: "Query timed out",
         },
       });
@@ -186,7 +178,7 @@ describe("BotQueryController", () => {
         success: false,
         data: null,
         error: {
-          code: BotQueryErrorCode.QUERY_FAILED,
+          code: "validation",
           message: "Query execution failed",
         },
       });

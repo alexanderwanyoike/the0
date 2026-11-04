@@ -342,9 +342,9 @@ describe("Custom Bot Schema Validation", () => {
 
       const result = validateCustomBotConfigPayload(invalidConfig);
       expect(result.valid).toBe(false);
-      expect(
-        result.errors?.some((err) => err.includes("must match pattern")),
-      ).toBe(true);
+      expect(result.errors).toContain(
+        "/name must be lowercase letters and numbers, with single hyphens between them",
+      );
     });
 
     it("should fail with invalid version format", () => {
