@@ -5,6 +5,68 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: changed
+          description: "The frontend forwards every api call through one proxy route, and browser code uses one HTTP client that shows the api's own error message"
+        - kind: removed
+          description: "The frontend no longer verifies JWTs itself or reads JWT_SECRET; the api enforces auth, and the chart stops passing the secret to the frontend"
+        - kind: changed
+          description: "The api answers every failure with one typed error and status mapping: a missing or hidden resource is 404, a database or storage failure is 500 with a fixed message, never the driver's text"
+        - kind: changed
+          description: "MCP tools return structured errors with a code and check their arguments against the same rules as the REST endpoints"
+        - kind: changed
+          description: "Custom bot names must be lowercase letters and numbers with single hyphens between them; a leading, trailing or doubled hyphen is refused"
+        - kind: fixed
+          description: "Publishing a Custom bot version checks the config before touching storage and answers 400 for a missing, invalid or non-object config"
+        - kind: fixed
+          description: "Request logs redact the x-api-key header"
+        - kind: changed
+          description: "The custom dashboard contract is defined once in the0-react and imported by the frontend"
+        - kind: security
+          description: "follow-redirects 1.16.2 in the frontend (GHSA-mrwp-f3q8-3g9p)"
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/8xpMh3RR3
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 1.23.0
+    created: "2026-11-04T01:02:55.046439949Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 9dcb8934f6eb6de5f4c8b5d3e83d6ccf57ca55d1b985380b9a46e53a134b83a1
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.18.0/the0-0.18.0.tgz
+    version: 0.18.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: changed
           description: "The api, gc and bot controller read the NATS URL, MinIO host and port, logs bucket and code bucket from one chart value each, so the two sides cannot drift"
         - kind: changed
           description: "The bot controller takes logs and query results bucket settings, and bot pods, sync sidecars and query pods use them instead of fixed bucket names"
@@ -2853,4 +2915,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-10-31T13:31:46.651903286Z"
+generated: "2026-11-04T01:02:55.046630466Z"
