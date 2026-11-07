@@ -1,13 +1,14 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { StorageService } from "../storage.service";
-import { Ok, Failure, Result } from "@/common/result";
+import { Result } from "@/common/result";
 import { AppError } from "@/common/app-error";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
 import AdmZip from "adm-zip";
 import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
+import { Readable } from "stream";
 
 describe("StorageService", () => {
   let service: StorageService;
@@ -238,15 +239,60 @@ describe("StorageService", () => {
   });
 
   describe("uploadBotFile", () => {
+    it("uses the real MinIO client's multipart path for a fresh large stream", async () => {
+      const { Client } = jest.requireActual<typeof Minio>("minio");
+      const client = new Client({
+        endPoint: "localhost",
+        partSize: 5 * 1024 * 1024,
+      });
+      jest.spyOn(client, "bucketExists").mockResolvedValue(true);
+      const buffered = jest
+        .spyOn(client as any, "uploadBuffer")
+        .mockResolvedValue({
+          etag: "buffered",
+        });
+      let uploadedBytes = 0;
+      const multipart = jest
+        .spyOn(client as any, "uploadStream")
+        .mockImplementation(async (...args: unknown[]) => {
+          for await (const chunk of args[3] as Readable) {
+            uploadedBytes += chunk.length;
+          }
+          return { etag: "multipart" };
+        });
+      const storage = new StorageService(
+        client,
+        configService,
+        logger as unknown as PinoLogger,
+      );
+      const chunk = Buffer.alloc(1024 * 1024);
+      const content = Readable.from([chunk, chunk, chunk, chunk, chunk, chunk]);
+
+      const result = await storage.uploadBotFile(
+        content,
+        6 * chunk.length,
+        "1.0.0",
+        "user123",
+        "test-bot",
+      );
+
+      expect(result.success).toBe(true);
+      expect(buffered.mock.calls.length).toBe(0);
+      expect(multipart).toHaveBeenCalledTimes(1);
+      expect(uploadedBytes).toBe(6 * chunk.length);
+    });
+
     it("should upload bot file successfully", async () => {
       const fileBuffer = createSampleZipBuffer();
-      mockMinioClient.putObject.mockResolvedValue({
-        etag: "test-etag",
-        versionId: "test-version",
-      } as any);
+      const content = Readable.from(fileBuffer);
+      mockMinioClient.putObject.mockImplementation(async () => {
+        for await (const chunk of content) expect(chunk).toEqual(fileBuffer);
+        return { etag: "test-etag", versionId: "test-version" };
+      });
 
       const result = await service.uploadBotFile(
-        fileBuffer,
+        content,
+        fileBuffer.length,
         "1.0.0",
         "user123",
         "test-bot",
@@ -257,7 +303,7 @@ describe("StorageService", () => {
       expect(mockMinioClient.putObject).toHaveBeenCalledWith(
         "custom-bots",
         "user123/test-bot/1.0.0",
-        fileBuffer,
+        content,
         fileBuffer.length,
         {
           "Content-Type": "application/zip",
@@ -272,7 +318,8 @@ describe("StorageService", () => {
       mockMinioClient.putObject.mockRejectedValue(new Error("Upload failed"));
 
       const result = await service.uploadBotFile(
-        fileBuffer,
+        Readable.from(fileBuffer),
+        fileBuffer.length,
         "1.0.0",
         "user123",
         "test-bot",
