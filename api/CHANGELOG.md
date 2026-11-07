@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Avoid buffering complete custom bot ZIP uploads in API memory (#191). Uploads use temporary disk space and stream to MinIO, with temporary files removed on completion or failure.
+
 ### Added
 
 - **Haskell GHC 9.6 runtime support** - Added `ghc96` to the Runtime type union for Haskell bot deployment

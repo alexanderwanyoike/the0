@@ -28,6 +28,10 @@ import {
   ApiTags,
 } from "@nestjs/swagger";
 import { Response } from "express";
+import { createReadStream } from "fs";
+import { unlink } from "fs/promises";
+import { diskStorage } from "multer";
+import { finished } from "stream/promises";
 import { CustomBotService, PublishRequest } from "./custom-bot.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { AuthenticatedUser } from "@/auth/auth.types";
@@ -72,7 +76,7 @@ export class CustomBotController {
 
   @Post(":name/upload")
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(FileInterceptor("file", { storage: diskStorage({}) }))
   @ApiOperation({
     summary: "Upload a custom bot's zip archive",
     description: "Returns the storage path to pass to the deploy endpoints.",
@@ -104,41 +108,55 @@ export class CustomBotController {
       throw new BadRequestException("File is required");
     }
 
-    // Validate file type
-    if (
-      file.mimetype !== "application/zip" &&
-      !file.originalname.endsWith(".zip")
-    ) {
-      throw new BadRequestException("Only ZIP files are allowed");
-    }
+    try {
+      // Validate file type
+      if (
+        file.mimetype !== "application/zip" &&
+        !file.originalname.endsWith(".zip")
+      ) {
+        throw new BadRequestException("Only ZIP files are allowed");
+      }
 
-    // Version must be provided
-    if (!body.version) {
-      throw new BadRequestException("Version is required");
-    }
+      // Version must be provided
+      if (!body.version) {
+        throw new BadRequestException("Version is required");
+      }
 
-    // Upload to MinIO using internal client
-    const uploadResult = await this.storageService.uploadBotFile(
-      file.buffer,
-      body.version,
-      userId,
-      name,
-    );
-
-    if (!uploadResult.success) {
-      throw toHttpException(
-        appError(
-          uploadResult.error.code,
-          `Upload failed: ${uploadResult.error.message}`,
-        ),
+      const content = createReadStream(file.path);
+      const closed = finished(content, { cleanup: true }).catch(
+        (): undefined => undefined,
       );
-    }
+      try {
+        const uploadResult = await this.storageService.uploadBotFile(
+          content,
+          file.size,
+          body.version,
+          userId,
+          name,
+        );
 
-    return {
-      success: true,
-      filePath: uploadResult.data,
-      message: "File uploaded successfully",
-    };
+        if (!uploadResult.success) {
+          throw toHttpException(
+            appError(
+              uploadResult.error.code,
+              `Upload failed: ${uploadResult.error.message}`,
+            ),
+          );
+        }
+
+        return {
+          success: true,
+          filePath: uploadResult.data,
+          message: "File uploaded successfully",
+        };
+      } finally {
+        // MinIO can reject before consuming the stream. Close it before unlinking.
+        content.destroy();
+        await closed;
+      }
+    } finally {
+      await unlink(file.path);
+    }
   }
 
   @Post(":name")
