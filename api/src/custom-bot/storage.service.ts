@@ -11,6 +11,9 @@ import { Result, Ok, Failure } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
 import AdmZip from "adm-zip";
+import { once } from "events";
+import { Readable } from "stream";
+import { finished } from "stream/promises";
 
 @Injectable()
 export class StorageService {
@@ -111,7 +114,8 @@ export class StorageService {
   }
 
   async uploadBotFile(
-    content: Buffer,
+    content: Readable,
+    size: number,
     fileName: string,
     userId: string,
     botName: string,
@@ -119,18 +123,21 @@ export class StorageService {
     try {
       const filePath = `${userId}/${botName}/${fileName}`;
 
+      // MinIO 8.0.5 buffers an empty read queue even when the size is known.
+      // Prime the paused stream so large files take its multipart upload path.
+      if (size > 0 && content.readableLength === 0) {
+        await once(content, "readable");
+      }
+
       // Upload to MinIO with metadata
-      await this.minioClient.putObject(
-        this.bucketName,
-        filePath,
-        content,
-        content.length,
-        {
+      await Promise.all([
+        finished(content, { cleanup: true }),
+        this.minioClient.putObject(this.bucketName, filePath, content, size, {
           "Content-Type": "application/zip",
           "X-Upload-Source": "custom-bot-api",
           "X-Upload-Time": new Date().toISOString(),
-        },
-      );
+        }),
+      ]);
 
       this.logger.info({ filePath }, "Uploaded bot file to MinIO");
       return Ok(filePath);
