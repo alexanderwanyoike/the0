@@ -12,7 +12,8 @@ The verdict file gets one line: "ok", "missing", "async", or
 import ast
 import sys
 
-USABLE = "ok"
+OK = "ok"
+MISSING = "missing"
 ASYNC = "async"
 
 # These open a scope of their own, so names bound inside them are not
@@ -30,28 +31,28 @@ NEW_SCOPES = (
 
 
 def bindings(node):
-    """Yields USABLE or ASYNC for each binding of main in node's scope."""
+    """Yields OK or ASYNC for each binding of main in node's scope."""
     for child in ast.iter_child_nodes(node):
         if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             if child.name == "main":
                 # The runtime calls main without awaiting it; a decorator may
                 # turn an async def into a sync function, so it gets the doubt.
                 bare_async = isinstance(child, ast.AsyncFunctionDef) and not child.decorator_list
-                yield ASYNC if bare_async else USABLE
+                yield ASYNC if bare_async else OK
             continue
         if isinstance(child, NEW_SCOPES):
             continue
         if isinstance(child, ast.alias):
             # A star import may bring main in.
             if (child.asname or child.name.split(".")[0]) in ("main", "*"):
-                yield USABLE
+                yield OK
             continue
         if isinstance(child, ast.Name) and child.id == "main" and isinstance(child.ctx, ast.Store):
-            yield USABLE
+            yield OK
         elif isinstance(child, (ast.MatchAs, ast.MatchStar)) and child.name == "main":
-            yield USABLE
+            yield OK
         elif isinstance(child, ast.MatchMapping) and child.rest == "main":
-            yield USABLE
+            yield OK
         yield from bindings(child)
 
 
@@ -68,11 +69,11 @@ def verdict(source):
         return f"syntax 0 {error}"
 
     found = set(bindings(tree))
-    if USABLE in found or declares_global_main(tree):
-        return "ok"
+    if OK in found or declares_global_main(tree):
+        return OK
     if ASYNC in found:
-        return "async"
-    return "missing"
+        return ASYNC
+    return MISSING
 
 
 if __name__ == "__main__":

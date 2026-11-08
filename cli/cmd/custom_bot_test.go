@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"the0/internal"
 )
 
@@ -14,12 +13,6 @@ func TestCustomBotDeploy_RefusesAMissingMainBeforeVendoring(t *testing.T) {
 	t.Chdir(t.TempDir())
 	checked := ""
 	refuse := errors.New("main.py has no main(bot_id, config) function at module level")
-	previous := checkBotEntrypoint
-	checkBotEntrypoint = func(config *internal.BotConfig) error {
-		checked = config.Entrypoints.Bot
-		return refuse
-	}
-	t.Cleanup(func() { checkBotEntrypoint = previous })
 	// If the deploy ever got past the check, it must still go nowhere: no
 	// saved login, an api address nothing listens on, and no Docker on PATH
 	// for vendoring.
@@ -42,9 +35,12 @@ func TestCustomBotDeploy_RefusesAMissingMainBeforeVendoring(t *testing.T) {
 		}
 	}
 
-	err := deployBot(&cobra.Command{}, nil)
+	err := deployBotWith(func(config *internal.BotConfig) error {
+		checked = config.Entrypoints.Bot
+		return refuse
+	})
 
-	if err != refuse || checked != "main.py" {
+	if !errors.Is(err, refuse) || checked != "main.py" {
 		t.Fatalf("error = %v after checking %q, want the check's refusal of main.py", err, checked)
 	}
 	if got, want := errOut.String(), "x Entrypoint check failed\n"; got != want {
