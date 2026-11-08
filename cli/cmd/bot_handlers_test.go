@@ -133,6 +133,22 @@ func TestBotDisableAll_StopsEveryBotInOneRequest(t *testing.T) {
 	})
 }
 
+func TestBotDisable_AllSendsTheDisableAllRequest(t *testing.T) {
+	captureLogger(t)
+	calls := fakeAPI(t, "/bot/disable-all", 200, `{"disabled":[],"alreadyDisabled":[]}`)
+	cmd := NewBotDisableCmd()
+	cmd.SetArgs([]string{"--all"})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("error = %v, want nil", err)
+	}
+	if len(*calls) != 1 || (*calls)[0] != "POST" {
+		t.Errorf("calls to /bot/disable-all = %v, want one POST", *calls)
+	}
+}
+
 func TestBotDisable_TakesABotIDOrAll(t *testing.T) {
 	for _, tc := range []struct {
 		name string
