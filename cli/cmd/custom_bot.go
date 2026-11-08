@@ -61,6 +61,11 @@ func deployBot(cmd *cobra.Command, args []string) error {
 		logger.Warning("%s", warning)
 	}
 
+	if err := internal.CheckBotEntrypoint(config); err != nil {
+		logger.StopSpinnerWithError("Entrypoint check failed")
+		return err
+	}
+
 	logger.UpdateSpinner("Installing dependencies")
 
 	// Step 2.5: Check for dependencies and perform compilation if needed
