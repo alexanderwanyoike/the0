@@ -36,7 +36,7 @@ func TestCustomBotDeploy_RefusesAMissingMainBeforeVendoring(t *testing.T) {
 
 	err := deployBot(&cobra.Command{}, nil)
 
-	if err == nil || !strings.HasPrefix(err.Error(), "main.py has no top-level main(bot_id, config) function") {
+	if err == nil || !strings.HasPrefix(err.Error(), "main.py has no main(bot_id, config) function") {
 		t.Fatalf("error = %v, want the missing main reported", err)
 	}
 	if got, want := errOut.String(), "x Entrypoint check failed\n"; got != want {
