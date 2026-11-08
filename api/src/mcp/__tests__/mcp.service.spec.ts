@@ -108,15 +108,14 @@ function createBotStore(seed: Bot[]) {
       const mine = [...bots.values()].filter((bot) => bot.userId === userId);
       const disabled = mine
         .filter((bot) => bot.config.enabled !== false)
-        .map((bot) => {
-          const updated = { ...bot, config: { ...bot.config, enabled: false } };
-          bots.set(bot.id, updated);
-          return updated;
-        });
-      const disabledEvents = disabled.flatMap((bot) => {
-        const built = eventsFor(bot);
-        return built.success ? built.data : [];
-      });
+        .map((bot) => ({ ...bot, config: { ...bot.config, enabled: false } }));
+      const built = disabled.map(eventsFor);
+      const refusal = built.find((result) => !result.success);
+      if (refusal && !refusal.success) return Failure(refusal.error);
+      disabled.forEach((bot) => bots.set(bot.id, bot));
+      const disabledEvents = built.flatMap((result) =>
+        result.success ? result.data : [],
+      );
       events.push(...disabledEvents);
       return Ok({
         disabled,
@@ -520,7 +519,7 @@ describe("McpService", () => {
         ]);
       });
 
-      it("reports bots that were already disabled apart and announces nothing for them", async () => {
+      it("reports bots that were already disabled apart, announces nothing for them and claims no stop", async () => {
         store.bots.set("bot-123", {
           ...callerBot,
           config: { ...callerBot.config, enabled: false },
@@ -533,8 +532,7 @@ describe("McpService", () => {
         );
 
         expect(parse(result)).toEqual({
-          message:
-            "Disabled 0 bots, stop sent to the runtime. Open positions with brokers are not closed.",
+          message: "Disabled 0 bots. None was enabled.",
           disabled: [],
           already_disabled: [{ id: "bot-123", name: "Test Bot" }],
         });
