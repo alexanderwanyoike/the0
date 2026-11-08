@@ -181,7 +181,7 @@ func initRepoPath(cmd *cobra.Command, args []string) (string, bool, error) {
 }
 
 func strayArgumentError(arg string) error {
-	return fmt.Errorf("unexpected argument %q; to build from that repository, run `the0 local init --source %s`", arg, arg)
+	return fmt.Errorf("unexpected argument %q; to build from that repository, run `the0 local init --source %q`", arg, arg)
 }
 
 // --- start ---
