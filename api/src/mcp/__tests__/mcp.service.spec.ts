@@ -101,6 +101,24 @@ function createBotStore(seed: Bot[]) {
       }
       return Ok(null);
     },
+    async disableAllWithEvents(
+      userId: string,
+      eventsFor: (bot: Bot) => BotEvent[],
+    ) {
+      const mine = [...bots.values()].filter((bot) => bot.userId === userId);
+      const disabled = mine
+        .filter((bot) => bot.config.enabled !== false)
+        .map((bot) => {
+          const updated = { ...bot, config: { ...bot.config, enabled: false } };
+          bots.set(bot.id, updated);
+          return updated;
+        });
+      events.push(...disabled.flatMap(eventsFor));
+      return Ok({
+        disabled,
+        alreadyDisabled: mine.filter((bot) => bot.config.enabled === false),
+      });
+    },
   };
 }
 
@@ -185,6 +203,11 @@ describe("McpService", () => {
       findVersions: jest.fn(),
       findLatestVersion: jest.fn(),
       findVersion: jest.fn(findInCatalogue),
+      findVersionById: jest.fn(async (id: string) =>
+        Ok<CustomBot, AppError>(
+          catalogueVersion(id.replace("custom-bot-", "")),
+        ),
+      ),
       checkOrphaned: jest
         .fn()
         .mockResolvedValue(
@@ -455,6 +478,61 @@ describe("McpService", () => {
         expect(result.isError).toBe(true);
         expect(result.content[0].text).toMatch(/not found/i);
         expect(store.bots.get("bot-456")).toEqual(otherUsersBot);
+        expect(store.events).toEqual([]);
+      });
+    });
+
+    describe("disabling every bot stops the caller's bots and tells the runtime", () => {
+      it("disables the caller's bots with their updated events and names them", async () => {
+        const result = await service.handleToolCall(
+          "bot_disable_all",
+          {},
+          actor,
+        );
+
+        expect(result.isError).toBeUndefined();
+        expect(parse(result)).toEqual({
+          message:
+            "Disabled 1 bot, stop sent to the runtime. Open positions with brokers are not closed.",
+          disabled: [{ id: "bot-123", name: "Test Bot" }],
+          already_disabled: [],
+        });
+        expect(store.bots.get("bot-123")?.config.enabled).toBe(false);
+        expect(store.bots.get("bot-456")).toEqual(otherUsersBot);
+        expect(store.events).toEqual([
+          {
+            botId: "bot-123",
+            subject: SCHEDULED_BOT_TOPICS.UPDATED,
+            payload: expect.objectContaining({
+              id: "bot-123",
+              config: {
+                ...callerBot.config,
+                enabled: false,
+                customBotId: "custom-bot-1.0.0",
+              },
+            }),
+          },
+        ]);
+      });
+
+      it("reports bots that were already disabled apart and announces nothing for them", async () => {
+        store.bots.set("bot-123", {
+          ...callerBot,
+          config: { ...callerBot.config, enabled: false },
+        });
+
+        const result = await service.handleToolCall(
+          "bot_disable_all",
+          {},
+          actor,
+        );
+
+        expect(parse(result)).toEqual({
+          message:
+            "Disabled 0 bots, stop sent to the runtime. Open positions with brokers are not closed.",
+          disabled: [],
+          already_disabled: [{ id: "bot-123", name: "Test Bot" }],
+        });
         expect(store.events).toEqual([]);
       });
     });
