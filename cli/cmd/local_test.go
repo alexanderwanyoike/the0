@@ -92,3 +92,15 @@ func TestInitRepoPath_RefusesAStrayArgument(t *testing.T) {
 		})
 	}
 }
+
+func TestInitRepoPath_SuggestsAQuotedSourcePath(t *testing.T) {
+	cmd := newLocalInitCmd()
+	if err := cmd.ParseFlags([]string{"/my repo"}); err != nil {
+		t.Fatalf("failed to parse: %v", err)
+	}
+
+	_, _, err := initRepoPath(cmd, cmd.Flags().Args())
+	if err == nil || !strings.Contains(err.Error(), `--source "/my repo"`) {
+		t.Errorf("error %v does not suggest a pasteable --source \"/my repo\"", err)
+	}
+}
