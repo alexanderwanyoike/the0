@@ -82,29 +82,9 @@ We welcome various types of contributions:
 
 ## Development Workflow
 
-the0 uses a `main <- dev <- feature branch` flow:
+the0 uses a `main <- dev <- feature branch` flow. Branch from `dev`, commit in small atomic steps, push to your fork and open a pull request into `dev`. Release PRs (`dev` into `main`) are opened by maintainers.
 
-1. **Create a branch from `dev`**, named `<type>/<area>-<slug>`:
-   ```bash
-   git checkout dev && git pull
-   git checkout -b feat/api-your-feature
-   # or
-   git checkout -b fix/cli-bug-description
-   ```
-
-2. **Make your changes** in small, atomic commits (see [CODING_STANDARDS.md](CODING_STANDARDS.md#commits)):
-   ```bash
-   git commit -m "type(scope): brief description"
-   ```
-
-   Commit types: `feat`, `fix`, `test`, `refactor`, `docs`, `chore`, `style`, `ci`. Scopes name the service: `api`, `cli`, `runtime`, `frontend`, `docs`, `k8s`, `sdk-<lang>`.
-
-3. **Push to your fork:**
-   ```bash
-   git push origin feat/api-your-feature
-   ```
-
-4. **Open a Pull Request into `dev`** on GitHub. Release PRs (`dev` into `main`) are opened by maintainers.
+Branch names, commit messages, the test-first commit order and the PR description format are defined in [CODING_STANDARDS.md](CODING_STANDARDS.md#workflow).
 
 ## Reporting Bugs
 
