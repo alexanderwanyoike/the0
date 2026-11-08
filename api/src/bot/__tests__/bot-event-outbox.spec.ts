@@ -162,6 +162,24 @@ describe("BotRepository writes with events", () => {
       expect(await outboxRows()).toEqual([]);
     });
 
+    it("disables none of the bots when any of their events cannot be stored", async () => {
+      await repository.createWithEvents(newBot("bot-1"), []);
+      await repository.createWithEvents(newBot("bot-2"), []);
+
+      const result = await repository.disableAllWithEvents(OWNER, (bot) => [
+        event(
+          bot.id,
+          bot.id === "bot-2" ? UNSTORABLE_SUBJECT : "the0.bot-schedule.updated",
+        ),
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(
+        (await botRows()).map((bot) => bot.config.enabled ?? "unset"),
+      ).toEqual(["unset", "unset"]);
+      expect(await outboxRows()).toEqual([]);
+    });
+
     it("does not delete the bot", async () => {
       await repository.createWithEvents(newBot("bot-1"), []);
 

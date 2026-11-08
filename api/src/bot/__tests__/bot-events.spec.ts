@@ -2,7 +2,12 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { PinoLogger } from "nestjs-pino";
 import { AppModule } from "@/app.module";
 import { AdminBootstrapService } from "@/user/admin-bootstrap.service";
-import { DeleteBot, DeployBot, UpdateBot } from "../commands/bot-commands";
+import {
+  DeleteBot,
+  DeployBot,
+  DisableAllBots,
+  UpdateBot,
+} from "../commands/bot-commands";
 import { CommandBus } from "@/command-bus/command-bus";
 import { appendBotEvents } from "../bot-event-outbox";
 import { BotEventRelay } from "../bot-event-relay";
@@ -268,6 +273,150 @@ describe("bot events", () => {
         subject: "the0.bot-schedule.deleted",
         payload: { id, config: { ...config, hasFrontend: false } },
       });
+    });
+  });
+
+  describe("stop every bot the Actor owns with one command", () => {
+    const disableAll = async (by = actor) => {
+      const result = await commands.execute(new DisableAllBots(by));
+      await moduleRef.get(BotEventRelay).settled();
+      return result;
+    };
+    const deployNamed = async (
+      name: string,
+      config: BotConfig,
+      by = actor,
+    ): Promise<string> => {
+      const result = await commands.execute(
+        new DeployBot(by, { name, config }),
+      );
+      expect(result.success).toBe(true);
+      return result.data!.id;
+    };
+    const storedConfig = async (id: string) => {
+      const [row] = await db()
+        .select({ config: botsTable.config })
+        .from(botsTable)
+        .where(eq(botsTable.id, id));
+      return row.config;
+    };
+
+    it("disables each enabled bot and announces it with the rest of its config unchanged", async () => {
+      const sma = await uploadCustomBot("sma-bot", "1.0.0", "scheduled");
+      const grid = await uploadCustomBot("grid-bot", "1.0.0", "realtime");
+      const smaConfig = scheduledConfig("1.0.0");
+      const gridConfig = {
+        name: "Grid",
+        type: "realtime/grid-bot",
+        version: "1.0.0",
+        symbol: "BTC",
+      };
+      const smaId = await deployNamed("SMA", smaConfig);
+      const gridId = await deployNamed("Grid", gridConfig);
+      await moduleRef.get(BotEventRelay).settled();
+
+      const result = await disableAll();
+
+      expect(result).toEqual(
+        Ok({
+          disabled: [
+            { id: gridId, name: "Grid" },
+            { id: smaId, name: "SMA" },
+          ],
+          alreadyDisabled: [],
+        }),
+      );
+      const disabledSma = { ...smaConfig, hasFrontend: false, enabled: false };
+      const disabledGrid = {
+        ...gridConfig,
+        hasFrontend: false,
+        enabled: false,
+      };
+      expect(await storedConfig(smaId)).toEqual(disabledSma);
+      expect(await storedConfig(gridId)).toEqual(disabledGrid);
+      expect(nats.published.slice(2)).toEqual(
+        expect.arrayContaining([
+          {
+            subject: "the0.bot-schedule.updated",
+            payload: {
+              id: smaId,
+              config: { ...disabledSma, customBotId: sma.id },
+              custom: sma.custom,
+            },
+          },
+          {
+            subject: "the0.bot.updated",
+            payload: {
+              id: gridId,
+              config: { ...disabledGrid, customBotId: grid.id },
+              custom: grid.custom,
+            },
+          },
+        ]),
+      );
+      expect(nats.published).toHaveLength(4);
+    });
+
+    it("leaves bots that are already disabled untouched and reports them apart", async () => {
+      await uploadCustomBot("sma-bot", "1.0.0", "scheduled");
+      const running = await deployNamed("Running", scheduledConfig("1.0.0"));
+      const stopped = await deployNamed("Stopped", {
+        ...scheduledConfig("1.0.0"),
+        enabled: false,
+      });
+      await moduleRef.get(BotEventRelay).settled();
+
+      const result = await disableAll();
+
+      expect(result).toEqual(
+        Ok({
+          disabled: [{ id: running, name: "Running" }],
+          alreadyDisabled: [{ id: stopped, name: "Stopped" }],
+        }),
+      );
+      expect(nats.published.slice(2)).toEqual([
+        expect.objectContaining({
+          subject: "the0.bot-schedule.updated",
+          payload: expect.objectContaining({ id: running }),
+        }),
+      ]);
+    });
+
+    it("changes nothing and announces nothing when run again", async () => {
+      await uploadCustomBot("sma-bot", "1.0.0", "scheduled");
+      const id = await deployNamed("SMA", scheduledConfig("1.0.0"));
+      await disableAll();
+      const announced = nats.published.length;
+
+      const again = await disableAll();
+
+      expect(again).toEqual(
+        Ok({ disabled: [], alreadyDisabled: [{ id, name: "SMA" }] }),
+      );
+      expect(nats.published).toHaveLength(announced);
+    });
+
+    it("leaves other users' bots running", async () => {
+      await db().insert(usersTable).values({
+        id: "user-2",
+        username: "other",
+        email: "other@example.com",
+        passwordHash: "hash",
+      });
+      await uploadCustomBot("sma-bot", "1.0.0", "scheduled");
+      const other = mockActor({ userId: "user-2" });
+      const theirs = await deployNamed(
+        "Theirs",
+        scheduledConfig("1.0.0"),
+        other,
+      );
+      await moduleRef.get(BotEventRelay).settled();
+
+      const result = await disableAll();
+
+      expect(result).toEqual(Ok({ disabled: [], alreadyDisabled: [] }));
+      expect(await storedConfig(theirs)).not.toHaveProperty("enabled");
+      expect(nats.published).toHaveLength(1);
     });
   });
 
