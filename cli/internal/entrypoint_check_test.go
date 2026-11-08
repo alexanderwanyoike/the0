@@ -42,6 +42,17 @@ func TestCheckBotEntrypoint_PassesAnyTopLevelMain(t *testing.T) {
 		{"a star import, which may bring main", "from strategy import *\n"},
 		{"an async def rebound later", "async def run(bot_id, config):\n    pass\n\nasync def main(bot_id, config):\n    pass\n\nmain = sync_wrapper(main)\n"},
 		{"Windows line endings", "def main(bot_id, config):\r\n    pass\r\n"},
+		{"a comment inside a parenthesised import", "from strategy import (\n    helper,  # used by tests\n    main,\n)\n"},
+		{"a comment line inside a parenthesised import", "from strategy import (\n    # the entry point\n    main,\n)\n"},
+		{"a comment after an import's opening parenthesis", "from strategy import (  # noqa: F401\n    main,\n)\n"},
+		{"an import with no space before its parenthesis", "from strategy import(main)\n"},
+		{"a byte order mark", "\ufeffdef main(bot_id, config):\n    pass\n"},
+		{"a wrapped signature with an async helper named main inside", "def main(\n    bot_id: str,\n    config: dict,\n) -> None:\n    async def main() -> None:\n        pass\n\n    asyncio.run(main())\n"},
+		{"an async def under a decorator, which may make it sync", "@async_to_sync\nasync def main(bot_id, config):\n    pass\n"},
+		{"an async def replacing an earlier def", "def main(bot_id, config):\n    pass\n\nasync def main(bot_id, config):\n    pass\n"},
+		{"a sync def in one branch and an async def in the other", "if FAST:\n    def main(bot_id, config):\n        pass\nelse:\n    async def main(bot_id, config):\n        pass\n"},
+		{"tuple unpacking", "main, query = build()\n"},
+		{"an assignment after a semicolon", "import strategy; main = strategy.main\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config := pythonBot(t, tc.source)
@@ -86,7 +97,7 @@ func TestCheckBotEntrypoint_RefusesAnAsyncMain(t *testing.T) {
 		source string
 	}{
 		{"the only main is async", "import asyncio\n\nasync def main(bot_id, config):\n    pass\n"},
-		{"an async def replaces an earlier def", "def main(bot_id, config):\n    pass\n\nasync def main(bot_id, config):\n    pass\n"},
+		{"an async def beside a class with a sync main method", "class Helper:\n    def main(self):\n        pass\n\nasync def main(bot_id, config):\n    pass\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config := pythonBot(t, tc.source)
