@@ -29,7 +29,7 @@ export class DeployBotHandler
 
   async execute({ actor, bot }: DeployBot): Promise<Result<Bot, AppError>> {
     // A second deploy of the same config would run a second bot placing the
-    // same orders. Renames through UpdateBot stay unchecked (#187).
+    // same orders.
     const taken = await this.bots.hasBotNamed(actor.userId, bot.name);
     if (!taken.success) return Failure(taken.error);
     if (taken.data) {
