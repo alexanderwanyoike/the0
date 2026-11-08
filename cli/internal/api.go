@@ -324,21 +324,21 @@ type BotRef struct {
 	Name string `json:"name"`
 }
 
-// DisableAllResult lists the bots DisableAllBots disabled and those that
+// BotDisableAllResponse lists the bots DisableAllBots disabled and those that
 // were disabled already.
-type DisableAllResult struct {
+type BotDisableAllResponse struct {
 	Disabled        []BotRef `json:"disabled"`
 	AlreadyDisabled []BotRef `json:"alreadyDisabled"`
 }
 
 // DisableAllBots disables every bot instance the caller owns, all or none.
-func (c *APIClient) DisableAllBots(auth *Auth) (*DisableAllResult, error) {
+func (c *APIClient) DisableAllBots(auth *Auth) (*BotDisableAllResponse, error) {
 	body, err := c.send(auth, apiRequest{method: "POST", path: "/bot/disable-all"})
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := decode[DisableAllResult](body)
+	result, err := decode[BotDisableAllResponse](body)
 	if err != nil {
 		return nil, err
 	}
