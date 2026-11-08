@@ -2,7 +2,7 @@ import { Injectable, OnModuleInit } from "@nestjs/common";
 import { createId } from "@paralleldrive/cuid2";
 import { CommandBus } from "@/command-bus/command-bus";
 import { CommandHandler } from "@/command-bus/command";
-import { AppError } from "@/common/app-error";
+import { appError, AppError } from "@/common/app-error";
 import { Failure, Result } from "@/common/result";
 import { BotRepository } from "../bot.repository";
 import { BotEventRelay } from "../bot-event-relay";
@@ -28,6 +28,19 @@ export class DeployBotHandler
   }
 
   async execute({ actor, bot }: DeployBot): Promise<Result<Bot, AppError>> {
+    // A second deploy of the same config would run a second bot placing the
+    // same orders. Renames through UpdateBot stay unchecked (#187).
+    const taken = await this.bots.hasBotNamed(actor.userId, bot.name);
+    if (!taken.success) return Failure(taken.error);
+    if (taken.data) {
+      return Failure(
+        appError(
+          "conflict",
+          `Bot instance named "${bot.name}" already exists. Use "bot update" to modify it.`,
+        ),
+      );
+    }
+
     const resolved = await this.configs.resolve(bot.config);
     if (!resolved.success) {
       return Failure(resolved.error);
