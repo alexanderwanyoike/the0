@@ -16,6 +16,8 @@ import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { StorageService } from "@/custom-bot/storage.service";
 import { botsTable } from "@/database/schema/bots";
 import { customBotsTable } from "@/database/schema/custom-bots";
+import { botEventOutboxTable } from "@/database/schema/bot-event-outbox";
+import { usersTable } from "@/database/schema/users";
 import { BOT_COMMAND_PROVIDERS } from "@/test/bot-command-providers";
 import { createMockLogger } from "@/test/mock-logger";
 import { TEST_OWNER_ID, useTestDatabase } from "@/test/test-database";
@@ -166,6 +168,61 @@ describe("/bot responses", () => {
       expect(res.body.message).toEqual(
         expect.arrayContaining(["name must be a string"]),
       );
+    });
+  });
+
+  describe("refuse a second deploy of a name the user already has", () => {
+    const deployNamed = (name: string) =>
+      api().post("/bot").set(asOwner).send({ name, config: botConfig() });
+
+    it("answers 409 and creates no bot and no event", async () => {
+      await deployedBot();
+      const outboxBefore = await db().select().from(botEventOutboxTable);
+
+      const res = await deployNamed("SMA");
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({
+        statusCode: 409,
+        message:
+          'Bot instance named "SMA" already exists. Use "bot update" to modify it.',
+        error: "Conflict",
+      });
+      expect(await db().select().from(botsTable)).toHaveLength(1);
+      expect(await db().select().from(botEventOutboxTable)).toEqual(
+        outboxBefore,
+      );
+    });
+
+    it("deploys a name that differs only in case", async () => {
+      await deployedBot();
+
+      const res = await deployNamed("sma");
+
+      expect(res.status).toBe(201);
+      expect(await db().select().from(botsTable)).toHaveLength(2);
+    });
+
+    it("deploys a name another user already has", async () => {
+      await db().insert(usersTable).values({
+        id: "user-2",
+        username: "other",
+        email: "other@example.com",
+        passwordHash: "hash",
+      });
+      apiKeyService.validateApiKey.mockResolvedValueOnce(
+        Ok({ id: "key-2", userId: "user-2", name: "cli" }),
+      );
+      await api()
+        .post("/bot")
+        .set({ "x-api-key": "the0_other" })
+        .send({ name: "SMA", config: botConfig() })
+        .expect(201);
+
+      const res = await deployNamed("SMA");
+
+      expect(res.status).toBe(201);
+      expect(await db().select().from(botsTable)).toHaveLength(2);
     });
   });
 
