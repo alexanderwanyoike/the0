@@ -46,13 +46,15 @@ const (
 )
 
 var (
-	mainMention  = regexp.MustCompile(`(?P<definer>(?:async\s+)?def\s+|class\s+)?\bmain\b(?P<call>\s*\()?`)
+	mainMention  = regexp.MustCompile(`(?P<definer>(?:async[\s\\]+)?def[\s\\]+|class[\s\\]+)?\bmain\b(?P<call>\s*\()?`)
 	definerGroup = mainMention.SubexpIndex("definer")
 	callGroup    = mainMention.SubexpIndex("call")
-	starImport   = regexp.MustCompile(`(?m)^\s*from\s+\S+\s+import\s*\(?\s*\*`)
+	// Anywhere, so one after a semicolon or a backslash counts too.
+	starImport = regexp.MustCompile(`\bimport[\s\\]*\(?\s*\*`)
 )
 
 func mainBindingOf(source string) mainBinding {
+	source = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(source)
 	if starImport.MatchString(source) {
 		return usableMain
 	}
@@ -76,16 +78,24 @@ func mainBindingOf(source string) mainBinding {
 	return found
 }
 
-// decorated reports whether the line before the one at offset, skipping
-// blank and comment lines, is a decorator, which may make an async def sync.
+// decorated reports whether a decorator sits above the def at offset,
+// since one may make an async def sync. Blank and comment lines, lines
+// indented deeper than the def and lines opening with a closing bracket are
+// the rest of a decorator split over lines, so they are skipped.
 func decorated(source string, offset int) bool {
 	lines := strings.Split(source[:offset], "\n")
+	defIndent := indentOf(lines[len(lines)-1])
 	for i := len(lines) - 2; i >= 0; i-- {
 		line := strings.TrimSpace(lines[i])
-		if line == "" || strings.HasPrefix(line, "#") {
+		if line == "" || strings.HasPrefix(line, "#") ||
+			indentOf(lines[i]) > defIndent || strings.ContainsAny(line[:1], ")]}") {
 			continue
 		}
 		return strings.HasPrefix(line, "@")
 	}
 	return false
+}
+
+func indentOf(line string) int {
+	return len(line) - len(strings.TrimLeft(line, " \t"))
 }
