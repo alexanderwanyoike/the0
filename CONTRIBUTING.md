@@ -175,33 +175,7 @@ We welcome AI-assisted development:
 
 ## Coding Conventions
 
-### General
-
-- Follow existing code style in each service
-- Use meaningful variable and function names
-- Keep functions small and focused
-- Avoid over-engineering - simple solutions preferred
-
-### TypeScript/JavaScript
-
-- Use TypeScript for type safety
-- Follow ESLint configuration
-- Run `yarn lint` before committing
-- Use functional components and hooks in React
-
-### Go
-
-- Follow standard Go formatting (`gofmt`)
-- Run `go vet` before committing
-- Use meaningful package names
-- Document exported functions
-
-### Python
-
-- Follow PEP 8 style guide
-- Use type hints where applicable
-- Run `black` for formatting
-- Use virtual environments
+[CODING_STANDARDS.md](CODING_STANDARDS.md) is the source of truth for how code is written in each service, how commits and pull requests are shaped, and the test-first workflow. Reviews check changes against it.
 
 ## Testing Requirements
 
