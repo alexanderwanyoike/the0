@@ -77,7 +77,7 @@ func TestBotCommands_ReturnTheServersReason(t *testing.T) {
 	})
 }
 
-func TestBotDisableAll_StopsEveryBotInOneRequest(t *testing.T) {
+func TestBotDisableAll_ReportsWhatItDisabled(t *testing.T) {
 	t.Run("lists the bots it disabled and counts the ones already disabled", func(t *testing.T) {
 		out, _ := captureLogger(t)
 		calls := fakeAPI(t, "/bot/disable-all", 200,
