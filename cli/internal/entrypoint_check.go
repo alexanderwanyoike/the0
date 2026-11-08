@@ -89,16 +89,24 @@ func checkEntrypointWith(runner BuildRunner, entrypoint string) error {
 	return entrypointError(entrypoint, strings.TrimSpace(string(verdict)))
 }
 
+// The verdicts entrypoint_check.py writes.
+const (
+	verdictOK      = "ok"
+	verdictMissing = "missing"
+	verdictAsync   = "async"
+	verdictSyntax  = "syntax "
+)
+
 func entrypointError(entrypoint, verdict string) error {
 	switch {
-	case verdict == "ok":
+	case verdict == verdictOK:
 		return nil
-	case verdict == "missing":
+	case verdict == verdictMissing:
 		return fmt.Errorf("%s has no main(bot_id, config) function at module level, which the runtime calls to start your bot. Define one, or import one as main", entrypoint)
-	case verdict == "async":
+	case verdict == verdictAsync:
 		return fmt.Errorf("%s defines main with async def, but the runtime calls main(bot_id, config) without awaiting it, so the bot would exit without running. Use a regular def main(bot_id, config) that calls asyncio.run(...)", entrypoint)
-	case strings.HasPrefix(verdict, "syntax "):
-		line, message, _ := strings.Cut(strings.TrimPrefix(verdict, "syntax "), " ")
+	case strings.HasPrefix(verdict, verdictSyntax):
+		line, message, _ := strings.Cut(strings.TrimPrefix(verdict, verdictSyntax), " ")
 		return fmt.Errorf("%s does not parse as Python 3.11 (line %s: %s), so the runtime could not load it", entrypoint, line, message)
 	default:
 		return skipEntrypointCheck("the checker said %q", verdict)
