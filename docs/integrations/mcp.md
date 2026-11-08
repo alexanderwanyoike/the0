@@ -126,7 +126,7 @@ the0's MCP server exposes 15 tools organized into six categories:
 | `bot_deploy` | Deploy a new bot instance | `config` (name, type, version, settings) |
 | `bot_update` | Update an existing bot instance | `bot_id`, `config` |
 | `bot_delete` | Delete a bot instance | `bot_id` |
-| `bot_disable_all` | Disable every bot instance you own in one step. Sends the stop to the runtime; does not close open positions with brokers | None |
+| `bot_disable_all` | Disable every bot instance you own in one step, all or none. Sends the stop to the runtime, which stops running bots on its next check (every 30 seconds by default); a scheduled run in progress is stopped on Kubernetes and finishes on Docker. Does not close open positions with brokers. Re-enable a bot with `bot_update` and its full config with `enabled: true` | None |
 
 ### Logs
 
