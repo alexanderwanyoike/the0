@@ -22,6 +22,7 @@ export const MCP_TOOL_NAMES = {
   BOT_DEPLOY: "bot_deploy",
   BOT_UPDATE: "bot_update",
   BOT_DELETE: "bot_delete",
+  BOT_DISABLE_ALL: "bot_disable_all",
 
   // Logs
   LOGS_GET: "logs_get",
@@ -127,6 +128,16 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
         },
       },
       required: ["bot_id"],
+    },
+  },
+  {
+    name: MCP_TOOL_NAMES.BOT_DISABLE_ALL,
+    description:
+      "Disable every bot instance you own in one step, to stop all trading. Either every enabled bot is disabled or none is. Success means the stop was sent, not that bots have exited. Running bots stop on the runtime's next check (every 30 seconds by default), and a scheduled run already in progress is stopped on Kubernetes but finishes on Docker. Open positions with brokers are not closed. Re-enable a bot with bot_update, sending its full config with enabled set to true.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
     },
   },
 

@@ -370,6 +370,25 @@ describe("/bot responses", () => {
       });
     });
 
+    it("answers disabling every bot, and disables none", async () => {
+      const id = await deployedBot();
+      jest.spyOn(db(), "transaction").mockRejectedValue(failingDatabase());
+
+      const res = await api().post("/bot/disable-all").set(asOwner);
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({
+        statusCode: 500,
+        message: "Failed to write to the database",
+        error: "Internal Server Error",
+      });
+      const [bot] = await db()
+        .select({ config: botsTable.config })
+        .from(botsTable)
+        .where(eq(botsTable.id, id));
+      expect(bot.config).not.toHaveProperty("enabled");
+    });
+
     it("answers a deploy", async () => {
       jest.spyOn(db(), "transaction").mockRejectedValue(failingDatabase());
 
@@ -410,6 +429,20 @@ describe("/bot responses", () => {
         },
       });
       expect(await db().select().from(botsTable)).toEqual([]);
+    });
+
+    it("disables every bot the user owns and names the ones it disabled", async () => {
+      const id = await deployedBot();
+
+      const res = await api().post("/bot/disable-all").set(asOwner);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        disabled: [{ id, name: "SMA" }],
+        alreadyDisabled: [],
+      });
+      const read = await api().get(`/bot/${id}`).set(asOwner);
+      expect(read.body.config.enabled).toBe(false);
     });
   });
 });

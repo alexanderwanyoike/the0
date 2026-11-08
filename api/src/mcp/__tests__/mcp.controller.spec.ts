@@ -143,6 +143,7 @@ describe("McpController", () => {
           bot_deploy: ["config"],
           bot_update: ["bot_id", "config"],
           bot_delete: ["bot_id"],
+          bot_disable_all: [],
           logs_get: ["bot_id"],
           logs_summary: ["bot_id"],
           bot_state_list: ["bot_id"],

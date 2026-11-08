@@ -11,6 +11,7 @@ import { BotEventFactory } from "./commands/bot-event-factory";
 import { DeployBotHandler } from "./commands/deploy-bot.handler";
 import { UpdateBotHandler } from "./commands/update-bot.handler";
 import { DeleteBotHandler } from "./commands/delete-bot.handler";
+import { DisableAllBotsHandler } from "./commands/disable-all-bots.handler";
 import { ConfigModule } from "@nestjs/config";
 import { CustomBotModule } from "@/custom-bot/custom-bot.module";
 import { ApiKeyModule } from "@/api-key/api-key.module";
@@ -42,6 +43,7 @@ import { CommandBusModule } from "@/command-bus/command-bus.module";
     DeployBotHandler,
     UpdateBotHandler,
     DeleteBotHandler,
+    DisableAllBotsHandler,
   ],
   exports: [BotService],
 })
