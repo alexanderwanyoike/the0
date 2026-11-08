@@ -98,7 +98,9 @@ export class BotRepository extends RoleRepository<Bot> {
     userId: string,
     eventsFor: (disabled: Bot) => Result<BotEvent[], AppError>,
   ): Promise<Result<DisableAllOutcome, AppError>> {
-    let refused: AppError | null = null;
+    // An object, not a let: TypeScript would narrow a let assigned only
+    // inside the transaction callback to null in the catch below.
+    const refusal: { error?: AppError } = {};
     try {
       const outcome = await this.db.transaction(async (tx: Executor) => {
         const rows = (await tx
@@ -125,7 +127,7 @@ export class BotRepository extends RoleRepository<Bot> {
         for (const bot of disabled) {
           const built = eventsFor(bot);
           if (!built.success) {
-            refused = built.error;
+            refusal.error = built.error;
             // Throwing is how a drizzle transaction rolls back.
             throw new Error(`Events refused for bot ${bot.id}`);
           }
@@ -140,7 +142,7 @@ export class BotRepository extends RoleRepository<Bot> {
       });
       return Ok(outcome);
     } catch (error: unknown) {
-      if (refused) return Failure(refused);
+      if (refusal.error) return Failure(refusal.error);
       logger.error({ err: error }, "Error disabling bots");
       return Failure(WRITE_FAILED);
     }
