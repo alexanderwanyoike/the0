@@ -100,6 +100,7 @@ func TestCheckBotEntrypoint_PassesAnyModuleLevelMain(t *testing.T) {
 		{"a for target", "for main in [run]:\n    pass\n"},
 		{"one-line compound imports", "if FAST: from fast import main\nelse: from slow import main\n"},
 		{"a def inside a top-level try after a multi-line string", "try:\n    import uvloop\n    HELP = \"\"\"\n    usage (fast\n    \"\"\"\n    def main(bot_id, config):\n        pass\nexcept ImportError:\n    pass\n"},
+		{"a main in the else of the __main__ guard, which runs on import", "if __name__ == \"__main__\":\n    pass\nelse:\n    def main(bot_id, config):\n        pass\n"},
 		{"a global main assigned in a function", "def setup():\n    global main\n    main = build()\n\nsetup()\n"},
 		{"a byte order mark", "\ufeffdef main(bot_id, config):\n    pass\n"},
 		{"Windows line endings", "def main(bot_id, config):\r\n    pass\r\n"},
@@ -124,6 +125,7 @@ func TestCheckBotEntrypoint_RefusesAnEntrypointWithoutModuleLevelMain(t *testing
 		{"a def whose name starts with main", "def main_loop(bot_id, config):\n    pass\n"},
 		{"an import whose name starts with main", "from strategy import mainly\n"},
 		{"a main that is only called, as a renamed bot's __main__ guard does", "def run(bot_id, config):\n    pass\n\nif __name__ == \"__main__\":\n    main(\"local\", {})\n"},
+		{"a main defined only under the __main__ guard, which the runtime never runs", "if __name__ == \"__main__\":\n    def main(bot_id, config):\n        pass\n"},
 		{"an annotation without a value", "from typing import Callable\n\nmain: Callable\n"},
 		{"an empty file", ""},
 	} {
@@ -178,12 +180,32 @@ func TestCheckBotEntrypoint_PassesAnAsyncMainThatMayBeMadeSync(t *testing.T) {
 	}
 }
 
-func TestCheckBotEntrypoint_RefusesAnEntrypointPythonCannotParse(t *testing.T) {
-	err := checkSource(t, "def main(bot_id, config):\n    pass\n\ndef run(:\n    pass\n")
+func TestCheckBotEntrypoint_RefusesAnEntrypointPythonCannotLoad(t *testing.T) {
+	t.Run("a syntax error", func(t *testing.T) {
+		err := checkSource(t, "def main(bot_id, config):\n    pass\n\ndef run(:\n    pass\n")
 
-	if err == nil || !strings.HasPrefix(err.Error(), "main.py does not parse as Python 3.11 (line 4: ") {
-		t.Errorf("error = %v, want the syntax error and its line", err)
-	}
+		if err == nil || !strings.HasPrefix(err.Error(), "main.py does not parse as Python 3.11 (line 4: ") {
+			t.Errorf("error = %v, want the syntax error and its line", err)
+		}
+	})
+
+	t.Run("a top-level return, which only the compiler refuses", func(t *testing.T) {
+		err := checkSource(t, "def main(bot_id, config):\n    pass\n\nreturn 1\n")
+
+		want := "main.py does not parse as Python 3.11 (line 4: 'return' outside function), so the runtime could not load it"
+		if err == nil || err.Error() != want {
+			t.Errorf("error = %v, want %q", err, want)
+		}
+	})
+
+	t.Run("a null byte, which has no line", func(t *testing.T) {
+		err := checkSource(t, "def main(bot_id, config):\n    pass\n\x00\n")
+
+		if err == nil || !strings.HasPrefix(err.Error(), "main.py does not parse as Python 3.11 (") ||
+			strings.Contains(err.Error(), "line 0") {
+			t.Errorf("error = %v, want the syntax error without a line number", err)
+		}
+	})
 }
 
 func TestCheckBotEntrypoint_SkipsWhatItCannotCheck(t *testing.T) {
@@ -286,8 +308,16 @@ func TestCheckBotEntrypoint_RunsTheCheckerInThePythonImage(t *testing.T) {
 		t.Errorf("step = %+v, want python on /bot/src/bot.py in %s", step, pythonImage)
 	}
 	wd, _ := os.Getwd()
-	if !strings.Contains(strings.Join(step.Binds, " "), wd+":/bot:ro") {
-		t.Errorf("binds = %v, want the project mounted read-only at /bot", step.Binds)
+	if len(step.Binds) != 2 || step.Binds[0] != wd+":/bot:ro" {
+		t.Fatalf("binds = %v, want the project mounted read-only at /bot first", step.Binds)
+	}
+	// Docker Desktop and Colima share the project, but not always the
+	// system temp directory, so the checker's own files live in the project.
+	if work := strings.TrimSuffix(step.Binds[1], ":/check"); filepath.Dir(work) != wd {
+		t.Errorf("checker files mounted from %s, want a directory inside the project", work)
+	}
+	if leftovers, _ := filepath.Glob(".the0-entrypoint-check-*"); len(leftovers) != 0 {
+		t.Errorf("left %v in the project, want it cleaned up", leftovers)
 	}
 }
 
