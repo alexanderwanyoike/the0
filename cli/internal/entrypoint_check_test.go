@@ -48,6 +48,9 @@ func TestCheckBotEntrypoint_PassesAnyWayOfBindingMain(t *testing.T) {
 		{"a def inside a top-level try after a multi-line string", "try:\n    import uvloop\n    HELP = \"\"\"\n    usage (fast\n    \"\"\"\n    def main(bot_id, config):\n        pass\nexcept ImportError:\n    pass\n"},
 		{"a with target", "with ctx() as main:\n    pass\n"},
 		{"a star import, which may bring main", "from strategy import *\n"},
+		{"a star import after a semicolon", "import os; from helpers import *\n\nmain(\"local\", {})\n"},
+		{"a star import split by a backslash", "from helpers \\\n    import *\n\nmain(\"local\", {})\n"},
+		{"a def split from its name by a backslash", "def \\\nmain(bot_id, config):\n    pass\n"},
 		{"a byte order mark", "\ufeffdef main(bot_id, config):\n    pass\n"},
 		{"Windows line endings", "def main(bot_id, config):\r\n    pass\r\n"},
 	} {
@@ -133,6 +136,9 @@ func TestCheckBotEntrypoint_PassesAnAsyncMainThatMayBeMadeSync(t *testing.T) {
 		source string
 	}{
 		{"a decorated async def", "@async_to_sync\nasync def main(bot_id, config):\n    pass\n"},
+		{"an async def under a multi-line decorator call", "@run_sync(\n    timeout=30,\n)\nasync def main(bot_id, config):\n    pass\n"},
+		{"an async def under a backslash-continued decorator", "@run_sync \\\n    .with_timeout(30)\nasync def main(bot_id, config):\n    pass\n"},
+		{"a decorated async def with carriage-return line endings", "@run_sync\rasync def main(bot_id, config):\r    pass\r"},
 		{"an async def rebound later", "async def main(bot_id, config):\n    pass\n\nmain = sync_wrapper(main)\n"},
 		{"an async def replacing an earlier def", "def main(bot_id, config):\n    pass\n\nasync def main(bot_id, config):\n    pass\n"},
 		{"a sync def in one branch and an async def in the other", "if FAST:\n    def main(bot_id, config):\n        pass\nelse:\n    async def main(bot_id, config):\n        pass\n"},
