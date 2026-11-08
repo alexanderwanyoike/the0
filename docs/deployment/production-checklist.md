@@ -34,11 +34,11 @@ Use this checklist before exposing a the0 deployment to users or real broker cre
 
 Login is the one place an unauthenticated visitor can try a password, and the0 does not rate-limit it. Keep it off the open internet, or rate-limit it in front of the0.
 
-### Prefer a private network
+### Prefer A Private Network
 
 Run the0 on a private network such as Tailscale or WireGuard, and don't publish the frontend or API hosts at all. Operators, the CLI and agents reach the instance over the private network, and nobody on the internet can try a password. If you also serve the docs publicly, give the docs host its own ingress rule and leave the frontend and API hosts off it.
 
-### If the instance must be public
+### If The Instance Must Be Public
 
 Rate-limit both login paths, and only those paths:
 
@@ -73,7 +73,7 @@ location = /auth/login {
 
 Each client IP gets five quick attempts across both paths, then one every 12 seconds, and nginx answers the rest with 429. If nginx sits behind a load balancer or CDN, set `set_real_ip_from` and `real_ip_header` so `$binary_remote_addr` is the visitor's address rather than the balancer's.
 
-#### Kubernetes with Traefik
+#### Kubernetes With Traefik
 
 The chart puts every host on one Ingress, so a limit on that Ingress would apply to every page. Add a route for the two login paths instead. Traefik picks it over the chart's `/` rule because its match is more specific.
 
@@ -122,7 +122,7 @@ Service names follow the chart's full name. With the release name `the0` they ar
 
 Add a rate limiting rule with the expression `(http.host eq "the0.example.com" and http.request.uri.path eq "/api/auth/login") or (http.host eq "api.the0.example.com" and http.request.uri.path eq "/auth/login")`.
 
-### API keys and MCP
+### API Keys And MCP
 
 API keys are 32 random bytes, so they can't be guessed, but a key can do everything its user can with bots, custom bots, logs and queries, over the REST API and the MCP endpoint. On a public instance, treat keys like passwords. Keep them out of shared configs and repositories, and when one may have leaked, delete it in the dashboard's API settings and create a new one. [Secret Rotation](./secret-rotation) covers the platform's own secrets.
 
