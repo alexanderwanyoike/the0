@@ -27,7 +27,7 @@ func CheckBotEntrypoint(config *BotConfig) error {
 	switch lastMainBinding(string(source)) {
 	case noMain:
 		return fmt.Errorf("%s has no top-level main(bot_id, config) function, which the runtime calls to start your bot. Define one, or import one as main", path)
-	case asyncMain:
+	case ausableMain:
 		return fmt.Errorf("%s defines main with async def, but the runtime calls main(bot_id, config) without awaiting it, so the bot would exit without running. Use a regular def main(bot_id, config) that calls asyncio.run(...)", path)
 	default:
 		return nil
@@ -38,8 +38,8 @@ type mainBinding int
 
 const (
 	noMain mainBinding = iota
-	syncMain
-	asyncMain
+	usableMain
+	ausableMain
 )
 
 var (
@@ -100,35 +100,46 @@ func joinContinuation(lines []string) (string, int) {
 func mainBoundBy(statement string) mainBinding {
 	if match := defMain.FindStringSubmatch(statement); match != nil {
 		if match[1] != "" {
-			return asyncMain
+			return ausableMain
 		}
-		return syncMain
+		return usableMain
 	}
 	if classMain.MatchString(statement) || assignMain.MatchString(statement) {
-		return syncMain
+		return usableMain
 	}
 	if loc := fromImport.FindStringIndex(statement); loc != nil {
-		return importBindsMain(statement[loc[1]:], false)
+		return bindingFor(importedNames(statement[loc[1]:], func(name string) string { return name }))
 	}
 	if loc := plainImport.FindStringIndex(statement); loc != nil {
-		return importBindsMain(statement[loc[1]:], true)
+		// A plain import binds the first part of a dotted name.
+		return bindingFor(importedNames(statement[loc[1]:], func(name string) string {
+			return strings.SplitN(name, ".", 2)[0]
+		}))
 	}
 	return noMain
 }
 
-// importBindsMain reads the names an import binds. A star import may bind
-// main, so it counts. A plain import binds the first part of a dotted name.
-func importBindsMain(names string, plain bool) mainBinding {
+// importedNames returns the names an import binds: the alias where there is
+// one, otherwise unaliased(name).
+func importedNames(names string, unaliased func(string) string) []string {
 	names = strings.Trim(strings.SplitN(names, "#", 2)[0], " ()")
+	var bound []string
 	for _, name := range strings.Split(names, ",") {
-		name = strings.Trim(name, " ()")
-		parts := importAliasSep.Split(name, 2)
-		bound := parts[len(parts)-1]
-		if len(parts) == 1 && plain {
-			bound = strings.SplitN(bound, ".", 2)[0]
+		parts := importAliasSep.Split(strings.Trim(name, " ()"), 2)
+		if len(parts) == 2 {
+			bound = append(bound, parts[1])
+		} else {
+			bound = append(bound, unaliased(parts[0]))
 		}
-		if bound == "main" || bound == "*" {
-			return syncMain
+	}
+	return bound
+}
+
+// bindingFor counts a star import, which may bring main in, as binding it.
+func bindingFor(names []string) mainBinding {
+	for _, name := range names {
+		if name == "main" || name == "*" {
+			return usableMain
 		}
 	}
 	return noMain
