@@ -173,6 +173,12 @@ This covers docs, CLI output, error messages and UI text.
 - A command that can't be undone asks for confirmation (`Type 'yes' to confirm`) and takes `--yes/-y` to skip it. A reversible command doesn't prompt. Agents drive the CLI non-interactively, so a command must never block on input when `--yes` is given or when it doesn't prompt at all.
 - CLI tests use the standard library (`t.Fatalf`, `t.Errorf`) and `httptest` servers, not testify.
 
+## Python (SDK and wrapper)
+
+- Follow PEP 8. No formatter is configured, so match the surrounding file.
+- The SDK (`sdk/python/the0/`) has a module docstring with a usage example and type hints on every public function. It supports Python 3.9, so use `typing` (`Optional`, `List`) rather than newer syntax.
+- SDK tests use `unittest` under `sdk/python/tests/`. The wrapper is tested from Go (`runtime/internal/execute/wrapper_test.go`).
+
 ## Configuration and deployment
 
 A new api or runtime setting touches every place it's read or documented, in the same PR:
