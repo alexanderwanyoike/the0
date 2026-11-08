@@ -33,8 +33,8 @@ export class DisableAllBotsHandler
     const owned = await this.bots.findAll(actor.userId);
     if (!owned.success) return Failure(owned.error);
 
-    // Loaded before the transaction: the update event carries each bot's
-    // Custom bot, and the events are built while its rows are locked.
+    // Loaded before the transaction, because the update event carries each
+    // bot's Custom bot and the events are built while its rows are locked.
     const customBots = new Map<string, CustomBot>();
     for (const id of new Set(owned.data.map((bot) => bot.customBotId))) {
       const customBot = await this.customBotService.findVersionById(id);

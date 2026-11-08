@@ -90,7 +90,7 @@ export class BotRepository extends RoleRepository<Bot> {
 
   /**
    * Disables every enabled bot the user owns and stores their events, all
-   * or none: a bot whose events are refused rolls every change back and
+   * or none. A bot whose events are refused rolls every change back and
    * returns the refusal. The rows are locked as they are read, so a
    * concurrent update is not overwritten with the config read here.
    */
@@ -98,8 +98,8 @@ export class BotRepository extends RoleRepository<Bot> {
     userId: string,
     eventsFor: (disabled: Bot) => Result<BotEvent[], AppError>,
   ): Promise<Result<DisableAllOutcome, AppError>> {
-    // An object, not a let: TypeScript would narrow a let assigned only
-    // inside the transaction callback to null in the catch below.
+    // An object, not a let, because TypeScript would narrow a let assigned
+    // only inside the transaction callback to null in the catch below.
     const refusal: { error?: AppError } = {};
     try {
       const outcome = await this.db.transaction(async (tx: Executor) => {
