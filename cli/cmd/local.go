@@ -55,7 +55,6 @@ Building from source:
 // --- init ---
 
 func newLocalInitCmd() *cobra.Command {
-	var source string
 	var adminEmail string
 	var adminPassword string
 
@@ -75,7 +74,10 @@ This must be run before 'the0 local start'.
 	  the0 local init --source --email you@example.com --password testuse123
 	  the0 local init --source /path/to/the0 --email you@example.com --password testuse123`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			useSource := cmd.Flags().Changed("source")
+			repoPath, useSource, err := initRepoPath(cmd, args)
+			if err != nil {
+				return err
+			}
 
 			// Check Docker prerequisites
 			logger.StartSpinner("Checking Docker prerequisites")
@@ -85,18 +87,7 @@ This must be run before 'the0 local start'.
 			}
 			logger.StopSpinnerWithSuccess("Docker is ready")
 
-			repoPath := ""
 			if useSource {
-				// Source mode: resolve repo path
-				repoPath = source
-				if repoPath == "" {
-					cwd, err := os.Getwd()
-					if err != nil {
-						return fmt.Errorf("failed to get current directory: %w", err)
-					}
-					repoPath = cwd
-				}
-
 				logger.StartSpinner("Validating repository path")
 				if err := local.ValidateRepoPath(repoPath); err != nil {
 					logger.StopSpinnerWithError("Invalid repository path")
@@ -151,12 +142,30 @@ This must be run before 'the0 local start'.
 		},
 	}
 
-	cmd.Flags().StringVar(&source, "source", "", "Build from local source code instead of using prebuilt images (defaults to current directory)")
+	cmd.Flags().String("source", "", "Build from local source code instead of using prebuilt images (defaults to current directory)")
 	cmd.Flags().StringVar(&adminEmail, "email", "", "Root admin email")
 	cmd.Flags().StringVar(&adminPassword, "password", "", "Root admin password")
 	cmd.Flag("source").NoOptDefVal = "."
 
 	return cmd
+}
+
+// initRepoPath returns the repository `local init` builds from and whether
+// --source was given at all; without it init uses prebuilt images.
+func initRepoPath(cmd *cobra.Command, args []string) (string, bool, error) {
+	flag := cmd.Flag("source")
+	if !flag.Changed {
+		return "", false, nil
+	}
+	repoPath := flag.Value.String()
+	if repoPath == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", false, fmt.Errorf("failed to get current directory: %w", err)
+		}
+		repoPath = cwd
+	}
+	return repoPath, true, nil
 }
 
 // --- start ---
