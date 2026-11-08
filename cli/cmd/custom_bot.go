@@ -30,6 +30,10 @@ func NewCustomBotCmd() *cobra.Command {
 	return cmd
 }
 
+// checkBotEntrypoint is a variable so tests can prove the check runs before
+// vendoring without Docker.
+var checkBotEntrypoint = internal.CheckBotEntrypoint
+
 func NewDeployCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "deploy",
@@ -61,7 +65,7 @@ func deployBot(cmd *cobra.Command, args []string) error {
 		logger.Warning("%s", warning)
 	}
 
-	if err := internal.CheckBotEntrypoint(config); err != nil {
+	if err := checkBotEntrypoint(config); err != nil {
 		logger.StopSpinnerWithError("Entrypoint check failed")
 		return err
 	}

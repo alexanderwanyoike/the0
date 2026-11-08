@@ -1,101 +1,104 @@
 package internal
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
-	"regexp"
+	"path"
+	"path/filepath"
 	"strings"
+
+	"the0/internal/logger"
 )
 
-// CheckBotEntrypoint refuses a Python bot entrypoint that the runtime
-// wrapper could not start. The wrapper reads the module's main attribute
-// and calls main(bot_id, config) in a thread without awaiting it.
+// entrypointChecker parses a Python entrypoint with Python's own parser and
+// writes a verdict on how it binds main.
 //
-// It reads words, not Python, because a parser that misreads a valid bot
-// would block its deploy with no way around it. An entrypoint fails only
-// when nothing in it could bind main, because every mention of main is a
-// call or an undecorated async def. Scope, strings and comments are not
-// judged, so some broken entrypoints pass.
+//go:embed entrypoint_check.py
+var entrypointChecker string
+
+// CheckBotEntrypoint refuses a Python bot entrypoint that the runtime
+// wrapper could not start: the wrapper reads the module's main attribute
+// and calls main(bot_id, config) in a thread without awaiting it. The file
+// is parsed, never run, in the Python image the bot runs in. When Docker is
+// not available the check is skipped, since it must never block a deploy
+// it cannot judge.
 func CheckBotEntrypoint(config *BotConfig) error {
 	if !strings.HasPrefix(config.Runtime, "python") {
 		return nil
 	}
-	path := config.Entrypoints.Bot
-	source, err := os.ReadFile(path)
-	if err != nil {
+	entrypoint := config.Entrypoints.Bot
+	if _, err := os.Stat(entrypoint); err != nil {
 		// A missing entrypoint is reported by the build and upload steps.
 		return nil
 	}
+	if err := CheckDockerInstalled(); err != nil {
+		logger.Verbose("Skipping the entrypoint check: %v", err)
+		return nil
+	}
+	runner, err := NewDockerRunner()
+	if err != nil {
+		logger.Verbose("Skipping the entrypoint check: %v", err)
+		return nil
+	}
+	defer runner.Close()
+	if err := runner.Ping(); err != nil {
+		logger.Verbose("Skipping the entrypoint check: %v", err)
+		return nil
+	}
+	return checkEntrypointWith(runner, entrypoint)
+}
 
-	switch mainBindingOf(string(source)) {
-	case noMain:
-		return fmt.Errorf("%s has no main(bot_id, config) function, which the runtime calls to start your bot. Define one, or import one as main", path)
-	case asyncMain:
-		return fmt.Errorf("%s defines main with async def, but the runtime calls main(bot_id, config) without awaiting it, so the bot would exit without running. Use a regular def main(bot_id, config) that calls asyncio.run(...)", path)
+// checkEntrypointWith runs the checker on entrypoint, relative to the
+// working directory, and turns its verdict into an error. A checker that
+// cannot run or leaves no verdict skips the check.
+func checkEntrypointWith(runner BuildRunner, entrypoint string) error {
+	project, err := filepath.Abs(".")
+	if err != nil {
+		return nil
+	}
+	work, err := os.MkdirTemp("", "the0-entrypoint-check-")
+	if err != nil {
+		return nil
+	}
+	defer os.RemoveAll(work)
+	if err := os.WriteFile(filepath.Join(work, "check.py"), []byte(entrypointChecker), 0o644); err != nil {
+		return nil
+	}
+
+	if err := runner.EnsureImage(pythonImage); err != nil {
+		logger.Verbose("Skipping the entrypoint check: %v", err)
+		return nil
+	}
+	err = runner.Run(BuildStep{
+		NamePrefix:      "entrypoint-check-",
+		Image:           pythonImage,
+		Cmd:             []string{"python", "/check/check.py", path.Join("/bot", filepath.ToSlash(entrypoint)), "/check/verdict"},
+		Binds:           []string{project + ":/bot:ro", work + ":/check"},
+		FailureHeadline: "Entrypoint check",
+		FailedCommand:   "python check.py",
+	})
+	if err != nil {
+		logger.Verbose("Skipping the entrypoint check: %v", err)
+		return nil
+	}
+	verdict, err := os.ReadFile(filepath.Join(work, "verdict"))
+	if err != nil {
+		return nil
+	}
+	return entrypointError(entrypoint, strings.TrimSpace(string(verdict)))
+}
+
+func entrypointError(entrypoint, verdict string) error {
+	switch {
+	case verdict == "missing":
+		return fmt.Errorf("%s has no main(bot_id, config) function at module level, which the runtime calls to start your bot. Define one, or import one as main", entrypoint)
+	case verdict == "async":
+		return fmt.Errorf("%s defines main with async def, but the runtime calls main(bot_id, config) without awaiting it, so the bot would exit without running. Use a regular def main(bot_id, config) that calls asyncio.run(...)", entrypoint)
+	case strings.HasPrefix(verdict, "syntax "):
+		line, message, _ := strings.Cut(strings.TrimPrefix(verdict, "syntax "), " ")
+		return fmt.Errorf("%s does not parse as Python 3.11 (line %s: %s), so the runtime could not load it", entrypoint, line, message)
 	default:
 		return nil
 	}
-}
-
-type mainBinding int
-
-const (
-	noMain mainBinding = iota
-	usableMain
-	asyncMain
-)
-
-var (
-	mainMention  = regexp.MustCompile(`(?P<definer>(?:async[\s\\]+)?def[\s\\]+|class[\s\\]+)?\bmain\b(?P<call>\s*\()?`)
-	definerGroup = mainMention.SubexpIndex("definer")
-	callGroup    = mainMention.SubexpIndex("call")
-	// Anywhere, so one after a semicolon or a backslash counts too.
-	starImport = regexp.MustCompile(`\bimport[\s\\]*\(?\s*\*`)
-)
-
-func mainBindingOf(source string) mainBinding {
-	source = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(source)
-	if starImport.MatchString(source) {
-		return usableMain
-	}
-	mentions := mainMention.FindAllStringSubmatchIndex(source, -1)
-	found := noMain
-	for _, m := range mentions {
-		definer := ""
-		if start := m[2*definerGroup]; start >= 0 {
-			definer = source[start:m[2*definerGroup+1]]
-		}
-		switch {
-		case definer == "" && m[2*callGroup] >= 0:
-			// asyncio.run(main()) runs main but binds nothing.
-			continue
-		case strings.HasPrefix(definer, "async") && !decorated(source, m[0]):
-			found = asyncMain
-		default:
-			return usableMain
-		}
-	}
-	return found
-}
-
-// decorated reports whether a decorator sits above the def at offset,
-// since one may make an async def sync. Blank and comment lines, lines
-// indented deeper than the def and lines opening with a closing bracket are
-// the rest of a decorator split over lines, so they are skipped.
-func decorated(source string, offset int) bool {
-	lines := strings.Split(source[:offset], "\n")
-	defIndent := indentOf(lines[len(lines)-1])
-	for i := len(lines) - 2; i >= 0; i-- {
-		line := strings.TrimSpace(lines[i])
-		if line == "" || strings.HasPrefix(line, "#") ||
-			indentOf(lines[i]) > defIndent || strings.ContainsAny(line[:1], ")]}") {
-			continue
-		}
-		return strings.HasPrefix(line, "@")
-	}
-	return false
-}
-
-func indentOf(line string) int {
-	return len(line) - len(strings.TrimLeft(line, " \t"))
 }
