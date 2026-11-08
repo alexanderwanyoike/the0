@@ -14,7 +14,7 @@ Use this checklist before exposing a the0 deployment to users or real broker cre
 - Configure `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD`; public registration is disabled.
 - Store the root admin password in protected deployment configuration, not plaintext Helm values or committed Compose files.
 - Create named admin and user accounts after first login; avoid routine use of the deployment-managed root admin.
-- Rotate API keys when users leave or automation ownership changes.
+- Rotate API keys when users leave or automation ownership changes, and see [API Keys And MCP](#api-keys-and-mcp) for public instances.
 
 ## Secrets
 
@@ -32,7 +32,7 @@ Use this checklist before exposing a the0 deployment to users or real broker cre
 
 ## Exposure
 
-Login is the one page an unauthenticated visitor can use, and the0 does not rate-limit it. Keep it off the open internet, or rate-limit it in front of the0.
+Login is the one place an unauthenticated visitor can try a password, and the0 does not rate-limit it. Keep it off the open internet, or rate-limit it in front of the0.
 
 ### Prefer a private network
 
@@ -116,15 +116,15 @@ spec:
     secretName: the0-tls  # the certificate your Ingress already uses
 ```
 
-Service names follow the chart's full name. With the release name `the0` they are `the0-frontend` and `the0-api`, and `kubectl -n the0 get svc` shows yours. Traefik counts each route separately, so each login path allows five quick attempts per client IP before answering 429. Behind a load balancer, enable proxy protocol or trusted forwarded headers so Traefik sees client addresses.
+Service names follow the chart's full name. With the release name `the0` they are `the0-frontend` and `the0-api`, and `kubectl -n the0 get svc` shows yours. Traefik counts each route separately, so each login path allows five quick attempts per client IP before answering 429. Traefik counts by the address of the connection it receives, so behind a load balancer every visitor would share one count. Enable proxy protocol on the balancer and Traefik, or, if the balancer adds `X-Forwarded-For`, add `sourceCriterion: {ipStrategy: {depth: 1}}` under `rateLimit` so Traefik counts by the visitor's address.
 
 #### Cloudflare
 
-Add a rate limiting rule that matches `http.request.uri.path eq "/api/auth/login"` on the frontend host and `/auth/login` on the API host.
+Add a rate limiting rule with the expression `(http.host eq "the0.example.com" and http.request.uri.path eq "/api/auth/login") or (http.host eq "api.the0.example.com" and http.request.uri.path eq "/auth/login")`.
 
 ### API keys and MCP
 
-API keys are 32 random bytes, so they can't be guessed, but a key can do everything its user can over the REST API and the MCP endpoint. On a public instance, treat keys like passwords. Keep them out of shared configs and repositories, and when one may have leaked, delete it in the dashboard's API settings and create a new one. [Secret Rotation](./secret-rotation) covers the platform's own secrets.
+API keys are 32 random bytes, so they can't be guessed, but a key can do everything its user can with bots, custom bots, logs and queries, over the REST API and the MCP endpoint. On a public instance, treat keys like passwords. Keep them out of shared configs and repositories, and when one may have leaked, delete it in the dashboard's API settings and create a new one. [Secret Rotation](./secret-rotation) covers the platform's own secrets.
 
 ## Storage And Backups
 
