@@ -82,31 +82,29 @@ We welcome various types of contributions:
 
 ## Development Workflow
 
-the0 uses a standard Git workflow:
+the0 uses a `main <- dev <- feature branch` flow:
 
-1. **Create a feature branch** from `main`:
+1. **Create a branch from `dev`**, named `<type>/<area>-<slug>`:
    ```bash
-   git checkout -b feature/your-feature-name
+   git checkout dev && git pull
+   git checkout -b feat/api-your-feature
    # or
-   git checkout -b fix/bug-description
+   git checkout -b fix/cli-bug-description
    ```
 
-2. **Make your changes** in your branch
-
-3. **Commit your changes** with clear commit messages:
+2. **Make your changes** in small, atomic commits (see [CODING_STANDARDS.md](CODING_STANDARDS.md#commits)):
    ```bash
-   git add .
-   git commit -m "type: brief description"
+   git commit -m "type(scope): brief description"
    ```
 
-   Commit types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
+   Commit types: `feat`, `fix`, `test`, `refactor`, `docs`, `chore`, `style`, `ci`. Scopes name the service: `api`, `cli`, `runtime`, `frontend`, `docs`, `k8s`, `sdk-<lang>`.
 
-4. **Push to your fork:**
+3. **Push to your fork:**
    ```bash
-   git push origin feature/your-feature-name
+   git push origin feat/api-your-feature
    ```
 
-5. **Create a Pull Request** on GitHub
+4. **Open a Pull Request into `dev`** on GitHub. Release PRs (`dev` into `main`) are opened by maintainers.
 
 ## Reporting Bugs
 
@@ -234,7 +232,7 @@ go test ./...
 - [ ] Tests added and passing
 - [ ] Documentation updated
 - [ ] Commit messages are clear
-- [ ] Branch is up to date with main
+- [ ] Branch is up to date with dev
 - [ ] No merge conflicts
 
 ### Submitting
@@ -255,8 +253,7 @@ go test ./...
 
 ### Merge Strategy
 
-- **Squash and merge** for feature branches
-- **Merge commit** for release branches
+- **Merge commit** for feature and release branches, so the atomic commits stay in history
 - Maintainers will handle the merge
 
 ## Releasing SDKs
