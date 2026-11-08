@@ -45,10 +45,10 @@ const (
 )
 
 var (
-	// A mention of main, with the def or class before it and the call
-	// parenthesis after it, when there are any.
-	mainMention = regexp.MustCompile(`((?:async\s+)?def\s+|class\s+)?\bmain\b(\s*\()?`)
-	starImport  = regexp.MustCompile(`(?m)^\s*from\s+\S+\s+import\s*\(?\s*\*`)
+	mainMention  = regexp.MustCompile(`(?P<definer>(?:async\s+)?def\s+|class\s+)?\bmain\b(?P<call>\s*\()?`)
+	definerGroup = mainMention.SubexpIndex("definer")
+	callGroup    = mainMention.SubexpIndex("call")
+	starImport   = regexp.MustCompile(`(?m)^\s*from\s+\S+\s+import\s*\(?\s*\*`)
 )
 
 func mainBindingOf(source string) mainBinding {
@@ -58,16 +58,15 @@ func mainBindingOf(source string) mainBinding {
 	mentions := mainMention.FindAllStringSubmatchIndex(source, -1)
 	found := noMain
 	for _, m := range mentions {
-		prefix := ""
-		if m[2] >= 0 {
-			prefix = source[m[2]:m[3]]
+		definer := ""
+		if start := m[2*definerGroup]; start >= 0 {
+			definer = source[start:m[2*definerGroup+1]]
 		}
-		isCall := prefix == "" && m[4] >= 0
 		switch {
-		case isCall:
+		case definer == "" && m[2*callGroup] >= 0:
 			// asyncio.run(main()) runs main but binds nothing.
 			continue
-		case strings.HasPrefix(prefix, "async") && !decorated(source, m[0]):
+		case strings.HasPrefix(definer, "async") && !decorated(source, m[0]):
 			found = asyncMain
 		default:
 			return usableMain

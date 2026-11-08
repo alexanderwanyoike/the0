@@ -82,7 +82,7 @@ func TestCheckBotEntrypoint_PassesAnyMentionOfMain(t *testing.T) {
 	}
 }
 
-func TestCheckBotEntrypoint_RefusesAnEntrypointThatNeverNamesMain(t *testing.T) {
+func TestCheckBotEntrypoint_RefusesAnEntrypointWhereNothingBindsMain(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		source string
