@@ -27,7 +27,7 @@ These are the rules every change to the0 is reviewed against. They come from wha
 
   `Tasks` is a checked list. `Tested` names the spec or test files and what each proves, plus the commands run (`yarn test`, `yarn build`, `go test ./...`). A PR that changes anything visual embeds screenshots of the rendered result under `Tested`. Host them on the `pr-screenshots` orphan branch under a folder named after the feature branch, and embed them with `https://github.com/alexanderwanyoike/the0/blob/pr-screenshots/<path>?raw=true` so they render for every reviewer.
 - Run the service's build locally before pushing (`yarn build` for api, frontend and docs; `go build ./...` for runtime and cli), and list the command under `Tested`.
-- Releases go from `dev` to `main` through a release PR opened by a maintainer, which bumps the chart `version` and `appVersion`. A `vX.Y.Z` tag on the release merge commit builds and publishes the images and SDKs.
+- Releases go from `dev` to `main` through a release PR opened by a maintainer, which bumps the chart `version` and `appVersion`. A `vX.Y.Z` tag on the release merge commit builds and publishes the images, CLI binaries and SDKs.
 
 ### Commits
 
@@ -50,7 +50,7 @@ Red commits are deliberate, so hooks must not run the test suite on commit, and 
 - Name tests after behaviour. A `describe` names a unit, a route or a group of behaviour (`"/bot routes"`, `"when the api cannot answer"`). An `it` is a sentence about what happens: `it("refuses a second deploy with a name the user already has")`. Don't start new titles with "should", and never name a `describe` after a review round or a bug report. Provenance goes in the commit message.
 - Never assert after a fixed sleep. Wait on a condition (`waitFor` in TypeScript, `require.Eventually` or the `eventstest` helpers in Go).
 - Prefer real collaborators at the boundary the change touches: PGlite for repositories, `frontDoor()` for HTTP behaviour, testcontainers for Mongo, MinIO and NATS.
-- Existing exceptions: many older api and frontend `it` titles start with "should", and some runtime tests still sleep (most in `internal/daemon/watcher_test.go`).
+- Existing exceptions: many older api and frontend `it` titles start with "should", and some runtime tests still sleep (the largest group is in `internal/daemon/watcher_test.go`).
 
 ## Comments
 
@@ -119,7 +119,7 @@ This covers docs, CLI output, error messages and UI text.
 
 - Inject `PinoLogger`. Log with the merge object first and the message second, and put errors under `err`: `this.logger.error({ err: error, botId }, "Failed to publish bot events")`.
 - No `console.*` outside `main.ts`.
-- Existing exceptions: Nest's `Logger` in `common/lock.repository.ts` and `user/admin-bootstrap.service.ts`, module-level `pino()` in some repositories, and `{ error }` instead of `{ err }` in `mcp.service.ts` and `nats.service.ts`.
+- Existing exceptions: Nest's `Logger` in `common/lock.repository.ts` and `user/admin-bootstrap.service.ts`, module-level `pino()` in some repositories, and `{ error }` instead of `{ err }` in `mcp.service.ts`, `mcp.controller.ts` and `nats.service.ts`.
 - Read configuration through `ConfigService`. `process.env` belongs only in `config/`, `main.ts` and the logger setup. Existing exceptions: `common/password.ts`, `common/root-admin.ts`, `database/migrate.ts`, `database/seed.ts`.
 
 ### API tests
@@ -134,7 +134,7 @@ This covers docs, CLI output, error messages and UI text.
 - Folders: `app/` for routes, `components/<feature>/`, `components/ui/` for shadcn primitives, `lib/`, `hooks/`, `contexts/`, `types/`. Files are kebab-case.
 - Components are function components declared as `export function Name(props: NameProps)`, with `interface NameProps`. Use named exports; default exports are only for Next.js route files (`page`, `layout`, `error`, `loading`, `not-found`). Existing exceptions: arrow components and `React.FC`, mostly in `components/bot/console/` and `components/custom-bots/`.
 - Put `"use client"` at the top of any file that uses state, effects or browser APIs.
-- Talk to the api through `apiRequest<T>` (`lib/auth-fetch.ts`), which returns `Result<T, ApiError>` (`lib/result.ts`). It sits on `authFetch`, which adds the token and handles a 401; use `authFetch` directly only for streams. Browser requests go through the `/api/[...path]` proxy. Don't call `fetch` directly from components. Existing exceptions: `lib/api/admin-users.ts`, three settings forms and `lib/auth/jwt-auth.service.ts`.
+- Talk to the api through `apiRequest<T>` (`lib/auth-fetch.ts`), which returns `Result<T, ApiError>` (`lib/result.ts`). It sits on `authFetch`, which adds the token and handles a 401; use `authFetch` directly only for streams. Existing exception: `hooks/bot-logs/log-transport.ts` fetches log pages with `authFetch`. Browser requests go through the `/api/[...path]` proxy. Don't call `fetch` directly from components. Existing exceptions: `lib/api/admin-users.ts`, three settings forms and `lib/auth/jwt-auth.service.ts`.
 - Streams use `authFetch` with `readSSEEvents` (`lib/sse/sse-stream-reader.ts`) and an `AbortController`, not `EventSource`.
 - Shared state lives in React Context: `createContext<T | null>(null)` with a `useXContext` hook that throws outside its provider. There is no global store library; don't add one. Existing exception: `contexts/auth-context.tsx` uses a default object.
 - Hooks are `export function useX()` and return a typed `UseXReturn`.
@@ -169,14 +169,14 @@ This covers docs, CLI output, error messages and UI text.
 
 - A command is built by `NewXCmd()` (exported for top-level groups, unexported `newXCmd()` inside a group), uses `RunE`, and delegates its body to a lowercase handler. Commands never call `os.Exit`; exit codes are set in `cmd/execute.go`.
 - Commands that call the api use `internal.NewSessionClient()` after `GetAuthTokenWithRetry()`, and every request goes through `APIClient.send` or `sendJSON` (`internal/transport.go`). Api errors arrive as `*APIError`.
-- Messages to the user go through `internal/logger`: `StartSpinner`, then `StopSpinnerWithError(failureTitle("X failed", err))` and `return err` on failure, or `StopSpinnerWithSuccess` on success. Data meant for stdout (JSON, raw log lines) is printed with `fmt.Println` so it can be piped. Existing exception: `cmd/auth.go` prints messages with `fmt.Println`.
+- Messages to the user go through `internal/logger`: `StartSpinner`, then `StopSpinnerWithError(failureTitle("X failed", err))` and `return err` on failure, or `StopSpinnerWithSuccess` on success. Data meant for stdout (JSON, raw log lines) is printed with `fmt.Print*` so it can be piped. Existing exception: `cmd/auth.go` prints messages with `fmt.Println`.
 - A command that can't be undone asks for confirmation (`Type 'yes' to confirm`) and takes `--yes/-y` to skip it. A reversible command doesn't prompt. Agents drive the CLI non-interactively, so a command must never block on input when `--yes` is given or when it doesn't prompt at all.
 - CLI tests use the standard library (`t.Fatalf`, `t.Errorf`) and `httptest` servers, not testify.
 
 ## Python (SDK and wrapper)
 
 - Follow PEP 8. No formatter is configured, so match the surrounding file.
-- The SDK (`sdk/python/the0/`) has a module docstring with a usage example and type hints on every public function. It supports Python 3.9, so use `typing` (`Optional`, `List`) rather than newer syntax.
+- The SDK (`sdk/python/the0/`) has a module docstring with a usage example and type hints on new public functions (existing exceptions: `handler` and `run` in `query.py`). It supports Python 3.9, so use `typing` (`Optional`, `List`) rather than newer syntax.
 - SDK tests use `unittest` under `sdk/python/tests/`. The wrapper is tested from Go (`runtime/internal/execute/wrapper_test.go`).
 
 ## Configuration and deployment
