@@ -29,7 +29,7 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
 ### Prerequisites
 
 - **Docker** 20.10+ with **Compose** plugin (the CLI uses Docker Compose under the hood)
-- **Node.js** 20+ and **yarn** (for frontend and API development)
+- **Node.js** 22 and **yarn** (for frontend and API development)
 - **Go** 1.21+ (for CLI and runtime services)
 - **Python** 3.11+ (for AI services)
 - **Git** for version control
@@ -170,7 +170,7 @@ yarn test:watch        # Watch mode
 - Unit tests for components, hooks, utilities
 - Integration tests for page flows
 - Use React Testing Library
-- Mock API calls with MSW
+- Mock api modules with `jest.mock`
 
 ### API Testing
 
@@ -226,7 +226,7 @@ go test ./...
 ### Review Process
 
 - Maintainers will review within 48-72 hours
-- CI must pass (tests, linting, builds)
+- CI must pass (tests and builds)
 - At least one approval required
 - Address all review comments
 - Maintain professional, respectful communication
