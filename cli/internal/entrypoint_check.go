@@ -11,8 +11,8 @@ import (
 // wrapper could not start: the wrapper reads the module's main attribute
 // and calls main(bot_id, config) in a thread without awaiting it. The scan
 // is deliberately conservative and fails only when no top-level binding of
-// main exists, or the last one is an async def. Anything it cannot read
-// passes.
+// main exists, or every one is an undecorated async def. Anything it cannot
+// read passes.
 func CheckBotEntrypoint(config *BotConfig) error {
 	if !strings.HasPrefix(config.Runtime, "python") {
 		return nil
@@ -24,10 +24,10 @@ func CheckBotEntrypoint(config *BotConfig) error {
 		return nil
 	}
 
-	switch lastMainBinding(string(source)) {
+	switch mainBindingOf(string(source)) {
 	case noMain:
 		return fmt.Errorf("%s has no top-level main(bot_id, config) function, which the runtime calls to start your bot. Define one, or import one as main", path)
-	case ausableMain:
+	case asyncMain:
 		return fmt.Errorf("%s defines main with async def, but the runtime calls main(bot_id, config) without awaiting it, so the bot would exit without running. Use a regular def main(bot_id, config) that calls asyncio.run(...)", path)
 	default:
 		return nil
@@ -39,68 +39,117 @@ type mainBinding int
 const (
 	noMain mainBinding = iota
 	usableMain
-	ausableMain
+	asyncMain
 )
 
 var (
-	defMain        = regexp.MustCompile(`^(async\s+)?def\s+main\s*\(`)
+	defMain = regexp.MustCompile(`^(async\s+)?def\s+main\s*\(`)
+	// Also matches main as one target of a tuple assignment.
+	assignMain     = regexp.MustCompile(`^\(?\s*(?:\w+\s*,\s*)*main\s*(?:,\s*\w+\s*)*,?\s*\)?\s*(?::[^=]*)?=(?:$|[^=])`)
 	classMain      = regexp.MustCompile(`^class\s+main\b`)
-	assignMain     = regexp.MustCompile(`^main\s*(:[^=]*)?=($|[^=])`)
-	fromImport     = regexp.MustCompile(`^from\s+\S+\s+import\s+`)
+	fromImport     = regexp.MustCompile(`^from\s+\S+\s+import(?:\s+|\s*\()`)
 	plainImport    = regexp.MustCompile(`^import\s+`)
 	opensBody      = regexp.MustCompile(`^(async\s+def|def|class)\b`)
 	importAliasSep = regexp.MustCompile(`\s+as\s+`)
+	stringLiteral  = regexp.MustCompile(`'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"`)
 )
 
-// lastMainBinding returns how main is last bound at module level. Lines
-// inside a top-level def or class are skipped, since they bind nothing on
-// the module; lines inside a top-level if, try, with or loop are read,
-// since they do.
-func lastMainBinding(source string) mainBinding {
-	lines := strings.Split(strings.ReplaceAll(source, "\r\n", "\n"), "\n")
-	last := noMain
-	inBody := false
+// mainBindingOf reads how main is bound at module level. Statements inside
+// a top-level def or class are skipped, since they bind nothing on the
+// module; statements inside a top-level if, try, with or loop are read,
+// since they do. A usable binding anywhere wins over async ones, because
+// the scan cannot tell which branch runs.
+func mainBindingOf(source string) mainBinding {
+	source = strings.TrimPrefix(strings.ReplaceAll(source, "\r\n", "\n"), "\ufeff")
+	lines := strings.Split(source, "\n")
+	found := noMain
+	inBody, decorated := false, false
 	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-		statement := strings.TrimLeft(line, " \t")
-		if statement == "" || strings.HasPrefix(statement, "#") {
+		code := withoutComment(lines[i])
+		statement := strings.TrimLeft(code, " \t")
+		if strings.TrimSpace(statement) == "" {
 			continue
 		}
-		if statement == line {
+		if statement == code {
 			inBody = opensBody.MatchString(statement)
 		} else if inBody {
 			continue
 		}
 
-		if fromImport.MatchString(statement) || plainImport.MatchString(statement) {
-			var consumed int
-			statement, consumed = joinContinuation(lines[i:])
-			i += consumed
+		var consumed int
+		statement, consumed = joinContinuation(statement, lines[i+1:])
+		i += consumed
+		if strings.HasPrefix(statement, "@") {
+			decorated = true
+			continue
 		}
-		if binding := mainBoundBy(statement); binding != noMain {
-			last = binding
+		for _, part := range strings.Split(statement, ";") {
+			switch mainBoundBy(strings.TrimSpace(part), decorated) {
+			case usableMain:
+				found = usableMain
+			case asyncMain:
+				if found == noMain {
+					found = asyncMain
+				}
+			}
 		}
+		decorated = false
 	}
-	return last
+	return found
 }
 
-// joinContinuation joins an import split over lines by parentheses or
-// trailing backslashes, and returns it with the number of extra lines used.
-func joinContinuation(lines []string) (string, int) {
-	joined := strings.TrimSpace(lines[0])
+// joinContinuation joins a statement continued by open brackets or a
+// trailing backslash, and returns it with the number of lines it used. A
+// line at column 0 ends it unless it closes a bracket, so a miscounted
+// bracket in a string cannot swallow the rest of the file.
+func joinContinuation(statement string, rest []string) (string, int) {
+	joined := strings.TrimSpace(statement)
 	consumed := 0
-	for consumed+1 < len(lines) &&
-		(strings.Count(joined, "(") > strings.Count(joined, ")") || strings.HasSuffix(joined, "\\")) {
+	for consumed < len(rest) && continues(joined) {
+		next := withoutComment(rest[consumed])
+		if next != "" && next == strings.TrimLeft(next, " \t") && !strings.ContainsAny(next[:1], ")]}") {
+			break
+		}
 		consumed++
-		joined = strings.TrimSuffix(joined, "\\") + " " + strings.TrimSpace(lines[consumed])
+		joined = strings.TrimSuffix(joined, "\\") + " " + strings.TrimSpace(next)
 	}
 	return joined, consumed
 }
 
-func mainBoundBy(statement string) mainBinding {
+func continues(statement string) bool {
+	code := stringLiteral.ReplaceAllString(statement, `""`)
+	open := strings.Count(code, "(") + strings.Count(code, "[") + strings.Count(code, "{")
+	closed := strings.Count(code, ")") + strings.Count(code, "]") + strings.Count(code, "}")
+	return open > closed || strings.HasSuffix(code, "\\")
+}
+
+// withoutComment drops a # comment that is not inside a string literal.
+func withoutComment(line string) string {
+	var quote rune
+	escaped := false
+	for i, r := range line {
+		switch {
+		case escaped:
+			escaped = false
+		case quote != 0 && r == '\\':
+			escaped = true
+		case quote != 0 && r == quote:
+			quote = 0
+		case quote == 0 && (r == '\'' || r == '"'):
+			quote = r
+		case quote == 0 && r == '#':
+			return strings.TrimRight(line[:i], " \t")
+		}
+	}
+	return line
+}
+
+// mainBoundBy reads one statement. A decorator may turn an async def into
+// a sync function, so a decorated async def counts as usable.
+func mainBoundBy(statement string, decorated bool) mainBinding {
 	if match := defMain.FindStringSubmatch(statement); match != nil {
-		if match[1] != "" {
-			return ausableMain
+		if match[1] != "" && !decorated {
+			return asyncMain
 		}
 		return usableMain
 	}
@@ -122,9 +171,8 @@ func mainBoundBy(statement string) mainBinding {
 // importedNames returns the names an import binds: the alias where there is
 // one, otherwise unaliased(name).
 func importedNames(names string, unaliased func(string) string) []string {
-	names = strings.Trim(strings.SplitN(names, "#", 2)[0], " ()")
 	var bound []string
-	for _, name := range strings.Split(names, ",") {
+	for _, name := range strings.Split(strings.Trim(names, " ()"), ",") {
 		parts := importAliasSep.Split(strings.Trim(name, " ()"), 2)
 		if len(parts) == 2 {
 			bound = append(bound, parts[1])
