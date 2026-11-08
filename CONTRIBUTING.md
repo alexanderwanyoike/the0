@@ -30,8 +30,8 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
 
 - **Docker** 20.10+ with **Compose** plugin (the CLI uses Docker Compose under the hood)
 - **Node.js** 22 and **yarn** (for frontend and API development)
-- **Go** 1.21+ (for CLI and runtime services)
-- **Python** 3.11+ (for AI services)
+- **Go** 1.26 (for CLI and runtime services)
+- **Python** 3.9+ (for the Python SDK)
 - **Git** for version control
 - At least 4GB RAM available for containers
 
@@ -39,7 +39,7 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
 
 1. **Fork and clone the repository:**
    ```bash
-   git fork https://github.com/alexanderwanyoike/the0.git
+   gh repo fork alexanderwanyoike/the0 --clone
    cd the0
    ```
 
@@ -119,7 +119,7 @@ Use the [Feature Request Template](.github/ISSUE_TEMPLATE/feature_request.yml) a
 **Frontend (Next.js + React):**
 - Located in `/frontend`
 - Uses TypeScript, React 19, Next.js 15
-- State management: Zustand
+- State management: React Context
 - UI components: shadcn/ui + Radix UI
 - Styling: Tailwind CSS
 - Testing: Jest + React Testing Library
@@ -132,7 +132,7 @@ Use the [Feature Request Template](.github/ISSUE_TEMPLATE/feature_request.yml) a
 
 **Runtime Services (Go):**
 - Located in `/runtime`
-- Uses Go 1.21+
+- Uses Go 1.26
 - Services: bot-runner, scheduler
 - Testing: Go testing package
 
