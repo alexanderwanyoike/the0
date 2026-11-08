@@ -71,8 +71,10 @@ This covers docs, CLI output, error messages and UI text.
 ## TypeScript (api, frontend, SDKs)
 
 - Use yarn. Never commit a `package-lock.json`.
-- Don't add `any` in production code. Model the type, use `unknown` and narrow, or use a generic. An unavoidable `any` carries `// eslint-disable-next-line @typescript-eslint/no-explicit-any -- <reason>`.
-- No `@ts-ignore`.
+- Don't add `any` in production code, and don't silence the rule with `eslint-disable` comments. Model the type, use `unknown` and narrow, or use a generic.
+- No `@ts-ignore`, and no new suppression comments for type or lint rules.
+- Never loosen `tsconfig.json` or the ESLint config. The target for every TypeScript package is `strict: true`, `@typescript-eslint/no-explicit-any` as an error, and the type-aware `no-unsafe-*` rules on; see Known gaps for where each package stands.
+- Existing exceptions: bare `any` in api and frontend production code (worst in `frontend/src/components/custom-bots/markdown-components.tsx`), and four `no-explicit-any` suppressions in the api (`command-bus.ts`, `role.repository.ts`, `role-revision.repository.ts`, `database/connection.ts`).
 - Files are kebab-case. Import across modules with the `@/` alias, and within a module with `./`.
 - Double quotes and trailing commas (Prettier defaults); run `yarn format`.
 
