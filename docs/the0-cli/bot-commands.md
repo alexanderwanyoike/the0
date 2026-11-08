@@ -135,6 +135,30 @@ the0 bot enable <bot_id>
 the0 bot disable <bot_id>
 ```
 
+### Disable every bot
+
+Stop all trading in one step, for example when a strategy misbehaves or a broker has an outage:
+
+```bash
+the0 bot disable --all
+```
+
+```
+v Disabled 2 bots: Grid, SMA (1 already disabled)
+  Grid (q3n8v1ej2wz0r5ty7ukc4h6d)
+  SMA (b7m2x9pl4kq1s8fd3hz6w0ra)
+  Stop sent to the runtime. Open positions with brokers are not closed.
+  Re-enable a bot with 'the0 bot enable <bot_id>'.
+```
+
+- It disables every enabled bot you own in one database change, so either all of them are disabled or, if anything fails, none is. Bots that were already disabled are left alone and counted.
+- It does not ask for confirmation, so it works from scripts and agents. It only disables, so every bot it lists can be turned back on with `the0 bot enable`.
+- Success means the change is saved and the stop is sent to the runtime. Bots exit within moments, but the command does not wait for them.
+- A scheduled bot run already in progress is stopped on Kubernetes and allowed to finish on Docker. No new runs start in either.
+- **Open positions with your broker stay open.** Close them with the broker if you need to be flat.
+
+The same action is available to agents as the `bot_disable_all` [MCP tool](/integrations/mcp) and over HTTP as `POST /bot/disable-all`.
+
 ## State
 
 Manage persistent bot state. State is automatically synced between the bot container and cloud storage.
