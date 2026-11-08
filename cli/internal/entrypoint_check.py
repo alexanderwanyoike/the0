@@ -27,9 +27,9 @@ NEW_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
 COMPREHENSIONS = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
 
 
-def bindings(node):
-    """Yields OK or ASYNC for each binding of main in node's scope."""
-    for child in ast.iter_child_nodes(node):
+def bindings(nodes):
+    """Yields OK or ASYNC for each binding of main among nodes, in their scope."""
+    for child in nodes:
         if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             if child.name == "main":
                 # The runtime calls main without awaiting it; a decorator may
@@ -45,6 +45,11 @@ def bindings(node):
         if isinstance(child, ast.AnnAssign) and child.value is None:
             # A bare annotation declares main without binding it.
             continue
+        if isinstance(child, ast.If) and is_main_guard(child.test):
+            # The runtime imports the module as "main", not "__main__", so
+            # only the guard's else branch runs.
+            yield from bindings(child.orelse)
+            continue
         if isinstance(child, ast.alias):
             # A star import may bring main in.
             if (child.asname or child.name.split(".")[0]) in ("main", "*"):
@@ -56,7 +61,17 @@ def bindings(node):
             yield OK
         elif isinstance(child, ast.MatchMapping) and child.rest == "main":
             yield OK
-        yield from bindings(child)
+        yield from bindings(ast.iter_child_nodes(child))
+
+
+def is_main_guard(test):
+    """True for `__name__ == "__main__"`, either way round."""
+    if not (isinstance(test, ast.Compare) and len(test.ops) == 1 and isinstance(test.ops[0], ast.Eq)):
+        return False
+    sides = [test.left, test.comparators[0]]
+    names = [side for side in sides if isinstance(side, ast.Name) and side.id == "__name__"]
+    mains = [side for side in sides if isinstance(side, ast.Constant) and side.value == "__main__"]
+    return len(names) == 1 and len(mains) == 1
 
 
 def walrus_bindings(comprehension):
@@ -72,12 +87,15 @@ def declares_global_main(tree):
 def verdict(source):
     try:
         tree = ast.parse(source)
+        # Some errors, such as a top-level return, only the compiler raises.
+        # Compiling runs no code.
+        compile(tree, "entrypoint", "exec")
     except SyntaxError as error:
         return f"syntax {error.lineno or 0} {error.msg}"
     except ValueError as error:
         return f"syntax 0 {error}"
 
-    found = set(bindings(tree))
+    found = set(bindings(tree.body))
     if OK in found or declares_global_main(tree):
         return OK
     if ASYNC in found:

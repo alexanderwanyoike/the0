@@ -50,8 +50,7 @@ func CheckBotEntrypoint(config *BotConfig) error {
 // working directory, and turns its verdict into an error. A checker that
 // cannot run or leaves no verdict skips the check.
 func checkEntrypointWith(runner BuildRunner, entrypoint string) error {
-	clean := filepath.Clean(entrypoint)
-	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+	if !filepath.IsLocal(entrypoint) {
 		// Only the project is mounted, so the checker could not see it.
 		return skipEntrypointCheck("%s is outside the project", entrypoint)
 	}
@@ -59,7 +58,9 @@ func checkEntrypointWith(runner BuildRunner, entrypoint string) error {
 	if err != nil {
 		return skipEntrypointCheck("%v", err)
 	}
-	work, err := os.MkdirTemp("", "the0-entrypoint-check-")
+	// Docker Desktop and Colima share the project, as vendoring needs, but
+	// not always the system temp directory.
+	work, err := os.MkdirTemp(project, ".the0-entrypoint-check-")
 	if err != nil {
 		return skipEntrypointCheck("%v", err)
 	}
@@ -74,7 +75,7 @@ func checkEntrypointWith(runner BuildRunner, entrypoint string) error {
 	err = runner.Run(BuildStep{
 		NamePrefix:      "entrypoint-check-",
 		Image:           pythonImage,
-		Cmd:             []string{"python", "/check/check.py", path.Join("/bot", filepath.ToSlash(clean)), "/check/verdict"},
+		Cmd:             []string{"python", "/check/check.py", path.Join("/bot", filepath.ToSlash(filepath.Clean(entrypoint))), "/check/verdict"},
 		Binds:           []string{project + ":/bot:ro", work + ":/check"},
 		FailureHeadline: "Entrypoint check",
 		FailedCommand:   "python check.py",
@@ -107,7 +108,10 @@ func entrypointError(entrypoint, verdict string) error {
 		return fmt.Errorf("%s defines main with async def, but the runtime calls main(bot_id, config) without awaiting it, so the bot would exit without running. Use a regular def main(bot_id, config) that calls asyncio.run(...)", entrypoint)
 	case strings.HasPrefix(verdict, verdictSyntax):
 		line, message, _ := strings.Cut(strings.TrimPrefix(verdict, verdictSyntax), " ")
-		return fmt.Errorf("%s does not parse as Python 3.11 (line %s: %s), so the runtime could not load it", entrypoint, line, message)
+		if line != "0" {
+			message = "line " + line + ": " + message
+		}
+		return fmt.Errorf("%s does not parse as Python 3.11 (%s), so the runtime could not load it", entrypoint, message)
 	default:
 		return skipEntrypointCheck("the checker said %q", verdict)
 	}
