@@ -153,7 +153,7 @@ v Disabled 2 bots: Grid, SMA (1 already disabled)
 
 - It disables every enabled bot you own in one database change, so either all of them are disabled or, if anything fails, none is. Bots that were already disabled are left alone and counted.
 - It does not ask for confirmation, so it works from scripts and agents. It only disables, so every bot it lists can be turned back on with `the0 bot enable`.
-- Success means the change is saved and the stop is sent to the runtime. Bots exit within moments, but the command does not wait for them.
+- Success means the change is saved and the stop is sent to the runtime. The runtime stops running bots on its next check, which runs every 30 seconds by default, and the command does not wait for that.
 - A scheduled bot run already in progress is stopped on Kubernetes and allowed to finish on Docker. No new runs start in either.
 - **Open positions with your broker stay open.** Close them with the broker if you need to be flat.
 
