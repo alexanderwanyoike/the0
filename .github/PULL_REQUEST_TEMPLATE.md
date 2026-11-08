@@ -16,7 +16,7 @@
 
 <!-- The test files added or changed and what each proves, plus the commands you ran
      (e.g. `yarn test`, `yarn build`, `go test ./...`). For visual changes, embed screenshots
-     hosted on the `pr-screenshots` branch. -->
+     of the rendered result (see CODING_STANDARDS.md). -->
 
 <!-- Optional:
 ## Tech Debt
