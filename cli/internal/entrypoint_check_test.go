@@ -61,8 +61,7 @@ func TestCheckBotEntrypoint_PassesAnyWayOfBindingMain(t *testing.T) {
 	}
 }
 
-// The scan does not judge scope: any mention of main passes, even one that
-// binds nothing on the module, so that no valid bot is ever refused.
+// Scope is not judged, so a mention that binds nothing on the module passes.
 func TestCheckBotEntrypoint_PassesAnyMentionOfMain(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

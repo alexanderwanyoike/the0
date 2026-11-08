@@ -11,10 +11,11 @@ import (
 // wrapper could not start. The wrapper reads the module's main attribute
 // and calls main(bot_id, config) in a thread without awaiting it.
 //
-// It reads words, not Python, so that no valid bot is ever refused. An
-// entrypoint fails only when nothing in it could bind main, because every
-// mention of main is a call or an undecorated async def. Scope, strings and
-// comments are not judged, so some broken entrypoints pass.
+// It reads words, not Python, because a parser that misreads a valid bot
+// would block its deploy with no way around it. An entrypoint fails only
+// when nothing in it could bind main, because every mention of main is a
+// call or an undecorated async def. Scope, strings and comments are not
+// judged, so some broken entrypoints pass.
 func CheckBotEntrypoint(config *BotConfig) error {
 	if !strings.HasPrefix(config.Runtime, "python") {
 		return nil
