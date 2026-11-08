@@ -130,6 +130,8 @@ describe("BotController - Enhanced Tests", () => {
 
     // Reset all mocks
     jest.clearAllMocks();
+    // Deploys check the name first; these tests deploy names nobody has.
+    jest.spyOn(repository, "hasBotNamed").mockResolvedValue(Ok(false));
   });
 
   describe("create", () => {

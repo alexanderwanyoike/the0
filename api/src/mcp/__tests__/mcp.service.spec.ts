@@ -67,6 +67,13 @@ function createBotStore(seed: Bot[]) {
     async findAll(userId: string) {
       return Ok([...bots.values()].filter((bot) => bot.userId === userId));
     },
+    async hasBotNamed(userId: string, name: string) {
+      return Ok(
+        [...bots.values()].some(
+          (bot) => bot.userId === userId && bot.name === name,
+        ),
+      );
+    },
     async findOne(userId: string, id: string) {
       const bot = owned(userId, id);
       return bot ? Ok(bot) : Failure(appError("not_found", "Not found"));
@@ -368,6 +375,25 @@ describe("McpService", () => {
           }),
         ]);
         expect(relay.publishCommitted).toHaveBeenCalledWith(store.events);
+      });
+
+      it("refuses a name the caller already uses, as a conflict", async () => {
+        const result = await service.handleToolCall(
+          "bot_deploy",
+          { config: { ...deployConfig, name: "Test Bot" } },
+          actor,
+        );
+
+        expect(result.isError).toBe(true);
+        expect(result.structuredContent).toEqual({
+          error: {
+            code: "conflict",
+            message:
+              'Bot instance named "Test Bot" already exists. Use "bot update" to modify it.',
+          },
+        });
+        expect(store.bots.size).toBe(2);
+        expect(store.events).toEqual([]);
       });
 
       it("requires a name in the config", async () => {

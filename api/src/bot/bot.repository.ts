@@ -3,7 +3,12 @@ import { and, asc, eq } from "drizzle-orm";
 import pino from "pino";
 import { Bot } from "./entities/bot.entity";
 import { RoleRepository } from "@/common/role.repository";
-import { appError, AppError, WRITE_FAILED } from "@/common/app-error";
+import {
+  appError,
+  AppError,
+  READ_FAILED,
+  WRITE_FAILED,
+} from "@/common/app-error";
 import { isForeignKeyViolation } from "@/common/database-errors";
 import { Failure, Ok, Result } from "@/common/result";
 import { appendBotEvents, BotEvent, Executor } from "./bot-event-outbox";
@@ -36,6 +41,24 @@ export class BotRepository extends RoleRepository<Bot> {
     } catch (error: unknown) {
       logger.error({ err: error }, "Error creating bot");
       return Failure(writeFailure(error));
+    }
+  }
+
+  /** Exact match, case included, as a deploy compares names. */
+  async hasBotNamed(
+    userId: string,
+    name: string,
+  ): Promise<Result<boolean, AppError>> {
+    try {
+      const rows = (await this.db
+        .select({ id: this.table.id })
+        .from(this.table)
+        .where(and(eq(this.table.userId, userId), eq(this.table.name, name)))
+        .limit(1)) as unknown[];
+      return Ok(rows.length > 0);
+    } catch (error: unknown) {
+      logger.error({ err: error }, "Error looking up bot name");
+      return Failure(READ_FAILED);
     }
   }
 
