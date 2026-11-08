@@ -43,6 +43,7 @@ export interface BotRef {
   name: string;
 }
 
+/** The Bots a DisableAllBots disabled, and those that were already disabled. */
 export interface DisabledBots {
   disabled: BotRef[];
   alreadyDisabled: BotRef[];

@@ -11,6 +11,8 @@ import {
 import { CommandBus } from "@/command-bus/command-bus";
 import { appendBotEvents } from "../bot-event-outbox";
 import { BotEventRelay } from "../bot-event-relay";
+import { BotRepository } from "../bot.repository";
+import { appError } from "@/common/app-error";
 import { usersTable } from "@/database/schema/users";
 import { botsTable } from "@/database/schema/bots";
 import { eq } from "drizzle-orm";
@@ -394,6 +396,29 @@ describe("bot events", () => {
         Ok({ disabled: [], alreadyDisabled: [{ id, name: "SMA" }] }),
       );
       expect(nats.published).toHaveLength(announced);
+    });
+
+    it("disables none and asks for a rerun when a bot appears after the Custom bots were loaded", async () => {
+      await uploadCustomBot("sma-bot", "1.0.0", "scheduled");
+      const id = await deployNamed("SMA", scheduledConfig("1.0.0"));
+      await moduleRef.get(BotEventRelay).settled();
+      // As if the bot were deployed between the handler's first read and its transaction.
+      jest
+        .spyOn(moduleRef.get(BotRepository), "findAll")
+        .mockResolvedValueOnce(Ok([]));
+
+      const result = await disableAll();
+
+      expect(result).toEqual(
+        Failure(
+          appError(
+            "conflict",
+            "Your bots changed while they were being disabled, so none was disabled. Run the command again.",
+          ),
+        ),
+      );
+      expect(await storedConfig(id)).not.toHaveProperty("enabled");
+      expect(nats.published).toHaveLength(1);
     });
 
     it("leaves other users' bots running", async () => {

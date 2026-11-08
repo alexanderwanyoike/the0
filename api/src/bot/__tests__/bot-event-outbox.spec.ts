@@ -1,7 +1,7 @@
 import { BotRepository } from "../bot.repository";
 import { appError } from "@/common/app-error";
 import { BotEvent } from "../bot-event-outbox";
-import { Failure } from "@/common/result";
+import { Failure, Ok } from "@/common/result";
 import { customBotsTable } from "@/database/schema/custom-bots";
 import { botsTable } from "@/database/schema/bots";
 import { botEventOutboxTable } from "@/database/schema/bot-event-outbox";
@@ -166,12 +166,16 @@ describe("BotRepository writes with events", () => {
       await repository.createWithEvents(newBot("bot-1"), []);
       await repository.createWithEvents(newBot("bot-2"), []);
 
-      const result = await repository.disableAllWithEvents(OWNER, (bot) => [
-        event(
-          bot.id,
-          bot.id === "bot-2" ? UNSTORABLE_SUBJECT : "the0.bot-schedule.updated",
-        ),
-      ]);
+      const result = await repository.disableAllWithEvents(OWNER, (bot) =>
+        Ok([
+          event(
+            bot.id,
+            bot.id === "bot-2"
+              ? UNSTORABLE_SUBJECT
+              : "the0.bot-schedule.updated",
+          ),
+        ]),
+      );
 
       expect(result.success).toBe(false);
       expect(

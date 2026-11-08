@@ -15,7 +15,7 @@ import { CustomBot } from "@/custom-bot/custom-bot.types";
 import { LogsService } from "@/logs/logs.service";
 import { BotStateService } from "@/bot-state/bot-state.service";
 import { BotQueryService } from "@/bot-query/bot-query.service";
-import { Ok, Failure } from "@/common/result";
+import { Ok, Failure, Result } from "@/common/result";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockBot, mockBotConfig } from "@/test/mock-bot";
 import { BOT_COMMAND_PROVIDERS } from "@/test/bot-command-providers";
@@ -103,7 +103,7 @@ function createBotStore(seed: Bot[]) {
     },
     async disableAllWithEvents(
       userId: string,
-      eventsFor: (bot: Bot) => BotEvent[],
+      eventsFor: (bot: Bot) => Result<BotEvent[], AppError>,
     ) {
       const mine = [...bots.values()].filter((bot) => bot.userId === userId);
       const disabled = mine
@@ -113,10 +113,15 @@ function createBotStore(seed: Bot[]) {
           bots.set(bot.id, updated);
           return updated;
         });
-      events.push(...disabled.flatMap(eventsFor));
+      const disabledEvents = disabled.flatMap((bot) => {
+        const built = eventsFor(bot);
+        return built.success ? built.data : [];
+      });
+      events.push(...disabledEvents);
       return Ok({
         disabled,
         alreadyDisabled: mine.filter((bot) => bot.config.enabled === false),
+        events: disabledEvents,
       });
     },
   };

@@ -1,12 +1,11 @@
 import { Injectable, OnModuleInit } from "@nestjs/common";
 import { CommandBus } from "@/command-bus/command-bus";
 import { CommandHandler } from "@/command-bus/command";
-import { AppError } from "@/common/app-error";
+import { appError, AppError } from "@/common/app-error";
 import { Failure, Ok, Result } from "@/common/result";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { CustomBot } from "@/custom-bot/custom-bot.types";
 import { BotRepository } from "../bot.repository";
-import { BotEvent } from "../bot-event-outbox";
 import { BotEventRelay } from "../bot-event-relay";
 import { Bot } from "../entities/bot.entity";
 import { BotRef, DisableAllBots, DisabledBots } from "./bot-commands";
@@ -43,19 +42,15 @@ export class DisableAllBotsHandler
       customBots.set(id, customBot.data);
     }
 
-    const committed: BotEvent[] = [];
     const result = await this.bots.disableAllWithEvents(actor.userId, (bot) => {
-      const events = this.events.updated(
-        bot.id,
-        bot.config,
-        customBotOf(bot, customBots),
-      );
-      committed.push(...events);
-      return events;
+      const customBot = customBots.get(bot.customBotId);
+      return customBot
+        ? Ok(this.events.updated(bot.id, bot.config, customBot))
+        : Failure(BOTS_CHANGED);
     });
     if (!result.success) return Failure(result.error);
 
-    this.relay.publishCommitted(committed);
+    this.relay.publishCommitted(result.data.events);
     return Ok({
       disabled: result.data.disabled.map(botRef),
       alreadyDisabled: result.data.alreadyDisabled.map(botRef),
@@ -64,16 +59,13 @@ export class DisableAllBotsHandler
 }
 
 /**
- * Throws, which rolls the transaction back, for a bot deployed or moved to
- * another version after the Custom bots were loaded. Running it again
- * disables it.
+ * A bot deployed or moved to another version after the Custom bots were
+ * loaded has none to announce it with. Nothing is disabled, and a rerun
+ * loads it.
  */
-const customBotOf = (bot: Bot, customBots: Map<string, CustomBot>) => {
-  const customBot = customBots.get(bot.customBotId);
-  if (!customBot) {
-    throw new Error(`Custom bot ${bot.customBotId} was not loaded`);
-  }
-  return customBot;
-};
+const BOTS_CHANGED = appError(
+  "conflict",
+  "Your bots changed while they were being disabled, so none was disabled. Run the command again.",
+);
 
 const botRef = ({ id, name }: Bot): BotRef => ({ id, name });

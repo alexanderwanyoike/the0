@@ -90,13 +90,15 @@ export class BotRepository extends RoleRepository<Bot> {
 
   /**
    * Disables every enabled bot the user owns and stores their events, all
-   * or none. The rows are locked as they are read, so a concurrent update
-   * is not overwritten with the config read here.
+   * or none: a bot whose events are refused rolls every change back and
+   * returns the refusal. The rows are locked as they are read, so a
+   * concurrent update is not overwritten with the config read here.
    */
   async disableAllWithEvents(
     userId: string,
-    eventsFor: (disabled: Bot) => BotEvent[],
+    eventsFor: (disabled: Bot) => Result<BotEvent[], AppError>,
   ): Promise<Result<DisableAllOutcome, AppError>> {
+    let refused: AppError | null = null;
     try {
       const outcome = await this.db.transaction(async (tx: Executor) => {
         const rows = (await tx
@@ -119,14 +121,26 @@ export class BotRepository extends RoleRepository<Bot> {
             .returning()) as Record<string, unknown>[];
           disabled.push(this.transformSnapshotToData<Bot>(updated));
         }
-        await appendBotEvents(tx, disabled.flatMap(eventsFor));
+        const events: BotEvent[] = [];
+        for (const bot of disabled) {
+          const built = eventsFor(bot);
+          if (!built.success) {
+            refused = built.error;
+            // Throwing is how a drizzle transaction rolls back.
+            throw new Error(`Events refused for bot ${bot.id}`);
+          }
+          events.push(...built.data);
+        }
+        await appendBotEvents(tx, events);
         return {
           disabled,
           alreadyDisabled: bots.filter((bot) => !isEnabled(bot)),
+          events,
         };
       });
       return Ok(outcome);
     } catch (error: unknown) {
+      if (refused) return Failure(refused);
       logger.error({ err: error }, "Error disabling bots");
       return Failure(WRITE_FAILED);
     }
@@ -137,9 +151,11 @@ export class BotRepository extends RoleRepository<Bot> {
   }
 }
 
+/** What disableAllWithEvents changed, and the events it stored for the relay. */
 export interface DisableAllOutcome {
   disabled: Bot[];
   alreadyDisabled: Bot[];
+  events: BotEvent[];
 }
 
 /** The runtime's rule (desired.IsEnabled): a bot runs unless config.enabled is false. */
