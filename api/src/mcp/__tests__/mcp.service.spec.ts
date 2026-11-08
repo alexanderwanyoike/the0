@@ -108,15 +108,14 @@ function createBotStore(seed: Bot[]) {
       const mine = [...bots.values()].filter((bot) => bot.userId === userId);
       const disabled = mine
         .filter((bot) => bot.config.enabled !== false)
-        .map((bot) => {
-          const updated = { ...bot, config: { ...bot.config, enabled: false } };
-          bots.set(bot.id, updated);
-          return updated;
-        });
-      const disabledEvents = disabled.flatMap((bot) => {
-        const built = eventsFor(bot);
-        return built.success ? built.data : [];
-      });
+        .map((bot) => ({ ...bot, config: { ...bot.config, enabled: false } }));
+      const built = disabled.map(eventsFor);
+      const refusal = built.find((result) => !result.success);
+      if (refusal && !refusal.success) return Failure(refusal.error);
+      disabled.forEach((bot) => bots.set(bot.id, bot));
+      const disabledEvents = built.flatMap((result) =>
+        result.success ? result.data : [],
+      );
       events.push(...disabledEvents);
       return Ok({
         disabled,
