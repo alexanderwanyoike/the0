@@ -5,7 +5,7 @@ These are the rules every change to the0 is reviewed against. They come from wha
 ## How to read this file
 
 - **New code follows the rule, even where old code does not.** Where a section lists "existing exceptions", those are known debt, not precedent. Don't copy them, and don't fix them in an unrelated PR.
-- **When the codebase has two patterns, the rule names the newer one.** If a case isn't covered here, follow the nearest recent code in the same module.
+- **When the codebase has two patterns, the rule names the newer one.** A case this file doesn't cover is not a standards finding; follow the most recently changed code in the same module.
 - **Tooling wins on formatting.** Anything Prettier, `gofmt` or a linter would change is not a review comment.
 - `CONTRIBUTING.md` covers setup, issues and community. This file owns the rules for code, commits and pull requests.
 
@@ -50,7 +50,7 @@ Red commits are deliberate, so hooks must not run the test suite on commit, and 
 - Name tests after behaviour. A `describe` names a unit, a route or a group of behaviour (`"/bot routes"`, `"when the api cannot answer"`). An `it` is a sentence about what happens: `it("refuses a second deploy with a name the user already has")`. Don't start new titles with "should", and never name a `describe` after a review round or a bug report. Provenance goes in the commit message.
 - Never assert after a fixed sleep. Wait on a condition (`waitFor` in TypeScript, `require.Eventually` or the `eventstest` helpers in Go).
 - Prefer real collaborators at the boundary the change touches: PGlite for repositories, `frontDoor()` for HTTP behaviour, testcontainers for Mongo, MinIO and NATS.
-- Existing exceptions: about 560 api and 250 frontend `it` titles start with "should"; 34 `time.Sleep` calls remain in runtime tests.
+- Existing exceptions: many older api and frontend `it` titles start with "should", and some runtime tests still sleep (most in `internal/daemon/watcher_test.go`).
 
 ## Comments
 
@@ -132,7 +132,7 @@ This covers docs, CLI output, error messages and UI text.
 ## Frontend (Next.js)
 
 - Folders: `app/` for routes, `components/<feature>/`, `components/ui/` for shadcn primitives, `lib/`, `hooks/`, `contexts/`, `types/`. Files are kebab-case.
-- Components are function components declared as `export function Name(props: NameProps)`, with `interface NameProps`. Use named exports; default exports are only for Next.js route files (`page`, `layout`, `error`, `loading`, `not-found`). Existing exceptions: about 30 arrow components and 10 uses of `React.FC`.
+- Components are function components declared as `export function Name(props: NameProps)`, with `interface NameProps`. Use named exports; default exports are only for Next.js route files (`page`, `layout`, `error`, `loading`, `not-found`). Existing exceptions: arrow components and `React.FC`, mostly in `components/bot/console/` and `components/custom-bots/`.
 - Put `"use client"` at the top of any file that uses state, effects or browser APIs.
 - Talk to the api through `apiRequest<T>` (`lib/auth-fetch.ts`), which returns `Result<T, ApiError>` (`lib/result.ts`). It sits on `authFetch`, which adds the token and handles a 401; use `authFetch` directly only for streams. Browser requests go through the `/api/[...path]` proxy. Don't call `fetch` directly from components. Existing exceptions: `lib/api/admin-users.ts`, three settings forms and `lib/auth/jwt-auth.service.ts`.
 - Streams use `authFetch` with `readSSEEvents` (`lib/sse/sse-stream-reader.ts`) and an `AbortController`, not `EventSource`.
@@ -163,7 +163,7 @@ This covers docs, CLI output, error messages and UI text.
 - Inject `util.Logger` and log with snake_case keys: `logger.Info("bot started", "bot_id", id)`. `util.LogMaster` stays confined to `cmd/app`, `internal/k8s/controller` and `internal/k8s/health`.
 - Long-running loops stop through `ctx.Done()` or a stop channel, and every goroutine is tracked with a `sync.WaitGroup` that shutdown waits on.
 - Bot event handlers return `botevents.Permanent(err)` to drop an event they can never process. Any other error is retried.
-- `runtime/wrappers/` (`python_bot.py`, `node_bot.js`) is the contract with user bots and changes only with an explicit decision.
+- `runtime/wrappers/` (`python_bot.py`, `node_bot.js`) is the contract with user bots. A PR that changes it says so in `Background` and explains why the contract changes.
 
 ### CLI
 
