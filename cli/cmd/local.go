@@ -61,6 +61,7 @@ func newLocalInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize the local environment",
+		Args:  cobra.MaximumNArgs(1),
 		Long: `Initialize the local environment by detecting Docker prerequisites
 and extracting compose files to ~/.the0/compose/.
 
@@ -155,9 +156,20 @@ This must be run before 'the0 local start'.
 func initRepoPath(cmd *cobra.Command, args []string) (string, bool, error) {
 	flag := cmd.Flag("source")
 	if !flag.Changed {
+		if len(args) > 0 {
+			return "", false, strayArgumentError(args[0])
+		}
 		return "", false, nil
 	}
 	repoPath := flag.Value.String()
+	if len(args) > 0 {
+		// pflag never gives a flag with NoOptDefVal a space-separated value,
+		// so `--source /path` arrives as the default plus an argument.
+		if repoPath != flag.NoOptDefVal {
+			return "", false, strayArgumentError(args[0])
+		}
+		repoPath = args[0]
+	}
 	if repoPath == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -166,6 +178,10 @@ func initRepoPath(cmd *cobra.Command, args []string) (string, bool, error) {
 		repoPath = cwd
 	}
 	return repoPath, true, nil
+}
+
+func strayArgumentError(arg string) error {
+	return fmt.Errorf("unexpected argument %q; to build from that repository, run `the0 local init --source %s`", arg, arg)
 }
 
 // --- start ---
