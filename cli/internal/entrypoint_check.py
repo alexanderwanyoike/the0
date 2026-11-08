@@ -5,8 +5,10 @@ It only parses the file; no bot code runs. Usage:
 
     python entrypoint_check.py <entrypoint> <verdict file>
 
-The verdict file gets one line: "ok", "missing", "async", or
-"syntax <line> <message>".
+The verdict file gets one line: "ok", "missing", "async",
+"syntax <line> <message>", or "error <reason>" when the checker itself
+could not finish. It always exits 0, so a check that is only being skipped
+never shows up as a failed container.
 """
 
 import ast
@@ -18,16 +20,11 @@ ASYNC = "async"
 
 # These open a scope of their own, so names bound inside them are not
 # module attributes.
-NEW_SCOPES = (
-    ast.FunctionDef,
-    ast.AsyncFunctionDef,
-    ast.ClassDef,
-    ast.Lambda,
-    ast.ListComp,
-    ast.SetComp,
-    ast.DictComp,
-    ast.GeneratorExp,
-)
+NEW_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+
+# A comprehension's own names stay inside it, but a walrus in it binds the
+# enclosing scope.
+COMPREHENSIONS = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
 
 
 def bindings(node):
@@ -42,6 +39,12 @@ def bindings(node):
             continue
         if isinstance(child, NEW_SCOPES):
             continue
+        if isinstance(child, COMPREHENSIONS):
+            yield from walrus_bindings(child)
+            continue
+        if isinstance(child, ast.AnnAssign) and child.value is None:
+            # A bare annotation declares main without binding it.
+            continue
         if isinstance(child, ast.alias):
             # A star import may bring main in.
             if (child.asname or child.name.split(".")[0]) in ("main", "*"):
@@ -54,6 +57,12 @@ def bindings(node):
         elif isinstance(child, ast.MatchMapping) and child.rest == "main":
             yield OK
         yield from bindings(child)
+
+
+def walrus_bindings(comprehension):
+    for node in ast.walk(comprehension):
+        if isinstance(node, ast.NamedExpr) and node.target.id == "main":
+            yield OK
 
 
 def declares_global_main(tree):
@@ -76,9 +85,15 @@ def verdict(source):
     return MISSING
 
 
+def checked(entrypoint):
+    try:
+        with open(entrypoint, "rb") as source:
+            return verdict(source.read())
+    except (OSError, MemoryError, RecursionError) as error:
+        return f"error {type(error).__name__}"
+
+
 if __name__ == "__main__":
     entrypoint, verdict_file = sys.argv[1], sys.argv[2]
-    with open(entrypoint, "rb") as source:
-        result = verdict(source.read())
     with open(verdict_file, "w", encoding="utf-8") as out:
-        out.write(result + "\n")
+        out.write(checked(entrypoint) + "\n")

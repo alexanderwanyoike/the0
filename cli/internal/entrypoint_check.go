@@ -18,7 +18,7 @@ import (
 var entrypointChecker string
 
 // CheckBotEntrypoint refuses a Python bot entrypoint that the runtime
-// wrapper could not start: the wrapper reads the module's main attribute
+// wrapper could not start. The wrapper reads the module's main attribute
 // and calls main(bot_id, config) in a thread without awaiting it. The file
 // is parsed, never run, in the Python image the bot runs in. When Docker is
 // not available the check is skipped, since it must never block a deploy
@@ -33,18 +33,15 @@ func CheckBotEntrypoint(config *BotConfig) error {
 		return nil
 	}
 	if err := CheckDockerInstalled(); err != nil {
-		logger.Verbose("Skipping the entrypoint check: %v", err)
-		return nil
+		return skipEntrypointCheck("%v", err)
 	}
 	runner, err := NewDockerRunner()
 	if err != nil {
-		logger.Verbose("Skipping the entrypoint check: %v", err)
-		return nil
+		return skipEntrypointCheck("%v", err)
 	}
 	defer runner.Close()
 	if err := runner.Ping(); err != nil {
-		logger.Verbose("Skipping the entrypoint check: %v", err)
-		return nil
+		return skipEntrypointCheck("%v", err)
 	}
 	return checkEntrypointWith(runner, entrypoint)
 }
@@ -53,44 +50,49 @@ func CheckBotEntrypoint(config *BotConfig) error {
 // working directory, and turns its verdict into an error. A checker that
 // cannot run or leaves no verdict skips the check.
 func checkEntrypointWith(runner BuildRunner, entrypoint string) error {
+	clean := filepath.Clean(entrypoint)
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		// Only the project is mounted, so the checker could not see it.
+		return skipEntrypointCheck("%s is outside the project", entrypoint)
+	}
 	project, err := filepath.Abs(".")
 	if err != nil {
-		return nil
+		return skipEntrypointCheck("%v", err)
 	}
 	work, err := os.MkdirTemp("", "the0-entrypoint-check-")
 	if err != nil {
-		return nil
+		return skipEntrypointCheck("%v", err)
 	}
 	defer os.RemoveAll(work)
 	if err := os.WriteFile(filepath.Join(work, "check.py"), []byte(entrypointChecker), 0o644); err != nil {
-		return nil
+		return skipEntrypointCheck("%v", err)
 	}
 
 	if err := runner.EnsureImage(pythonImage); err != nil {
-		logger.Verbose("Skipping the entrypoint check: %v", err)
-		return nil
+		return skipEntrypointCheck("%v", err)
 	}
 	err = runner.Run(BuildStep{
 		NamePrefix:      "entrypoint-check-",
 		Image:           pythonImage,
-		Cmd:             []string{"python", "/check/check.py", path.Join("/bot", filepath.ToSlash(entrypoint)), "/check/verdict"},
+		Cmd:             []string{"python", "/check/check.py", path.Join("/bot", filepath.ToSlash(clean)), "/check/verdict"},
 		Binds:           []string{project + ":/bot:ro", work + ":/check"},
 		FailureHeadline: "Entrypoint check",
 		FailedCommand:   "python check.py",
 	})
 	if err != nil {
-		logger.Verbose("Skipping the entrypoint check: %v", err)
-		return nil
+		return skipEntrypointCheck("%v", err)
 	}
 	verdict, err := os.ReadFile(filepath.Join(work, "verdict"))
 	if err != nil {
-		return nil
+		return skipEntrypointCheck("no verdict: %v", err)
 	}
 	return entrypointError(entrypoint, strings.TrimSpace(string(verdict)))
 }
 
 func entrypointError(entrypoint, verdict string) error {
 	switch {
+	case verdict == "ok":
+		return nil
 	case verdict == "missing":
 		return fmt.Errorf("%s has no main(bot_id, config) function at module level, which the runtime calls to start your bot. Define one, or import one as main", entrypoint)
 	case verdict == "async":
@@ -99,6 +101,13 @@ func entrypointError(entrypoint, verdict string) error {
 		line, message, _ := strings.Cut(strings.TrimPrefix(verdict, "syntax "), " ")
 		return fmt.Errorf("%s does not parse as Python 3.11 (line %s: %s), so the runtime could not load it", entrypoint, line, message)
 	default:
-		return nil
+		return skipEntrypointCheck("the checker said %q", verdict)
 	}
+}
+
+// skipEntrypointCheck notes why the check could not judge the entrypoint
+// and lets the deploy go on.
+func skipEntrypointCheck(format string, args ...any) error {
+	logger.Verbose("Skipping the entrypoint check: "+format, args...)
+	return nil
 }
