@@ -7,7 +7,7 @@ These are the rules every change to the0 is reviewed against. They come from wha
 - **New code follows the rule, even where old code does not.** Where a section lists "existing exceptions", those are known debt, not precedent. Don't copy them, and don't fix them in an unrelated PR.
 - **When the codebase has two patterns, the rule names the newer one.** If a case isn't covered here, follow the nearest recent code in the same module.
 - **Tooling wins on formatting.** Anything Prettier, `gofmt` or a linter would change is not a review comment.
-- `CONTRIBUTING.md` covers setup and the contribution process. This file covers how code is written.
+- `CONTRIBUTING.md` covers setup, issues and community. This file owns the rules for code, commits and pull requests.
 
 ## Workflow
 
@@ -25,13 +25,14 @@ These are the rules every change to the0 is reviewed against. They come from wha
   ## Tech Debt   (optional)
   ```
 
-  `Tasks` is a checked list. `Tested` names the spec or test files and what each proves, plus the commands run (`yarn test`, `yarn build`, `go test ./...`). A PR that changes anything visual embeds screenshots of the rendered result under `Tested`.
-- Run the service's build locally before pushing (`yarn build` for api, frontend and docs; `go build ./...` for runtime and cli).
+  `Tasks` is a checked list. `Tested` names the spec or test files and what each proves, plus the commands run (`yarn test`, `yarn build`, `go test ./...`). A PR that changes anything visual embeds screenshots of the rendered result under `Tested`. Host them on the `pr-screenshots` orphan branch under a folder named after the feature branch, and embed them with `https://github.com/alexanderwanyoike/the0/blob/pr-screenshots/<path>?raw=true` so they render for every reviewer.
+- Run the service's build locally before pushing (`yarn build` for api, frontend and docs; `go build ./...` for runtime and cli), and list the command under `Tested`.
+- Releases go from `dev` to `main` through a release PR opened by a maintainer, which bumps the chart `version` and `appVersion`. A `vX.Y.Z` tag on the release merge commit builds and publishes the images and SDKs.
 
 ### Commits
 
 - Every commit does exactly one thing. A refactor, a rename or a formatting change never shares a commit with a behaviour change.
-- Messages are conventional commits with the service as scope: `type(scope): summary`. Types are `feat`, `fix`, `test`, `refactor`, `docs`, `chore`, `style`, `ci`. Scopes are `api`, `cli`, `runtime`, `frontend`, `docs`, `k8s`, `sdk-<lang>`.
+- Messages are conventional commits with the service as scope: `type(scope): summary`. Types are `feat`, `fix`, `test`, `refactor`, `docs`, `chore`, `style`, `ci`. Scopes are `api`, `cli`, `runtime`, `frontend`, `docs`, `k8s`, `sdk-<lang>`. A change to repo-root files (`CODING_STANDARDS.md`, `CONTRIBUTING.md`, `.github/`) has no scope: `docs: ...`, `ci: ...`.
 - Write the summary as the behaviour, in the present tense: `fix(api): a storage failure answers a fixed message`.
 
 ### Test-driven changes
@@ -42,7 +43,7 @@ Code changes follow red, green, refactor:
 2. Make the smallest change that passes it, and commit that as `fix(scope)` or `feat(scope)`.
 3. Refactor in later commits, with the tests still passing.
 
-Red commits are deliberate, so hooks must not run the test suite on commit. Documentation-only and formatting-only changes need no new tests.
+Red commits are deliberate, so hooks must not run the test suite on commit, and `git bisect` should `skip` a red commit rather than mark it bad. Documentation-only and formatting-only changes need no new tests.
 
 ## Tests
 
