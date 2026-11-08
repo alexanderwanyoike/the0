@@ -47,6 +47,31 @@ func checkSource(t *testing.T, source string) error {
 	return checkEntrypointWith(hostPython{}, "main.py")
 }
 
+// pythonVerdict runs the checker script on source with the host's python3
+// and returns its verdict, so a pass is told apart from a skipped check.
+func pythonVerdict(t *testing.T, source string) string {
+	t.Helper()
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 is not installed")
+	}
+	dir := t.TempDir()
+	script, entrypoint, verdict := filepath.Join(dir, "check.py"), filepath.Join(dir, "main.py"), filepath.Join(dir, "verdict")
+	if err := os.WriteFile(script, []byte(entrypointChecker), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(entrypoint, []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("python3", script, entrypoint, verdict).CombinedOutput(); err != nil {
+		t.Fatalf("checker failed: %v\n%s", err, out)
+	}
+	got, err := os.ReadFile(verdict)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(string(got))
+}
+
 func TestCheckBotEntrypoint_PassesAnyModuleLevelMain(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -70,6 +95,7 @@ func TestCheckBotEntrypoint_PassesAnyModuleLevelMain(t *testing.T) {
 		{"tuple, starred and list targets", "main, query = build()\nmain, *rest = build()\n[main, q] = build()\n"},
 		{"an assignment after a semicolon", "import strategy; main = strategy.main\n"},
 		{"a walrus", "if (main := build()):\n    pass\n"},
+		{"a walrus inside a comprehension, which binds the module", "fs = [print]\n[(main := f) for f in fs]\n"},
 		{"a with target", "with ctx() as main:\n    pass\n"},
 		{"a for target", "for main in [run]:\n    pass\n"},
 		{"one-line compound imports", "if FAST: from fast import main\nelse: from slow import main\n"},
@@ -79,8 +105,8 @@ func TestCheckBotEntrypoint_PassesAnyModuleLevelMain(t *testing.T) {
 		{"Windows line endings", "def main(bot_id, config):\r\n    pass\r\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := checkSource(t, tc.source); err != nil {
-				t.Errorf("error = %v, want nil", err)
+			if got := pythonVerdict(t, tc.source); got != "ok" {
+				t.Errorf("verdict = %q, want ok", got)
 			}
 		})
 	}
@@ -98,6 +124,7 @@ func TestCheckBotEntrypoint_RefusesAnEntrypointWithoutModuleLevelMain(t *testing
 		{"a def whose name starts with main", "def main_loop(bot_id, config):\n    pass\n"},
 		{"an import whose name starts with main", "from strategy import mainly\n"},
 		{"a main that is only called, as a renamed bot's __main__ guard does", "def run(bot_id, config):\n    pass\n\nif __name__ == \"__main__\":\n    main(\"local\", {})\n"},
+		{"an annotation without a value", "from typing import Callable\n\nmain: Callable\n"},
 		{"an empty file", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -144,8 +171,8 @@ func TestCheckBotEntrypoint_PassesAnAsyncMainThatMayBeMadeSync(t *testing.T) {
 		{"a sync def in one branch and an async def in the other", "if FAST:\n    def main(bot_id, config):\n        pass\nelse:\n    async def main(bot_id, config):\n        pass\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := checkSource(t, tc.source); err != nil {
-				t.Errorf("error = %v, want nil", err)
+			if got := pythonVerdict(t, tc.source); got != "ok" {
+				t.Errorf("verdict = %q, want ok", got)
 			}
 		})
 	}
@@ -195,6 +222,35 @@ func TestCheckBotEntrypoint_SkipsWhatItCannotCheck(t *testing.T) {
 		}
 	})
 
+	for _, entrypoint := range []string{"../outside.py", "/etc/outside.py"} {
+		t.Run("an entrypoint outside the project, "+entrypoint, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			runner := &fakeRunner{}
+
+			if err := checkEntrypointWith(runner, entrypoint); err != nil {
+				t.Errorf("error = %v, want nil", err)
+			}
+			if len(runner.steps) != 0 {
+				t.Errorf("ran %d steps, want none", len(runner.steps))
+			}
+		})
+	}
+
+	t.Run("a checker that reports an error", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		if err := os.WriteFile("main.py", []byte("def run():\n    pass\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		runner := &fakeRunner{onRun: func(step BuildStep) error {
+			work := strings.TrimSuffix(step.Binds[1], ":/check")
+			return os.WriteFile(filepath.Join(work, "verdict"), []byte("error MemoryError\n"), 0o644)
+		}}
+
+		if err := checkEntrypointWith(runner, "main.py"); err != nil {
+			t.Errorf("error = %v, want nil", err)
+		}
+	})
+
 	t.Run("a checker that leaves no verdict", func(t *testing.T) {
 		t.Chdir(t.TempDir())
 		if err := os.WriteFile("main.py", []byte("def run():\n    pass\n"), 0o644); err != nil {
@@ -232,5 +288,26 @@ func TestCheckBotEntrypoint_RunsTheCheckerInThePythonImage(t *testing.T) {
 	wd, _ := os.Getwd()
 	if !strings.Contains(strings.Join(step.Binds, " "), wd+":/bot:ro") {
 		t.Errorf("binds = %v, want the project mounted read-only at /bot", step.Binds)
+	}
+}
+
+func TestEntrypointChecker_ReportsAnUnreadableEntrypointWithoutFailing(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 is not installed")
+	}
+	dir := t.TempDir()
+	script, verdict := filepath.Join(dir, "check.py"), filepath.Join(dir, "verdict")
+	if err := os.WriteFile(script, []byte(entrypointChecker), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// A non-zero exit would make the runner print a red failure for a check
+	// that is only being skipped.
+	if out, err := exec.Command("python3", script, filepath.Join(dir, "missing.py"), verdict).CombinedOutput(); err != nil {
+		t.Fatalf("checker exited with %v, want 0\n%s", err, out)
+	}
+	got, err := os.ReadFile(verdict)
+	if err != nil || !strings.HasPrefix(string(got), "error ") {
+		t.Errorf("verdict = %q (read error %v), want an error verdict", got, err)
 	}
 }
