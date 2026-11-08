@@ -519,7 +519,7 @@ describe("McpService", () => {
         ]);
       });
 
-      it("reports bots that were already disabled apart and announces nothing for them", async () => {
+      it("reports bots that were already disabled apart, announces nothing for them and claims no stop", async () => {
         store.bots.set("bot-123", {
           ...callerBot,
           config: { ...callerBot.config, enabled: false },
@@ -532,8 +532,7 @@ describe("McpService", () => {
         );
 
         expect(parse(result)).toEqual({
-          message:
-            "Disabled 0 bots, stop sent to the runtime. Open positions with brokers are not closed.",
+          message: "Disabled 0 bots. None was enabled.",
           disabled: [],
           already_disabled: [{ id: "bot-123", name: "Test Bot" }],
         });
