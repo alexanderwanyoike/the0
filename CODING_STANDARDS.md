@@ -116,13 +116,14 @@ This covers docs, CLI output, error messages and UI text.
 
 - Inject `PinoLogger`. Log with the merge object first and the message second, and put errors under `err`: `this.logger.error({ err: error, botId }, "Failed to publish bot events")`.
 - No `console.*` outside `main.ts`.
-- Read configuration through `ConfigService`. `process.env` belongs only in `config/`, `main.ts` and the logger setup.
+- Existing exceptions: Nest's `Logger` in `common/lock.repository.ts` and `user/admin-bootstrap.service.ts`, module-level `pino()` in some repositories, and `{ error }` instead of `{ err }` in `mcp.service.ts` and `nats.service.ts`.
+- Read configuration through `ConfigService`. `process.env` belongs only in `config/`, `main.ts` and the logger setup. Existing exceptions: `common/password.ts`, `common/root-admin.ts`, `database/migrate.ts`, `database/seed.ts`.
 
 ### API tests
 
 - Specs live in `__tests__/` next to the code and end in `.spec.ts`. HTTP behaviour goes in `*.endpoint.spec.ts` using `frontDoor()` (`test/front-door.ts`), which runs the real guard and pipe.
 - Repository and command tests that need SQL use PGlite through `useTestDatabase()` (`test/test-database.ts`).
-- Shared request and response contracts live in `contracts/` and are checked from `*-contracts.spec.ts`.
+- Payloads shared by the api and the runtime are JSON examples in the repo-root `contracts/` folder, checked from `*-contracts.spec.ts` (through `src/test/contracts.ts`) and from the runtime's `contracts_test.go` files.
 - Use the helpers in `src/test/` (`mock-actor`, `mock-bot`, `mock-config`, `mock-logger`, `bot-command-providers`) before writing new ones.
 
 ## Frontend (Next.js)
@@ -130,9 +131,9 @@ This covers docs, CLI output, error messages and UI text.
 - Folders: `app/` for routes, `components/<feature>/`, `components/ui/` for shadcn primitives, `lib/`, `hooks/`, `contexts/`, `types/`. Files are kebab-case.
 - Components are function components declared as `export function Name(props: NameProps)`, with `interface NameProps`. Use named exports; default exports are only for Next.js route files (`page`, `layout`, `error`, `loading`, `not-found`). Existing exceptions: about 30 arrow components and 10 uses of `React.FC`.
 - Put `"use client"` at the top of any file that uses state, effects or browser APIs.
-- Talk to the api through `authFetch` and `apiRequest<T>` (`lib/auth-fetch.ts`), which return `Result<T, ApiError>` (`lib/result.ts`). Browser requests go through the `/api/[...path]` proxy. Don't call `fetch` directly from components. Existing exceptions: `lib/api/admin-users.ts`, three settings forms and `lib/auth/jwt-auth.service.ts`.
+- Talk to the api through `apiRequest<T>` (`lib/auth-fetch.ts`), which returns `Result<T, ApiError>` (`lib/result.ts`). It sits on `authFetch`, which adds the token and handles a 401; use `authFetch` directly only for streams. Browser requests go through the `/api/[...path]` proxy. Don't call `fetch` directly from components. Existing exceptions: `lib/api/admin-users.ts`, three settings forms and `lib/auth/jwt-auth.service.ts`.
 - Streams use `authFetch` with `readSSEEvents` (`lib/sse/sse-stream-reader.ts`) and an `AbortController`, not `EventSource`.
-- Shared state lives in React Context: `createContext<T | null>(null)` with a `useXContext` hook that throws outside its provider. There is no global store library; don't add one.
+- Shared state lives in React Context: `createContext<T | null>(null)` with a `useXContext` hook that throws outside its provider. There is no global store library; don't add one. Existing exception: `contexts/auth-context.tsx` uses a default object.
 - Hooks are `export function useX()` and return a typed `UseXReturn`.
 - Show user-facing errors with `useToast`. No `console.log`.
 - Style with Tailwind and `cn()` (`lib/utils.ts`). No CSS modules, no inline `style` for layout.
@@ -146,7 +147,7 @@ This covers docs, CLI output, error messages and UI text.
 - `context.Context` is the first parameter of any function that does I/O or waits. Never `context.TODO()`. Timeouts use `context.WithTimeout`, with shared durations in constants.
 - Wrap errors with `%w` and a lowercase message that says what failed: `fmt.Errorf("start mongo container: %w", err)`. Check them with `errors.Is` and `errors.As`, never by string.
 - No `panic` for expected failures. `os.Exit` only in `main`.
-- Define an interface where it is consumed, keep it small, and write the test double by hand. Don't add a mocking framework.
+- Define an interface where it is consumed, keep it small, and write the test double by hand. Don't add a mocking framework. Existing exception: `runtime/internal/query/server_test.go` uses `testify/mock`.
 - Tests are named `TestThing_Behaviour` and are table-driven where cases share a shape. Integration tests are `*_integration_test.go` and skip under `testing.Short()`.
 - Use `t.TempDir`, `t.Setenv` and `t.Cleanup` for isolation.
 - Write `any` rather than `interface{}` in new code.
@@ -156,7 +157,7 @@ This covers docs, CLI output, error messages and UI text.
 - One package per concern under `internal/`. Test-support packages end in `test` (`mongotest`, `s3test`, `eventstest`).
 - Docker and Kubernetes modes don't import each other, and the shared packages (`model`, `util`, `constants`, `runtime`, `query`) import neither mode. `depguard` in `runtime/.golangci.yml` encodes this.
 - Whether a bot or schedule should run is decided only by `desired.State` and `desired.IsEnabled`. Don't add a second enabled rule.
-- Inject `util.Logger` and log with snake_case keys: `logger.Info("bot started", "bot_id", id)`. `util.LogMaster` stays confined to `cmd/app` and the k8s controller.
+- Inject `util.Logger` and log with snake_case keys: `logger.Info("bot started", "bot_id", id)`. `util.LogMaster` stays confined to `cmd/app`, `internal/k8s/controller` and `internal/k8s/health`.
 - Long-running loops stop through `ctx.Done()` or a stop channel, and every goroutine is tracked with a `sync.WaitGroup` that shutdown waits on.
 - Bot event handlers return `botevents.Permanent(err)` to drop an event they can never process. Any other error is retried.
 - `runtime/wrappers/` (`python_bot.py`, `node_bot.js`) is the contract with user bots and changes only with an explicit decision.
@@ -165,7 +166,7 @@ This covers docs, CLI output, error messages and UI text.
 
 - A command is built by `NewXCmd()` (exported for top-level groups, unexported `newXCmd()` inside a group), uses `RunE`, and delegates its body to a lowercase handler. Commands never call `os.Exit`; exit codes are set in `cmd/execute.go`.
 - Commands that call the api use `internal.NewSessionClient()` after `GetAuthTokenWithRetry()`, and every request goes through `APIClient.send` or `sendJSON` (`internal/transport.go`). Api errors arrive as `*APIError`.
-- Output goes through `internal/logger`: `StartSpinner`, then `StopSpinnerWithError(failureTitle("X failed", err))` and `return err` on failure, or `StopSpinnerWithSuccess` on success. No `fmt.Print*` for user output. Existing exception: `cmd/auth.go`.
+- Messages to the user go through `internal/logger`: `StartSpinner`, then `StopSpinnerWithError(failureTitle("X failed", err))` and `return err` on failure, or `StopSpinnerWithSuccess` on success. Data meant for stdout (JSON, raw log lines) is printed with `fmt.Println` so it can be piped. Existing exception: `cmd/auth.go` prints messages with `fmt.Println`.
 - A command that can't be undone asks for confirmation (`Type 'yes' to confirm`) and takes `--yes/-y` to skip it. A reversible command doesn't prompt. Agents drive the CLI non-interactively, so a command must never block on input when `--yes` is given or when it doesn't prompt at all.
 - CLI tests use the standard library (`t.Fatalf`, `t.Errorf`) and `httptest` servers, not testify.
 
