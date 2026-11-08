@@ -260,7 +260,10 @@ export class McpService {
     if (!result.success) return result;
     const { disabled, alreadyDisabled } = result.data;
     return Ok({
-      message: `Disabled ${botCount(disabled)}, stop sent to the runtime. Open positions with brokers are not closed.`,
+      message:
+        disabled.length === 0
+          ? "Disabled 0 bots. None was enabled."
+          : `Disabled ${botCount(disabled)}, stop sent to the runtime. Open positions with brokers are not closed.`,
       disabled,
       already_disabled: alreadyDisabled,
     });
