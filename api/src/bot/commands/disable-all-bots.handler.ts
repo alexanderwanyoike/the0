@@ -6,7 +6,6 @@ import { Failure, Ok, Result } from "@/common/result";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { CustomBot } from "@/custom-bot/custom-bot.types";
 import { BotRepository } from "../bot.repository";
-import { BotEvent } from "../bot-event-outbox";
 import { BotEventRelay } from "../bot-event-relay";
 import { Bot } from "../entities/bot.entity";
 import { BotRef, DisableAllBots, DisabledBots } from "./bot-commands";
@@ -43,19 +42,12 @@ export class DisableAllBotsHandler
       customBots.set(id, customBot.data);
     }
 
-    const committed: BotEvent[] = [];
-    const result = await this.bots.disableAllWithEvents(actor.userId, (bot) => {
-      const events = this.events.updated(
-        bot.id,
-        bot.config,
-        customBotOf(bot, customBots),
-      );
-      committed.push(...events);
-      return events;
-    });
+    const result = await this.bots.disableAllWithEvents(actor.userId, (bot) =>
+      this.events.updated(bot.id, bot.config, customBotOf(bot, customBots)),
+    );
     if (!result.success) return Failure(result.error);
 
-    this.relay.publishCommitted(committed);
+    this.relay.publishCommitted(result.data.events);
     return Ok({
       disabled: result.data.disabled.map(botRef),
       alreadyDisabled: result.data.alreadyDisabled.map(botRef),

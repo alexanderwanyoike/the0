@@ -119,10 +119,12 @@ export class BotRepository extends RoleRepository<Bot> {
             .returning()) as Record<string, unknown>[];
           disabled.push(this.transformSnapshotToData<Bot>(updated));
         }
-        await appendBotEvents(tx, disabled.flatMap(eventsFor));
+        const events = disabled.flatMap(eventsFor);
+        await appendBotEvents(tx, events);
         return {
           disabled,
           alreadyDisabled: bots.filter((bot) => !isEnabled(bot)),
+          events,
         };
       });
       return Ok(outcome);
@@ -137,9 +139,11 @@ export class BotRepository extends RoleRepository<Bot> {
   }
 }
 
+/** What disableAllWithEvents changed, and the events it stored for the relay. */
 export interface DisableAllOutcome {
   disabled: Bot[];
   alreadyDisabled: Bot[];
+  events: BotEvent[];
 }
 
 /** The runtime's rule (desired.IsEnabled): a bot runs unless config.enabled is false. */

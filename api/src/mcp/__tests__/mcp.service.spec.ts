@@ -113,10 +113,12 @@ function createBotStore(seed: Bot[]) {
           bots.set(bot.id, updated);
           return updated;
         });
-      events.push(...disabled.flatMap(eventsFor));
+      const disabledEvents = disabled.flatMap(eventsFor);
+      events.push(...disabledEvents);
       return Ok({
         disabled,
         alreadyDisabled: mine.filter((bot) => bot.config.enabled === false),
+        events: disabledEvents,
       });
     },
   };
