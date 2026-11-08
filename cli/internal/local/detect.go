@@ -74,7 +74,9 @@ func ValidateRepoPath(path string) error {
 		return fmt.Errorf("path is not a directory: %s", absPath)
 	}
 
-	requiredDirs := []string{"api", "frontend", "runtime", "docker"}
+	// The build contexts of compose_files/docker-compose.yml. The repo has no
+	// docker/ folder since the compose files moved into the CLI.
+	requiredDirs := []string{"api", "frontend", "runtime", "docs"}
 	missing := []string{}
 	for _, dir := range requiredDirs {
 		dirPath := filepath.Join(absPath, dir)
