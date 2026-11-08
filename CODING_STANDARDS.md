@@ -25,7 +25,7 @@ These are the rules every change to the0 is reviewed against. They come from wha
   ## Tech Debt   (optional)
   ```
 
-  `Tasks` is a checked list. `Tested` names the spec or test files and what each proves, plus the commands run (`yarn test`, `yarn build`, `go test ./...`). A PR that changes anything visual embeds screenshots of the rendered result under `Tested`. Host them on the `pr-screenshots` orphan branch under a folder named after the feature branch, and embed them with `https://github.com/alexanderwanyoike/the0/blob/pr-screenshots/<path>?raw=true` so they render for every reviewer.
+  `Tasks` is a checked list. `Tested` names the spec or test files and what each proves, plus the commands run (`yarn test`, `yarn build`, `go test ./...`). A PR that changes anything visual embeds screenshots of the rendered result under `Tested`. Maintainers host them on the `pr-screenshots` orphan branch (created on first use) under a folder named after the feature branch, and embed them with `https://github.com/alexanderwanyoike/the0/blob/pr-screenshots/<path>?raw=true`. Contributors from forks drag the images into the PR description instead.
 - Run the service's build locally before pushing (`yarn build` for api, frontend and docs; `go build ./...` for runtime and cli), and list the command under `Tested`.
 - Releases go from `dev` to `main` through a release PR opened by a maintainer, which bumps the chart `version` and `appVersion`. A `vX.Y.Z` tag on the release merge commit builds and publishes the images, CLI binaries and SDKs.
 
