@@ -54,7 +54,7 @@ Red commits are deliberate, so hooks must not run the test suite on commit, and 
 
 ## Comments
 
-- A comment explains a why the code can't express: a constraint, an invariant, a trade-off. It never narrates what the next line does.
+- A comment explains why, when the code can't say it itself: a constraint, an invariant, a trade-off. It never narrates what the next line does.
 - One why, one place. If the rationale already lives on a type, a command or a message doc, don't repeat it at the call site.
 - Exported Go identifiers have doc comments. TypeScript commands and shared types get a one-line JSDoc that gives the reason they exist.
 - No `TODO` or `FIXME` comments. Open an issue instead.
@@ -75,7 +75,7 @@ This covers docs, CLI output, error messages and UI text.
 - Don't add `any` in production code, and don't silence the rule with `eslint-disable` comments. Model the type, use `unknown` and narrow, or use a generic.
 - No `@ts-ignore`, and no new suppression comments for type or lint rules.
 - Never loosen `tsconfig.json` or the ESLint config. The target for every TypeScript package is `strict: true`, `@typescript-eslint/no-explicit-any` as an error, and the type-aware `no-unsafe-*` rules on; see Known gaps for where each package stands.
-- Existing exceptions: bare `any` in api and frontend production code (worst in `frontend/src/components/custom-bots/markdown-components.tsx`), and four `no-explicit-any` suppressions in the api (`command-bus.ts`, `role.repository.ts`, `role-revision.repository.ts`, `database/connection.ts`).
+- Existing exceptions: bare `any` in api and frontend production code (worst in `frontend/src/components/custom-bots/markdown-components.tsx`), four `no-explicit-any` suppressions in the api (`command-bus.ts`, `role.repository.ts`, `role-revision.repository.ts`, `database/connection.ts`), and one `exhaustive-deps` suppression in `frontend/src/components/bot/console-interface.tsx`.
 - Files are kebab-case. Import across modules with the `@/` alias, and within a module with `./`.
 - Double quotes and trailing commas (Prettier defaults); run `yarn format`.
 
@@ -134,13 +134,13 @@ This covers docs, CLI output, error messages and UI text.
 - Folders: `app/` for routes, `components/<feature>/`, `components/ui/` for shadcn primitives, `lib/`, `hooks/`, `contexts/`, `types/`. Files are kebab-case.
 - Components are function components declared as `export function Name(props: NameProps)`, with `interface NameProps`. Use named exports; default exports are only for Next.js route files (`page`, `layout`, `error`, `loading`, `not-found`). Existing exceptions: arrow components and `React.FC`, mostly in `components/bot/console/` and `components/custom-bots/`.
 - Put `"use client"` at the top of any file that uses state, effects or browser APIs.
-- Talk to the api through `apiRequest<T>` (`lib/auth-fetch.ts`), which returns `Result<T, ApiError>` (`lib/result.ts`). It sits on `authFetch`, which adds the token and handles a 401; use `authFetch` directly only for streams. Existing exception: `hooks/bot-logs/log-transport.ts` fetches log pages with `authFetch`. Browser requests go through the `/api/[...path]` proxy. Don't call `fetch` directly from components. Existing exceptions: `lib/api/admin-users.ts`, three settings forms and `lib/auth/jwt-auth.service.ts`.
+- Talk to the api through `apiRequest<T>` (`lib/auth-fetch.ts`), which returns `Result<T, ApiError>` (`lib/result.ts`). It sits on `authFetch`, which adds the token and handles a 401; use `authFetch` directly only for streams. Browser requests go through the `/api/[...path]` proxy. Don't call `fetch` directly from components. Existing exceptions: `authFetch` for plain requests in `lib/api/admin-users.ts`, `hooks/bot-logs/log-transport.ts` and the three settings forms in `components/settings/`; raw `fetch` in `lib/auth/jwt-auth.service.ts` and `components/bot/bot-dashboard-loader.tsx`.
 - Streams use `authFetch` with `readSSEEvents` (`lib/sse/sse-stream-reader.ts`) and an `AbortController`, not `EventSource`.
 - Shared state lives in React Context: `createContext<T | null>(null)` with a `useXContext` hook that throws outside its provider. There is no global store library; don't add one. Existing exception: `contexts/auth-context.tsx` uses a default object.
 - Hooks are `export function useX()` and return a typed `UseXReturn`.
 - Show user-facing errors with `useToast`. No `console.log`.
 - Style with Tailwind and `cn()` (`lib/utils.ts`). No CSS modules, no inline `style` for layout.
-- Tests use Jest and React Testing Library, live in `__tests__/` with kebab-case names, use `it(...)`, and prefer `userEvent` over `fireEvent`.
+- Tests use Jest and React Testing Library, live in `__tests__/` with kebab-case names, use `it(...)`, and prefer `userEvent` over `fireEvent`. Existing exceptions: `Login.test.tsx`, `DashboardLayout.test.tsx` and `Sidebar.test.tsx`.
 
 ## Go (runtime, cli)
 
@@ -148,7 +148,7 @@ This covers docs, CLI output, error messages and UI text.
 
 - Files are snake_case. Tests sit next to the code as `x_test.go`.
 - `context.Context` is the first parameter of any function that does I/O or waits. Never `context.TODO()`. Timeouts use `context.WithTimeout`, with shared durations in constants.
-- Wrap errors with `%w` and a lowercase message that says what failed: `fmt.Errorf("start mongo container: %w", err)`. Check them with `errors.Is` and `errors.As`, never by string.
+- Wrap errors with `%w` and a lowercase message that says what failed: `fmt.Errorf("start mongo container: %w", err)`. Check them with `errors.Is` and `errors.As`, never by string. Existing exceptions: many older `fmt.Errorf` calls wrap with `%v` (for example in `runtime/internal/docker/container_orchestrator.go` and `cli/internal/vendor_node.go`), and many messages start with "failed to".
 - No `panic` for expected failures. `os.Exit` only in `main`.
 - Define an interface where it is consumed, keep it small, and write the test double by hand. Don't add a mocking framework. Existing exception: `runtime/internal/query/server_test.go` uses `testify/mock`.
 - Tests are named `TestThing_Behaviour` and are table-driven where cases share a shape. Integration tests are `*_integration_test.go` and skip under `testing.Short()`.
@@ -158,7 +158,7 @@ This covers docs, CLI output, error messages and UI text.
 ### Runtime
 
 - One package per concern under `internal/`. Test-support packages end in `test` (`mongotest`, `s3test`, `eventstest`).
-- Docker and Kubernetes modes don't import each other, and the shared packages (`model`, `util`, `constants`, `runtime`, `query`) import neither mode. `depguard` in `runtime/.golangci.yml` encodes this.
+- Docker mode never imports `k8s/controller`, `k8s/podgen` or `k8s/detect`, Kubernetes mode never imports `docker`, and the shared packages (`model`, `util`, `constants`, `runtime`, `query`) import neither mode. `depguard` in `runtime/.golangci.yml` encodes exactly these rules. Docker mode does use `k8s/health`, which is mode-neutral despite its path.
 - Whether a bot or schedule should run is decided only by `desired.State` and `desired.IsEnabled`. Don't add a second enabled rule.
 - Inject `util.Logger` and log with snake_case keys: `logger.Info("bot started", "bot_id", id)`. `util.LogMaster` stays confined to `cmd/app`, `internal/k8s/controller` and `internal/k8s/health`.
 - Long-running loops stop through `ctx.Done()` or a stop channel, and every goroutine is tracked with a `sync.WaitGroup` that shutdown waits on.
