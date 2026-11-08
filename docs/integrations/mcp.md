@@ -126,6 +126,7 @@ the0's MCP server exposes 14 tools organized into six categories:
 | `bot_deploy` | Deploy a new bot instance | `config` (name, type, version, settings) |
 | `bot_update` | Update an existing bot instance | `bot_id`, `config` |
 | `bot_delete` | Delete a bot instance | `bot_id` |
+| `bot_disable_all` | Disable every bot instance you own in one step. Sends the stop to the runtime; does not close open positions with brokers | None |
 
 ### Logs
 
