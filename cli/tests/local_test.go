@@ -735,15 +735,15 @@ func TestGenerateEnvFile_CorrectPermissions(t *testing.T) {
 
 // ---- ValidateRepoPath ----
 
-func TestValidateRepoPath_ValidRepo(t *testing.T) {
+func TestValidateRepoPath_AcceptsCheckoutWithBuildContexts(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "repo-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Create the required directories
-	requiredDirs := []string{"api", "frontend", "runtime", "docker"}
+	// The build contexts of the source compose file, and nothing else
+	requiredDirs := []string{"api", "frontend", "runtime", "docs"}
 	for _, dir := range requiredDirs {
 		if err := os.Mkdir(filepath.Join(tmpDir, dir), 0755); err != nil {
 			t.Fatalf("Failed to create dir %s: %v", dir, err)
