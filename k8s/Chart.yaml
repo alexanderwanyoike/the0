@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.18.0
-appVersion: "1.23.0"
+version: 0.19.0
+appVersion: "1.24.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,24 +30,18 @@ annotations:
     - name: Discord
       url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
+    - kind: added
+      description: "A kill switch: the0 bot disable --all, POST /bot/disable-all and the bot_disable_all MCP tool disable every bot the caller owns in one transaction, all or none"
     - kind: changed
-      description: "The frontend forwards every api call through one proxy route, and browser code uses one HTTP client that shows the api's own error message"
-    - kind: removed
-      description: "The frontend no longer verifies JWTs itself or reads JWT_SECRET; the api enforces auth, and the chart stops passing the secret to the frontend"
-    - kind: changed
-      description: "The api answers every failure with one typed error and status mapping: a missing or hidden resource is 404, a database or storage failure is 500 with a fixed message, never the driver's text"
-    - kind: changed
-      description: "MCP tools return structured errors with a code and check their arguments against the same rules as the REST endpoints"
-    - kind: changed
-      description: "Custom bot names must be lowercase letters and numbers with single hyphens between them; a leading, trailing or doubled hyphen is refused"
+      description: "Deploying a bot under a name the user already has answers 409 instead of starting a duplicate bot"
+    - kind: added
+      description: "the0 custom-bot deploy refuses a Python bot entrypoint with no usable main, an async-only main, or code Python 3.11 cannot load, before vendoring, using Python's own parser in Docker"
+    - kind: added
+      description: "The production checklist explains exposure and login rate limits for nginx, Traefik and Cloudflare"
     - kind: fixed
-      description: "Publishing a Custom bot version checks the config before touching storage and answers 400 for a missing, invalid or non-object config"
+      description: "the0 local init --source takes a space-separated path and accepts a fresh clone"
     - kind: fixed
-      description: "Request logs redact the x-api-key header"
-    - kind: changed
-      description: "The custom dashboard contract is defined once in the0-react and imported by the frontend"
-    - kind: security
-      description: "follow-redirects 1.16.2 in the frontend (GHSA-mrwp-f3q8-3g9p)"
+      description: "the0 local built from source no longer mounts a database/init folder that does not exist"
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
