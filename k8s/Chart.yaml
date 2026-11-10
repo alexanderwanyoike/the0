@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.19.0
-appVersion: "1.24.0"
+version: 0.19.1
+appVersion: "1.24.1"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,18 +30,10 @@ annotations:
     - name: Discord
       url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
-    - kind: added
-      description: "A kill switch: the0 bot disable --all, POST /bot/disable-all and the bot_disable_all MCP tool disable every bot the caller owns in one transaction, all or none"
-    - kind: changed
-      description: "Deploying a bot under a name the user already has answers 409 instead of starting a duplicate bot"
-    - kind: added
-      description: "the0 custom-bot deploy refuses a Python bot entrypoint with no usable main, an async-only main, or code Python 3.11 cannot load, before vendoring, using Python's own parser in Docker"
-    - kind: added
-      description: "The production checklist explains exposure and login rate limits for nginx, Traefik and Cloudflare"
-    - kind: fixed
-      description: "the0 local init --source takes a space-separated path and accepts a fresh clone"
-    - kind: fixed
-      description: "the0 local built from source no longer mounts a database/init folder that does not exist"
+    - kind: security
+      description: "golang.org/x/net 0.62.0 in the runtime and CLI (CVE-2026-78661)"
+    - kind: security
+      description: "github.com/klauspost/compress 1.20.2 in the runtime (GO-2026-6865)"
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
