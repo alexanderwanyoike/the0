@@ -36,3 +36,22 @@ export class DeleteBot extends Command<Result<BotDeleteResult, AppError>> {
     super();
   }
 }
+
+/** A Bot as a DisableAllBots result names it. */
+export interface BotRef {
+  id: string;
+  name: string;
+}
+
+/** The Bots a DisableAllBots disabled, and those that were already disabled. */
+export interface DisabledBots {
+  disabled: BotRef[];
+  alreadyDisabled: BotRef[];
+}
+
+/** Disables every enabled Bot the Actor's user owns, all or none. */
+export class DisableAllBots extends Command<Result<DisabledBots, AppError>> {
+  constructor(readonly actor: Actor) {
+    super();
+  }
+}

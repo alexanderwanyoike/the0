@@ -55,7 +55,7 @@ Upgrading from an older deployment requires an explicit migration step. See the 
 
 ## Operator Runbooks
 
-- [Production Checklist](./production-checklist) covers the preflight checks for credentials, TLS, storage, backups, runtime limits, and upgrades.
+- [Production Checklist](./production-checklist) covers the preflight checks for credentials, TLS, exposure and login rate limits, storage, backups, runtime limits, and upgrades.
 - [Secret Rotation](./secret-rotation) covers local root admin rotation, Kubernetes Secret updates, Sealed Secrets, and external service credentials.
 
 ## When to Use Each Mode

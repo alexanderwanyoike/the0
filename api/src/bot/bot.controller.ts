@@ -7,6 +7,8 @@ import {
   Delete,
   UseGuards,
   Put,
+  HttpCode,
+  HttpStatus,
 } from "@nestjs/common";
 import { BotService } from "./bot.service";
 import { CreateBotDto } from "./dto/create-bot.dto";
@@ -14,6 +16,7 @@ import { UpdateBotDto } from "./dto/update-bot.dto";
 import {
   ApiBadRequestResponse,
   ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -24,7 +27,12 @@ import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 import { CommandBus } from "@/command-bus/command-bus";
 import { toHttpException } from "@/common/http-error";
-import { DeleteBot, DeployBot, UpdateBot } from "./commands/bot-commands";
+import {
+  DeleteBot,
+  DeployBot,
+  DisableAllBots,
+  UpdateBot,
+} from "./commands/bot-commands";
 
 @ApiTags("bots")
 @ApiJwtOrApiKeyAuth()
@@ -47,6 +55,24 @@ export class BotController {
     const result = await this.commandBus.execute(
       new DeployBot(actor, { ...createBotDto }),
     );
+    if (!result.success) {
+      throw toHttpException(result.error);
+    }
+    return result.data;
+  }
+
+  @Post("disable-all")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Disable every bot instance you own",
+    description:
+      "Disables every enabled bot instance in one transaction and sends the stop to the runtime. Open positions with brokers are not closed.",
+  })
+  @ApiOkResponse({
+    description: "The bots disabled, and those that were already disabled",
+  })
+  async disableAll(@CurrentActor() actor: Actor) {
+    const result = await this.commandBus.execute(new DisableAllBots(actor));
     if (!result.success) {
       throw toHttpException(result.error);
     }

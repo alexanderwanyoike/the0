@@ -29,9 +29,9 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
 ### Prerequisites
 
 - **Docker** 20.10+ with **Compose** plugin (the CLI uses Docker Compose under the hood)
-- **Node.js** 20+ and **yarn** (for frontend and API development)
-- **Go** 1.21+ (for CLI and runtime services)
-- **Python** 3.11+ (for AI services)
+- **Node.js** 22 and **yarn** (for frontend and API development)
+- **Go** 1.26 (for CLI and runtime services)
+- **Python** 3.9+ (for the Python SDK)
 - **Git** for version control
 - At least 4GB RAM available for containers
 
@@ -39,7 +39,7 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
 
 1. **Fork and clone the repository:**
    ```bash
-   git fork https://github.com/alexanderwanyoike/the0.git
+   gh repo fork alexanderwanyoike/the0 --clone
    cd the0
    ```
 
@@ -82,31 +82,9 @@ We welcome various types of contributions:
 
 ## Development Workflow
 
-the0 uses a standard Git workflow:
+the0 uses a `main <- dev <- feature branch` flow. Branch from `dev`, commit in small atomic steps, push to your fork and open a pull request into `dev`. Release PRs (`dev` into `main`) are opened by maintainers.
 
-1. **Create a feature branch** from `main`:
-   ```bash
-   git checkout -b feature/your-feature-name
-   # or
-   git checkout -b fix/bug-description
-   ```
-
-2. **Make your changes** in your branch
-
-3. **Commit your changes** with clear commit messages:
-   ```bash
-   git add .
-   git commit -m "type: brief description"
-   ```
-
-   Commit types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
-
-4. **Push to your fork:**
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-5. **Create a Pull Request** on GitHub
+Branch names, commit messages, the test-first commit order and the PR description format are defined in [CODING_STANDARDS.md](CODING_STANDARDS.md#workflow).
 
 ## Reporting Bugs
 
@@ -141,7 +119,7 @@ Use the [Feature Request Template](.github/ISSUE_TEMPLATE/feature_request.yml) a
 **Frontend (Next.js + React):**
 - Located in `/frontend`
 - Uses TypeScript, React 19, Next.js 15
-- State management: Zustand
+- State management: React Context
 - UI components: shadcn/ui + Radix UI
 - Styling: Tailwind CSS
 - Testing: Jest + React Testing Library
@@ -154,7 +132,7 @@ Use the [Feature Request Template](.github/ISSUE_TEMPLATE/feature_request.yml) a
 
 **Runtime Services (Go):**
 - Located in `/runtime`
-- Uses Go 1.21+
+- Uses Go 1.26
 - Services: bot-runner, scheduler
 - Testing: Go testing package
 
@@ -175,33 +153,7 @@ We welcome AI-assisted development:
 
 ## Coding Conventions
 
-### General
-
-- Follow existing code style in each service
-- Use meaningful variable and function names
-- Keep functions small and focused
-- Avoid over-engineering - simple solutions preferred
-
-### TypeScript/JavaScript
-
-- Use TypeScript for type safety
-- Follow ESLint configuration
-- Run `yarn lint` before committing
-- Use functional components and hooks in React
-
-### Go
-
-- Follow standard Go formatting (`gofmt`)
-- Run `go vet` before committing
-- Use meaningful package names
-- Document exported functions
-
-### Python
-
-- Follow PEP 8 style guide
-- Use type hints where applicable
-- Run `black` for formatting
-- Use virtual environments
+[CODING_STANDARDS.md](CODING_STANDARDS.md) is the source of truth for how code is written in each service, how commits and pull requests are shaped, and the test-first workflow. Reviews check changes against it.
 
 ## Testing Requirements
 
@@ -218,7 +170,7 @@ yarn test:watch        # Watch mode
 - Unit tests for components, hooks, utilities
 - Integration tests for page flows
 - Use React Testing Library
-- Mock API calls with MSW
+- Mock api modules with `jest.mock`
 
 ### API Testing
 
@@ -260,7 +212,7 @@ go test ./...
 - [ ] Tests added and passing
 - [ ] Documentation updated
 - [ ] Commit messages are clear
-- [ ] Branch is up to date with main
+- [ ] Branch is up to date with dev
 - [ ] No merge conflicts
 
 ### Submitting
@@ -274,15 +226,14 @@ go test ./...
 ### Review Process
 
 - Maintainers will review within 48-72 hours
-- CI must pass (tests, linting, builds)
+- CI must pass (tests and builds)
 - At least one approval required
 - Address all review comments
 - Maintain professional, respectful communication
 
 ### Merge Strategy
 
-- **Squash and merge** for feature branches
-- **Merge commit** for release branches
+- **Merge commit** for feature and release branches, so the atomic commits stay in history
 - Maintainers will handle the merge
 
 ## Releasing SDKs

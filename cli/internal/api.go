@@ -318,6 +318,33 @@ func (c *APIClient) UpdateBotInstance(auth *Auth, botID string, request *BotUpda
 	return err
 }
 
+// BotRef names a bot instance in a DisableAllBots result.
+type BotRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// BotDisableAllResponse lists the bots DisableAllBots disabled and those that
+// were disabled already.
+type BotDisableAllResponse struct {
+	Disabled        []BotRef `json:"disabled"`
+	AlreadyDisabled []BotRef `json:"alreadyDisabled"`
+}
+
+// DisableAllBots disables every bot instance the caller owns, all or none.
+func (c *APIClient) DisableAllBots(auth *Auth) (*BotDisableAllResponse, error) {
+	body, err := c.send(auth, apiRequest{method: "POST", path: "/bot/disable-all"})
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := decode[BotDisableAllResponse](body)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // UserBot represents a user-installed bot instance
 type UserBot struct {
 	ID            string         `json:"id"`

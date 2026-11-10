@@ -9,7 +9,11 @@ export type ErrorCode =
   | "validation"
   | "forbidden"
   | "not_found"
-  /** The change lost a race with another one: retrying may succeed. */
+  /**
+   * The change clashes with the current state, such as a name already in
+   * use or a concurrent change it lost a race with. Retrying succeeds only
+   * once that state changes.
+   */
   | "conflict"
   | "too_large"
   /** Understood and allowed, but the target cannot answer it. */

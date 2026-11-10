@@ -14,7 +14,13 @@ import { CreateBotDto } from "@/bot/dto/create-bot.dto";
 import { GetLogsQueryDto } from "@/logs/dto/get-logs-query.dto";
 import { Actor } from "@/auth/actor";
 import { BotService } from "@/bot/bot.service";
-import { DeleteBot, DeployBot, UpdateBot } from "@/bot/commands/bot-commands";
+import {
+  BotRef,
+  DeleteBot,
+  DeployBot,
+  DisableAllBots,
+  UpdateBot,
+} from "@/bot/commands/bot-commands";
 import { CommandBus } from "@/command-bus/command-bus";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { LogsService } from "@/logs/logs.service";
@@ -125,6 +131,8 @@ export class McpService {
         return this.withArguments(BotArguments, args, (input) =>
           this.handleBotDelete(input, actor),
         );
+      case MCP_TOOL_NAMES.BOT_DISABLE_ALL:
+        return this.handleBotDisableAll(actor);
       case MCP_TOOL_NAMES.LOGS_GET:
         return this.withArguments(BotArguments, args, (bot) =>
           this.handleLogsGet(bot, args, actor),
@@ -245,6 +253,20 @@ export class McpService {
     );
     if (!result.success) return result;
     return Ok({ message: "Bot deleted successfully", bot_id: input.bot_id });
+  }
+
+  private async handleBotDisableAll(actor: Actor): Promise<ToolResult> {
+    const result = await this.commandBus.execute(new DisableAllBots(actor));
+    if (!result.success) return result;
+    const { disabled, alreadyDisabled } = result.data;
+    return Ok({
+      message:
+        disabled.length === 0
+          ? "Disabled 0 bots. None was enabled."
+          : `Disabled ${botCount(disabled)}, stop sent to the runtime. Open positions with brokers are not closed.`,
+      disabled,
+      already_disabled: alreadyDisabled,
+    });
   }
 
   // Logs Handlers
@@ -414,3 +436,6 @@ type ToolResult = Result<unknown, AppError>;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+const botCount = (bots: BotRef[]): string =>
+  `${bots.length} bot${bots.length === 1 ? "" : "s"}`;

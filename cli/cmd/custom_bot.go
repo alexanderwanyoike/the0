@@ -40,6 +40,12 @@ func NewDeployCmd() *cobra.Command {
 }
 
 func deployBot(cmd *cobra.Command, args []string) error {
+	return deployBotWith(internal.CheckBotEntrypoint)
+}
+
+// deployBotWith takes the entrypoint check so tests can prove it runs
+// before vendoring without Docker.
+func deployBotWith(checkBotEntrypoint func(*internal.BotConfig) error) error {
 	logger.StartSpinner("Starting deployment")
 
 	// Step 1: Load bot config
@@ -59,6 +65,11 @@ func deployBot(cmd *cobra.Command, args []string) error {
 
 	if warning := internal.RuntimeDeprecationWarning(config.Runtime); warning != "" {
 		logger.Warning("%s", warning)
+	}
+
+	if err := checkBotEntrypoint(config); err != nil {
+		logger.StopSpinnerWithError("Entrypoint check failed")
+		return err
 	}
 
 	logger.UpdateSpinner("Installing dependencies")

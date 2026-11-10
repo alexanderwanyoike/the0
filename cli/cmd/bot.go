@@ -116,13 +116,35 @@ func NewBotEnableCmd() *cobra.Command {
 }
 
 func NewBotDisableCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "disable <bot_id>",
-		Short: "Disable a bot instance",
-		Long:  "Disable a running bot instance to stop it",
-		Args:  cobra.ExactArgs(1),
-		RunE:  disableBotInstance,
+	var all bool
+	cmd := &cobra.Command{
+		Use:   "disable <bot_id> | --all",
+		Short: "Disable a bot instance, or every bot instance with --all",
+		Long: `Disable a running bot instance to stop it.
+
+With --all, disable every bot instance you own in one step, without a prompt.
+Either every enabled bot is disabled or, if anything fails, none is.
+Success means the change is saved and the stop is sent to the runtime, not
+that every bot has exited yet. On Kubernetes a scheduled run already in
+progress is stopped; on Docker it finishes.
+
+Disabling does not close open positions with your broker.
+Re-enable a bot with 'the0 bot enable <bot_id>'.`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if all {
+				return cobra.NoArgs(cmd, args)
+			}
+			return cobra.ExactArgs(1)(cmd, args)
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if all {
+				return disableAllBots()
+			}
+			return disableBotInstance(cmd, args)
+		},
 	}
+	cmd.Flags().BoolVar(&all, "all", false, "Disable every bot instance you own")
+	return cmd
 }
 
 func NewBotStateCmd() *cobra.Command {
@@ -429,6 +451,52 @@ func enableBotInstance(cmd *cobra.Command, args []string) error {
 
 func disableBotInstance(cmd *cobra.Command, args []string) error {
 	return setBotEnabled(args[0], false)
+}
+
+func disableAllBots() error {
+	logger.StartSpinner("Disabling bots")
+
+	auth, err := internal.GetAuthTokenWithRetry()
+	if err != nil {
+		logger.StopSpinnerWithError("Authentication failed")
+		return err
+	}
+
+	result, err := internal.NewSessionClient().DisableAllBots(auth)
+	if err != nil {
+		logger.StopSpinnerWithError(failureTitle("Disabling bots failed", err))
+		return err
+	}
+
+	headline := fmt.Sprintf("Disabled %s", botCount(len(result.Disabled)))
+	if len(result.Disabled) > 0 {
+		names := make([]string, len(result.Disabled))
+		for i, bot := range result.Disabled {
+			names[i] = bot.Name
+		}
+		headline += ": " + strings.Join(names, ", ")
+	}
+	if len(result.AlreadyDisabled) > 0 {
+		headline += fmt.Sprintf(" (%d already disabled)", len(result.AlreadyDisabled))
+	}
+	logger.StopSpinnerWithSuccess(headline)
+
+	if len(result.Disabled) == 0 {
+		return nil
+	}
+	for _, bot := range result.Disabled {
+		logger.Print("  %s (%s)", bot.Name, bot.ID)
+	}
+	logger.Print("  Stop sent to the runtime. Open positions with brokers are not closed.")
+	logger.Print("  Re-enable a bot with 'the0 bot enable <bot_id>'.")
+	return nil
+}
+
+func botCount(n int) string {
+	if n == 1 {
+		return "1 bot"
+	}
+	return fmt.Sprintf("%d bots", n)
 }
 
 func setBotEnabled(botID string, enabled bool) error {

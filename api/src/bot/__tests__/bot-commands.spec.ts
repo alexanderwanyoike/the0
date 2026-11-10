@@ -105,6 +105,8 @@ describe("Bot commands", () => {
 
     // Reset all mocks
     jest.clearAllMocks();
+    // Deploys check the name first; these tests deploy names nobody has.
+    jest.spyOn(repository, "hasBotNamed").mockResolvedValue(Ok(false));
   });
 
   const deploy = (by: Actor, bot: CreateBotDto) =>

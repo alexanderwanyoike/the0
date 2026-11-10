@@ -4,6 +4,7 @@ import { BotEventFactory } from "@/bot/commands/bot-event-factory";
 import { DeployBotHandler } from "@/bot/commands/deploy-bot.handler";
 import { UpdateBotHandler } from "@/bot/commands/update-bot.handler";
 import { DeleteBotHandler } from "@/bot/commands/delete-bot.handler";
+import { DisableAllBotsHandler } from "@/bot/commands/disable-all-bots.handler";
 
 /**
  * The CommandBus with the real Bot command handlers. The handlers register
@@ -16,4 +17,5 @@ export const BOT_COMMAND_PROVIDERS = [
   DeployBotHandler,
   UpdateBotHandler,
   DeleteBotHandler,
+  DisableAllBotsHandler,
 ];

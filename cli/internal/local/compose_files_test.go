@@ -1,6 +1,8 @@
 package local
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -126,4 +128,24 @@ func containsString(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// Docker creates a missing bind-mount source as an empty root-owned
+// directory, so a stale path litters the user's checkout instead of failing.
+func TestComposeFiles_UseOnlyRepoPathsThatExist(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..")
+	repoPath := regexp.MustCompile(`\{\{REPO_PATH\}\}/([^\s:]+)`)
+	sourceFiles := map[string][]byte{
+		"docker-compose.yml":     embeddedComposeFile,
+		"docker-compose.dev.yml": embeddedComposeDevFile,
+	}
+
+	for name, file := range sourceFiles {
+		for _, m := range repoPath.FindAllSubmatch(file, -1) {
+			rel := string(m[1])
+			if _, err := os.Stat(filepath.Join(repoRoot, rel)); err != nil {
+				t.Errorf("%s uses {{REPO_PATH}}/%s, which is not in the repo", name, rel)
+			}
+		}
+	}
 }
