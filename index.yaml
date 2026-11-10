@@ -4,6 +4,62 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: added
+          description: "A kill switch: the0 bot disable --all, POST /bot/disable-all and the bot_disable_all MCP tool disable every bot the caller owns in one transaction, all or none"
+        - kind: changed
+          description: "Deploying a bot under a name the user already has answers 409 instead of starting a duplicate bot"
+        - kind: added
+          description: "the0 custom-bot deploy refuses a Python bot entrypoint with no usable main, an async-only main, or code Python 3.11 cannot load, before vendoring, using Python's own parser in Docker"
+        - kind: added
+          description: "The production checklist explains exposure and login rate limits for nginx, Traefik and Cloudflare"
+        - kind: fixed
+          description: "the0 local init --source takes a space-separated path and accepts a fresh clone"
+        - kind: fixed
+          description: "the0 local built from source no longer mounts a database/init folder that does not exist"
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/8xpMh3RR3
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 1.24.0
+    created: "2026-11-10T09:00:00.889239854Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 18ac5ca9cd0ca14246b5046b36d7ed10d4789975440a99b4b342c6f726b6fae2
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.19.0/the0-0.19.0.tgz
+    version: 0.19.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: changed
           description: "The frontend forwards every api call through one proxy route, and browser code uses one HTTP client that shows the api's own error message"
         - kind: removed
@@ -2915,4 +2971,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-11-04T01:02:55.046630466Z"
+generated: "2026-11-10T09:00:00.889360213Z"
