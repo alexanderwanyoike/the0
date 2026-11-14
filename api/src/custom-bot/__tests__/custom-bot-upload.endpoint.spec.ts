@@ -277,6 +277,7 @@ describe("custom bot uploads", () => {
       .attach("file", payload, "bot.zip")
       .attach("file", payload, "other.zip");
     expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Unexpected file field");
     expect(minio.putObject).not.toHaveBeenCalled();
   });
 
