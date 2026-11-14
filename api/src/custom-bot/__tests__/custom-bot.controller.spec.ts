@@ -5,11 +5,7 @@ import {
 } from "@nestjs/common";
 import { appError } from "@/common/app-error";
 import { CustomBotController } from "../custom-bot.controller";
-import {
-  CustomBot,
-  CustomBotConfig,
-  CustomBotWithVersions,
-} from "../custom-bot.types";
+import { CustomBotConfig, CustomBotWithVersions } from "../custom-bot.types";
 import { Ok, Failure } from "@/common/result";
 import { StorageService } from "../storage.service";
 import { AuthenticatedUser } from "@/auth/auth.types";
