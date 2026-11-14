@@ -123,7 +123,7 @@ export class StorageService {
     try {
       const filePath = `${userId}/${botName}/${fileName}`;
 
-      // MinIO 8.0.5 buffers an empty read queue even when the size is known.
+      // The MinIO client buffers an empty read queue even when the size is known.
       // Prime the paused stream so large files take its multipart upload path.
       if (size > 0 && content.readableLength === 0) {
         await once(content, "readable");

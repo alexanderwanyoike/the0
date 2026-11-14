@@ -15,13 +15,13 @@ import {
   UseInterceptors,
   UploadedFile,
 } from "@nestjs/common";
-import { FileInterceptor } from "@nestjs/platform-express";
 import {
   ApiBadRequestResponse,
   ApiBody,
   ApiConsumes,
   ApiNotFoundResponse,
   ApiOkResponse,
+  ApiPayloadTooLargeResponse,
   ApiOperation,
   ApiParam,
   ApiProduces,
@@ -30,7 +30,7 @@ import {
 import { Response } from "express";
 import { createReadStream } from "fs";
 import { unlink } from "fs/promises";
-import { diskStorage } from "multer";
+import { PinoLogger } from "nestjs-pino";
 import { finished } from "stream/promises";
 import { CustomBotService, PublishRequest } from "./custom-bot.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
@@ -40,6 +40,7 @@ import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 import { StorageService } from "./storage.service";
 import { appError } from "@/common/app-error";
 import { toHttpException } from "@/common/http-error";
+import { CustomBotUploadInterceptor } from "./custom-bot-upload.interceptor";
 
 // Described by hand because the body is an interface, not a DTO class: as an
 // undecorated class, the global ValidationPipe (forbidNonWhitelisted) would
@@ -72,11 +73,12 @@ export class CustomBotController {
   constructor(
     private readonly customBotService: CustomBotService,
     private readonly storageService: StorageService,
+    private readonly logger: PinoLogger,
   ) {}
 
   @Post(":name/upload")
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor("file", { storage: diskStorage({}) }))
+  @UseInterceptors(CustomBotUploadInterceptor)
   @ApiOperation({
     summary: "Upload a custom bot's zip archive",
     description: "Returns the storage path to pass to the deploy endpoints.",
@@ -95,6 +97,9 @@ export class CustomBotController {
   })
   @ApiBadRequestResponse({
     description: "Missing file or version, or not a zip",
+  })
+  @ApiPayloadTooLargeResponse({
+    description: "ZIP archive exceeds CUSTOM_BOT_UPLOAD_MAX_BYTES",
   })
   async uploadFile(
     @Param("name") name: string,
@@ -155,7 +160,22 @@ export class CustomBotController {
         await closed;
       }
     } finally {
-      await unlink(file.path);
+      try {
+        await unlink(file.path);
+      } catch (error: unknown) {
+        if (
+          !(
+            error instanceof Error &&
+            "code" in error &&
+            error.code === "ENOENT"
+          )
+        ) {
+          this.logger.warn(
+            { err: error, filePath: file.path },
+            "Failed to remove temporary bot upload",
+          );
+        }
+      }
     }
   }
 
