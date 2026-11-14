@@ -1,8 +1,7 @@
-import { ExecutionContext, INestApplication } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { Test } from "@nestjs/testing";
+import { INestApplication } from "@nestjs/common";
 import { createHash } from "crypto";
 import { mkdtemp, readdir, rm } from "fs/promises";
+import fsPromises from "fs/promises";
 import { request as httpRequest } from "http";
 import { AddressInfo } from "net";
 import os from "os";
@@ -10,9 +9,7 @@ import { join } from "path";
 import { Readable } from "stream";
 import request from "supertest";
 import { PinoLogger } from "nestjs-pino";
-import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
-import { MINIO_CLIENT } from "@/minio";
-import { createMockLogger } from "@/test/mock-logger";
+import { AS_OWNER, OWNER, frontDoor } from "@/test/front-door";
 import { CustomBotService } from "../custom-bot.service";
 import { StorageService } from "../storage.service";
 
@@ -21,6 +18,8 @@ describe("custom bot uploads", () => {
   let uploadDir: string;
   let restoreTempDirectory: jest.SpyInstance;
   const payload = Buffer.alloc(1024 * 1024, "zip contents");
+  const uploadLimit = payload.length * 2;
+  const originalUploadLimit = process.env.CUSTOM_BOT_UPLOAD_MAX_BYTES;
   const minio = {
     bucketExists: jest.fn().mockResolvedValue(true),
     putObject: jest.fn(),
@@ -28,28 +27,15 @@ describe("custom bot uploads", () => {
   let received: { path: string; size: number; digest: string }[];
 
   beforeAll(async () => {
+    process.env.CUSTOM_BOT_UPLOAD_MAX_BYTES = String(uploadLimit);
     uploadDir = await mkdtemp(join(os.tmpdir(), "the0-upload-test-"));
     restoreTempDirectory = jest.spyOn(os, "tmpdir").mockReturnValue(uploadDir);
     const { CustomBotController } = await import("../custom-bot.controller");
-    const moduleRef = await Test.createTestingModule({
+    app = await frontDoor({
       controllers: [CustomBotController],
-      providers: [
-        StorageService,
-        { provide: CustomBotService, useValue: {} },
-        { provide: MINIO_CLIENT, useValue: minio },
-        { provide: ConfigService, useValue: { get: () => "custom-bots" } },
-        { provide: PinoLogger, useValue: createMockLogger() },
-      ],
-    })
-      .overrideGuard(AuthCombinedGuard)
-      .useValue({
-        canActivate(context: ExecutionContext) {
-          context.switchToHttp().getRequest().user = { uid: "user123" };
-          return true;
-        },
-      })
-      .compile();
-    app = moduleRef.createNestApplication();
+      providers: [StorageService, { provide: CustomBotService, useValue: {} }],
+      minio,
+    });
     app.useLogger(false);
     await app.listen(0, "127.0.0.1");
   });
@@ -57,10 +43,16 @@ describe("custom bot uploads", () => {
   afterAll(async () => {
     await app?.close();
     restoreTempDirectory?.mockRestore();
+    if (originalUploadLimit === undefined) {
+      delete process.env.CUSTOM_BOT_UPLOAD_MAX_BYTES;
+    } else {
+      process.env.CUSTOM_BOT_UPLOAD_MAX_BYTES = originalUploadLimit;
+    }
     if (uploadDir) await rm(uploadDir, { recursive: true, force: true });
   });
 
   beforeEach(() => {
+    jest.clearAllMocks();
     received = [];
     minio.putObject.mockReset();
     minio.putObject.mockImplementation(
@@ -87,7 +79,9 @@ describe("custom bot uploads", () => {
   });
 
   const upload = () =>
-    request(app.getHttpServer()).post("/custom-bots/test-bot/upload");
+    request(app.getHttpServer())
+      .post("/custom-bots/test-bot/upload")
+      .set(AS_OWNER);
 
   it.each(["before", "after"])(
     "streams the ZIP with its size when version is sent %s the file",
@@ -101,13 +95,13 @@ describe("custom bot uploads", () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
         success: true,
-        filePath: "user123/test-bot/1.0.0",
+        filePath: `${OWNER}/test-bot/1.0.0`,
         message: "File uploaded successfully",
       });
       expect(minio.putObject.mock.calls[0][2] instanceof Readable).toBe(true);
       expect(received).toEqual([
         {
-          path: "user123/test-bot/1.0.0",
+          path: `${OWNER}/test-bot/1.0.0`,
           size: payload.length,
           digest: createHash("sha256").update(payload).digest("hex"),
         },
@@ -133,6 +127,89 @@ describe("custom bot uploads", () => {
     expect(res.status).toBe(200);
     expect(received[0].size).toBe(0);
     expect(received[0].digest).toBe(createHash("sha256").digest("hex"));
+  });
+
+  it("accepts a ZIP exactly at the configured byte limit", async () => {
+    const res = await upload()
+      .field("version", "1.0.0")
+      .attach("file", Buffer.alloc(uploadLimit), "bot.zip");
+    expect(res.status).toBe(200);
+    expect(received[0].size).toBe(uploadLimit);
+  });
+
+  it.each(["before", "after"])(
+    "answers 413 and removes an oversized ZIP when version is sent %s the file",
+    async (order) => {
+      const req = upload();
+      if (order === "before") req.field("version", "1.0.0");
+      req.attach("file", Buffer.alloc(uploadLimit + 1), "bot.zip");
+      if (order === "after") req.field("version", "1.0.0");
+      const res = await req;
+      expect(res.status).toBe(413);
+      expect(minio.putObject).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["successful upload", "1.0.0", false, 200, "File uploaded successfully"],
+    ["validation failure", undefined, false, 400, "Version is required"],
+    [
+      "storage failure",
+      "1.0.0",
+      true,
+      500,
+      "Upload failed: Failed to write to storage",
+    ],
+  ] as const)(
+    "preserves the %s response when temporary file cleanup fails",
+    async (_outcome, version, storageFails, status, message) => {
+      const error = Object.assign(new Error("cannot unlink temporary file"), {
+        code: "EACCES",
+      });
+      const remove = jest
+        .spyOn(fsPromises, "unlink")
+        .mockRejectedValueOnce(error);
+      try {
+        if (storageFails)
+          minio.putObject.mockRejectedValueOnce(
+            new Error("storage unavailable"),
+          );
+        const req = upload();
+        if (version) req.field("version", version);
+        const res = await req.attach("file", payload, "bot.zip");
+        expect(res.status).toBe(status);
+        expect(res.body.message).toBe(message);
+        expect(app.get(PinoLogger).warn).toHaveBeenCalledWith(
+          { err: error, filePath: expect.any(String) },
+          "Failed to remove temporary bot upload",
+        );
+      } finally {
+        remove.mockRestore();
+        for (const file of await readdir(uploadDir)) {
+          await fsPromises.unlink(join(uploadDir, file));
+        }
+      }
+    },
+  );
+
+  it("ignores a temporary file that was already removed", async () => {
+    const remove = jest
+      .spyOn(fsPromises, "unlink")
+      .mockRejectedValueOnce(
+        Object.assign(new Error("already removed"), { code: "ENOENT" }),
+      );
+    try {
+      const res = await upload()
+        .field("version", "1.0.0")
+        .attach("file", payload, "bot.zip");
+      expect(res.status).toBe(200);
+      expect(app.get(PinoLogger).warn).not.toHaveBeenCalled();
+    } finally {
+      remove.mockRestore();
+      for (const file of await readdir(uploadDir)) {
+        await fsPromises.unlink(join(uploadDir, file));
+      }
+    }
   });
 
   it("removes the temporary file when the version is missing", async () => {
@@ -235,6 +312,7 @@ describe("custom bot uploads", () => {
       path: "/custom-bots/test-bot/upload",
       method: "POST",
       headers: {
+        ...AS_OWNER,
         "Content-Type": "multipart/form-data; boundary=upload-boundary",
       },
     });
@@ -257,8 +335,8 @@ describe("custom bot uploads", () => {
     );
     expect(responses.map((res) => res.status)).toEqual([200, 200]);
     expect(received.map((file) => file.path).sort()).toEqual([
-      "user123/test-bot/1.0.0",
-      "user123/test-bot/2.0.0",
+      `${OWNER}/test-bot/1.0.0`,
+      `${OWNER}/test-bot/2.0.0`,
     ]);
     expect(received.every((file) => file.size === payload.length)).toBe(true);
   });
