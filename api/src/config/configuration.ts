@@ -1,3 +1,14 @@
+const customBotUploadMaxBytes = (): number => {
+  const configured = process.env.CUSTOM_BOT_UPLOAD_MAX_BYTES;
+  const limit = configured === undefined ? 2 * 1024 ** 3 : Number(configured);
+  if (!Number.isSafeInteger(limit) || limit <= 0) {
+    throw new Error(
+      "CUSTOM_BOT_UPLOAD_MAX_BYTES must be a positive integer number of bytes.",
+    );
+  }
+  return limit;
+};
+
 export default () => ({
   // Bot runtime configuration
   BOT_TYPE_API_KEY: process.env.BOT_TYPE_API_KEY || "",
@@ -18,6 +29,7 @@ export default () => ({
 
   // Storage buckets
   CUSTOM_BOTS_BUCKET: process.env.CUSTOM_BOTS_BUCKET || "custom-bots",
+  CUSTOM_BOT_UPLOAD_MAX_BYTES: customBotUploadMaxBytes(),
   LOG_BUCKET: process.env.LOG_BUCKET || "bot-logs",
 
   // Database configuration

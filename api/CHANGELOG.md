@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Part of #191: avoid buffering complete custom bot ZIP uploads in API memory. Uploads stream from temporary files to MinIO, with a configurable 2 GiB limit (`CUSTOM_BOT_UPLOAD_MAX_BYTES`) and HTTP 413 for larger archives. Cleanup errors are logged without changing the upload response. Deploy-time ZIP validation and frontend extraction still buffer archives in memory.
+
 ### Added
 
 - **Haskell GHC 9.6 runtime support** - Added `ghc96` to the Runtime type union for Haskell bot deployment
