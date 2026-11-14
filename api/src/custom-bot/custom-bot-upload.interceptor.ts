@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   CallHandler,
   ExecutionContext,
   Inject,
@@ -9,6 +8,8 @@ import { ConfigService } from "@nestjs/config";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { MulterError, diskStorage } from "multer";
 import { Observable } from "rxjs";
+import { appError } from "@/common/app-error";
+import { toHttpException } from "@/common/http-error";
 
 /** Bound temporary disk use before a ZIP can reach the storage service. */
 @Injectable()
@@ -28,10 +29,10 @@ export class CustomBotUploadInterceptor extends FileInterceptor("file", {
     try {
       return await super.intercept(context, next);
     } catch (error) {
-      // Nest maps Multer errors by message, and Multer 2.5 reworded some of
-      // them ("Unexpected file field"), so they would otherwise surface as 500.
+      // Nest maps Multer errors by message and misses ones it doesn't know,
+      // such as "Unexpected file field", which would otherwise surface as 500.
       if (error instanceof MulterError) {
-        throw new BadRequestException(error.message);
+        throw toHttpException(appError("validation", error.message));
       }
       throw error;
     }
