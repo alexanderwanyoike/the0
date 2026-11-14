@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
+import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import request from "supertest";
 import { CustomBotController } from "../custom-bot.controller";
@@ -15,6 +16,7 @@ import { customBotsTable } from "@/database/schema/custom-bots";
 import { usersTable } from "@/database/schema/users";
 import { mockBotConfig } from "@/test/mock-bot";
 import { createMockLogger } from "@/test/mock-logger";
+import { unsetConfig } from "@/test/mock-config";
 import { TEST_OWNER_ID, useTestDatabase } from "@/test/test-database";
 
 jest.mock(
@@ -68,6 +70,7 @@ describe("/custom-bots responses", () => {
         },
         { provide: AuthService, useValue: { validateToken: jest.fn() } },
         { provide: PinoLogger, useValue: createMockLogger() },
+        { provide: ConfigService, useValue: unsetConfig() },
       ],
     }).compile();
 
