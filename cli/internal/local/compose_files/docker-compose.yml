@@ -130,6 +130,7 @@ services:
       # Storage configuration
       STORAGE_PATH: /app/uploads/custom-bots
       CUSTOM_BOTS_BUCKET: *code-bucket
+      CUSTOM_BOT_UPLOAD_MAX_BYTES: ${CUSTOM_BOT_UPLOAD_MAX_BYTES:-2147483648}
       LOG_BUCKET: *logs-bucket
       BACKTEST_BUCKET: backtests
 

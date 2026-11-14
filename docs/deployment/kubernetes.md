@@ -143,6 +143,7 @@ the0Api:
     THE0_ADMIN_EMAIL: "admin@example.com"
     NODE_ENV: "production"
     FRONTEND_URL: "https://the0.example.com"
+    CUSTOM_BOT_UPLOAD_MAX_BYTES: "2147483648"
   extraEnv:
     - name: THE0_ADMIN_PASSWORD
       valueFrom:
@@ -212,6 +213,21 @@ On startup:
 - If the configured password changes later, restarting or rolling out the API updates the root admin password once and invalidates old sessions.
 
 See [Root Admin Configuration](./admin-bootstrap) for the full fresh install, upgrade, password rotation, and last-admin protection behavior.
+
+### Custom Bot Uploads
+
+Set `the0Api.env.CUSTOM_BOT_UPLOAD_MAX_BYTES` to a positive integer number of
+bytes. The default is `2147483648` (2 GiB) per ZIP, and an oversized upload
+receives HTTP 413 before object storage is called. Invalid values stop API
+startup. Configure ingress request-body limits to allow the ZIP plus multipart
+overhead.
+
+Uploads consume the API pod's `/tmp` volume until object storage finishes.
+Budget node ephemeral storage for concurrent uploads and monitor free space;
+the per-file limit does not cap total concurrent use. Cleanup failures are
+logged without replacing the original response. The later deploy request
+still buffers the archive for validation and frontend extraction, so raising
+the upload limit can still require more API memory at deploy time.
 
 ## Quick Start with Minikube
 

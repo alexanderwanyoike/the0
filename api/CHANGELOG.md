@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Avoid buffering complete custom bot ZIP uploads in API memory (#191). Uploads use temporary disk space and stream to MinIO, with temporary files removed on completion or failure.
+- Part of #191: avoid buffering complete custom bot ZIP uploads in API memory. Uploads stream from temporary files to MinIO, with a configurable 2 GiB limit (`CUSTOM_BOT_UPLOAD_MAX_BYTES`) and HTTP 413 for larger archives. Cleanup errors are logged without changing the upload response. Deploy-time ZIP validation and frontend extraction still buffer archives in memory.
 
 ### Added
 

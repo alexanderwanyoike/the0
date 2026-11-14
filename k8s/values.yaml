@@ -141,6 +141,8 @@ the0Api:
     # CUSTOM_BOTS_BUCKET: the code bucket for the api and the controller,
     # overriding botController.minio.bucket.
     LOG_BUCKET: "bot-logs"
+    # Maximum ZIP bytes per upload (2 GiB). Larger uploads receive HTTP 413.
+    CUSTOM_BOT_UPLOAD_MAX_BYTES: "2147483648"
     BACKTEST_BUCKET: "backtests"
     NODE_ENV: "development"
     PORT: "3000"
