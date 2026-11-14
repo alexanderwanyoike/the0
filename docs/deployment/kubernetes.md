@@ -225,9 +225,17 @@ overhead.
 Uploads consume the API pod's `/tmp` volume until object storage finishes.
 Budget node ephemeral storage for concurrent uploads and monitor free space;
 the per-file limit does not cap total concurrent use. Cleanup failures are
-logged without replacing the original response. The later deploy request
-still buffers the archive for validation and frontend extraction, so raising
-the upload limit can still require more API memory at deploy time.
+logged without replacing the original response.
+
+::: warning API memory at deploy time
+The default upload limit is larger than the API's default memory limit
+(`the0Api.resources.limits.memory: 1Gi`). Uploads stream to disk, but the
+later deploy request still reads the whole ZIP into memory for validation and
+frontend extraction. A ZIP that uploads successfully can therefore get the API
+pod OOM-killed when a bot is deployed from it. Until deploys are bounded too,
+keep `CUSTOM_BOT_UPLOAD_MAX_BYTES` well below the API memory limit, or raise
+the memory limit to cover the largest ZIP you accept.
+:::
 
 ## Quick Start with Minikube
 
