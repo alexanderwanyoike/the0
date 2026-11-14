@@ -171,10 +171,10 @@ check for leftover files after a storage or filesystem incident.
 
 ::: warning API memory at deploy time
 Uploads stream to disk, but the later deploy request still reads the whole ZIP
-into memory for validation and frontend extraction. A ZIP near the 2 GiB
-default needs at least that much free memory in the API container when a bot
-is deployed from it. Lower `CUSTOM_BOT_UPLOAD_MAX_BYTES` to fit the memory you
-can give the API.
+into memory for validation and frontend extraction, briefly holding about twice
+the ZIP's size. A ZIP near the 2 GiB default can need around 4 GiB of host
+memory when a bot is deployed from it. Keep `CUSTOM_BOT_UPLOAD_MAX_BYTES` below
+half the memory you can give the API.
 :::
 
 ### Storage Configuration
