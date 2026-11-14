@@ -49,6 +49,7 @@ services:
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       JWT_EXPIRES_IN: 24h
       STORAGE_PATH: /app/uploads/custom-bots
+      CUSTOM_BOT_UPLOAD_MAX_BYTES: ${CUSTOM_BOT_UPLOAD_MAX_BYTES:-2147483648}
       BACKTEST_BUCKET: backtests
       BOT_API_URL: http://the0-api:3000
       PORT: 3000
