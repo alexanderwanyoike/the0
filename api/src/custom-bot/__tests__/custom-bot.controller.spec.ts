@@ -5,14 +5,12 @@ import {
 } from "@nestjs/common";
 import { appError } from "@/common/app-error";
 import { CustomBotController } from "../custom-bot.controller";
-import {
-  CustomBot,
-  CustomBotConfig,
-  CustomBotWithVersions,
-} from "../custom-bot.types";
+import { CustomBotConfig, CustomBotWithVersions } from "../custom-bot.types";
 import { Ok, Failure } from "@/common/result";
 import { StorageService } from "../storage.service";
 import { AuthenticatedUser } from "@/auth/auth.types";
+import { PinoLogger } from "nestjs-pino";
+import { createMockLogger } from "@/test/mock-logger";
 
 describe("CustomBotController", () => {
   let controller: CustomBotController;
@@ -64,7 +62,11 @@ describe("CustomBotController", () => {
     // Removed GcsService - using StorageService
 
     // Directly instantiate the controller with the mock services
-    controller = new CustomBotController(mockService, mockStorageService);
+    controller = new CustomBotController(
+      mockService,
+      mockStorageService,
+      createMockLogger() as unknown as PinoLogger,
+    );
   });
 
   afterEach(() => {

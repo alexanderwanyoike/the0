@@ -15,19 +15,23 @@ import {
   UseInterceptors,
   UploadedFile,
 } from "@nestjs/common";
-import { FileInterceptor } from "@nestjs/platform-express";
 import {
   ApiBadRequestResponse,
   ApiBody,
   ApiConsumes,
   ApiNotFoundResponse,
   ApiOkResponse,
+  ApiPayloadTooLargeResponse,
   ApiOperation,
   ApiParam,
   ApiProduces,
   ApiTags,
 } from "@nestjs/swagger";
 import { Response } from "express";
+import { createReadStream } from "fs";
+import { unlink } from "fs/promises";
+import { PinoLogger } from "nestjs-pino";
+import { finished } from "stream/promises";
 import { CustomBotService, PublishRequest } from "./custom-bot.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { AuthenticatedUser } from "@/auth/auth.types";
@@ -36,6 +40,7 @@ import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 import { StorageService } from "./storage.service";
 import { appError } from "@/common/app-error";
 import { toHttpException } from "@/common/http-error";
+import { CustomBotUploadInterceptor } from "./custom-bot-upload.interceptor";
 
 // Described by hand because the body is an interface, not a DTO class: as an
 // undecorated class, the global ValidationPipe (forbidNonWhitelisted) would
@@ -68,11 +73,12 @@ export class CustomBotController {
   constructor(
     private readonly customBotService: CustomBotService,
     private readonly storageService: StorageService,
+    private readonly logger: PinoLogger,
   ) {}
 
   @Post(":name/upload")
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(CustomBotUploadInterceptor)
   @ApiOperation({
     summary: "Upload a custom bot's zip archive",
     description: "Returns the storage path to pass to the deploy endpoints.",
@@ -92,6 +98,9 @@ export class CustomBotController {
   @ApiBadRequestResponse({
     description: "Missing file or version, or not a zip",
   })
+  @ApiPayloadTooLargeResponse({
+    description: "ZIP archive exceeds CUSTOM_BOT_UPLOAD_MAX_BYTES",
+  })
   async uploadFile(
     @Param("name") name: string,
     @UploadedFile() file: Express.Multer.File,
@@ -104,41 +113,70 @@ export class CustomBotController {
       throw new BadRequestException("File is required");
     }
 
-    // Validate file type
-    if (
-      file.mimetype !== "application/zip" &&
-      !file.originalname.endsWith(".zip")
-    ) {
-      throw new BadRequestException("Only ZIP files are allowed");
-    }
+    try {
+      // Validate file type
+      if (
+        file.mimetype !== "application/zip" &&
+        !file.originalname.endsWith(".zip")
+      ) {
+        throw new BadRequestException("Only ZIP files are allowed");
+      }
 
-    // Version must be provided
-    if (!body.version) {
-      throw new BadRequestException("Version is required");
-    }
+      // Version must be provided
+      if (!body.version) {
+        throw new BadRequestException("Version is required");
+      }
 
-    // Upload to MinIO using internal client
-    const uploadResult = await this.storageService.uploadBotFile(
-      file.buffer,
-      body.version,
-      userId,
-      name,
-    );
-
-    if (!uploadResult.success) {
-      throw toHttpException(
-        appError(
-          uploadResult.error.code,
-          `Upload failed: ${uploadResult.error.message}`,
-        ),
+      const content = createReadStream(file.path);
+      const closed = finished(content, { cleanup: true }).catch(
+        (): undefined => undefined,
       );
-    }
+      try {
+        const uploadResult = await this.storageService.uploadBotFile(
+          content,
+          file.size,
+          body.version,
+          userId,
+          name,
+        );
 
-    return {
-      success: true,
-      filePath: uploadResult.data,
-      message: "File uploaded successfully",
-    };
+        if (!uploadResult.success) {
+          throw toHttpException(
+            appError(
+              uploadResult.error.code,
+              `Upload failed: ${uploadResult.error.message}`,
+            ),
+          );
+        }
+
+        return {
+          success: true,
+          filePath: uploadResult.data,
+          message: "File uploaded successfully",
+        };
+      } finally {
+        // MinIO can reject before consuming the stream. Close it before unlinking.
+        content.destroy();
+        await closed;
+      }
+    } finally {
+      try {
+        await unlink(file.path);
+      } catch (error: unknown) {
+        if (
+          !(
+            error instanceof Error &&
+            "code" in error &&
+            error.code === "ENOENT"
+          )
+        ) {
+          this.logger.warn(
+            { err: error, filePath: file.path },
+            "Failed to remove temporary bot upload",
+          );
+        }
+      }
+    }
   }
 
   @Post(":name")

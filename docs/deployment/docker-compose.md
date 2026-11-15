@@ -154,7 +154,28 @@ environment:
   # Serve Swagger UI at /docs and the OpenAPI spec at /docs-json. Off by
   # default when NODE_ENV is production, as it is in this stack.
   SWAGGER_ENABLED: "true"
+  CUSTOM_BOT_UPLOAD_MAX_BYTES: "2147483648"
 ```
+
+`CUSTOM_BOT_UPLOAD_MAX_BYTES` limits each custom bot ZIP upload to 2 GiB by
+default. Set a positive integer number of bytes in `~/.the0/compose/.env` and
+recreate the API container to change it. Invalid values stop API startup.
+An archive larger than the limit receives HTTP 413 before it reaches object
+storage. A proxy's request-body limit must also allow the archive and multipart
+overhead.
+
+Uploads use temporary disk space until object storage finishes reading them.
+Allow space for concurrent uploads and monitor the API container's writable
+storage. Cleanup failures are logged and preserve the original response, so
+check for leftover files after a storage or filesystem incident.
+
+::: warning API memory at deploy time
+Uploads stream to disk, but the later deploy request still reads the whole ZIP
+into memory for validation and frontend extraction, briefly holding about twice
+the ZIP's size. A ZIP near the 2 GiB default can need around 4 GiB of host
+memory when a bot is deployed from it. Keep `CUSTOM_BOT_UPLOAD_MAX_BYTES` below
+half the memory you can give the API.
+:::
 
 ### Storage Configuration
 

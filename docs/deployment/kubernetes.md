@@ -143,6 +143,7 @@ the0Api:
     THE0_ADMIN_EMAIL: "admin@example.com"
     NODE_ENV: "production"
     FRONTEND_URL: "https://the0.example.com"
+    CUSTOM_BOT_UPLOAD_MAX_BYTES: "2147483648"
   extraEnv:
     - name: THE0_ADMIN_PASSWORD
       valueFrom:
@@ -212,6 +213,30 @@ On startup:
 - If the configured password changes later, restarting or rolling out the API updates the root admin password once and invalidates old sessions.
 
 See [Root Admin Configuration](./admin-bootstrap) for the full fresh install, upgrade, password rotation, and last-admin protection behavior.
+
+### Custom Bot Uploads
+
+Set `the0Api.env.CUSTOM_BOT_UPLOAD_MAX_BYTES` to a positive integer number of
+bytes. The default is `2147483648` (2 GiB) per ZIP, and an oversized upload
+receives HTTP 413 before object storage is called. Invalid values stop API
+startup. Configure ingress request-body limits to allow the ZIP plus multipart
+overhead.
+
+Uploads consume the API pod's `/tmp` volume until object storage finishes.
+Budget node ephemeral storage for concurrent uploads and monitor free space;
+the per-file limit does not cap total concurrent use. Cleanup failures are
+logged without replacing the original response.
+
+::: warning API memory at deploy time
+The default upload limit is larger than the API's default memory limit
+(`the0Api.resources.limits.memory: 1Gi`). Uploads stream to disk, but the
+later deploy request still reads the whole ZIP into memory for validation and
+frontend extraction, briefly holding about twice the ZIP's size. A ZIP that
+uploads successfully can therefore get the API pod OOM-killed when a bot is
+deployed from it. Until deploys are bounded too, keep
+`CUSTOM_BOT_UPLOAD_MAX_BYTES` below half the API memory limit, or raise the
+memory limit to more than twice the largest ZIP you accept.
+:::
 
 ## Quick Start with Minikube
 
@@ -560,7 +585,9 @@ helm upgrade the0 . --namespace the0
 
 ### Vertical Scaling
 
-Adjust resource limits based on workload:
+Adjust resource limits based on workload. The API's memory limit also caps
+the largest bot ZIP it can deploy; see
+[Custom Bot Uploads](#custom-bot-uploads).
 
 ```yaml
 the0Api:
