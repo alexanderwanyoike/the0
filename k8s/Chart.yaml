@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.19.1
-appVersion: "1.24.1"
+version: 0.20.0
+appVersion: "1.25.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,10 +30,12 @@ annotations:
     - name: Discord
       url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
-    - kind: security
-      description: "golang.org/x/net 0.62.0 in the runtime and CLI (CVE-2026-78661)"
-    - kind: security
-      description: "github.com/klauspost/compress 1.20.2 in the runtime (GO-2026-6865)"
+    - kind: changed
+      description: "Custom bot uploads stream to temporary disk instead of api memory"
+    - kind: added
+      description: "the0Api.env.CUSTOM_BOT_UPLOAD_MAX_BYTES caps each bot ZIP upload (default 2 GiB, larger uploads get 413)"
+    - kind: fixed
+      description: "An upload with a second file answers 400 instead of 500"
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
