@@ -129,7 +129,8 @@ API keys are 32 random bytes, so they can't be guessed, but a key can do everyth
 ## Storage And Backups
 
 - Set `CUSTOM_BOT_UPLOAD_MAX_BYTES` for the largest bot ZIP you support (default 2 GiB), and allow multipart overhead in proxy limits.
-- Budget API temporary storage for concurrent uploads, monitor free space, and investigate logged cleanup failures. Deploy-time ZIP validation and frontend extraction still require memory for the archive.
+- Budget API temporary storage for concurrent uploads, monitor free space, and investigate logged cleanup failures. Deploy-time ZIP validation and frontend extraction still read the whole archive into API memory, briefly holding about twice its size.
+- Keep `CUSTOM_BOT_UPLOAD_MAX_BYTES` below half the API's memory limit. The 2 GiB default exceeds the chart's 1Gi API limit, so lower the upload limit or raise the memory.
 - Back up PostgreSQL; it contains users, bot definitions, and platform configuration.
 - Back up MongoDB if runtime state and execution coordination data must survive disaster recovery.
 - Back up object storage buckets containing bot packages, logs, state archives, and artifacts.

@@ -271,13 +271,13 @@ describe("custom bot uploads", () => {
     });
   });
 
-  it("cleans up when multipart parsing rejects a second file", async () => {
+  it("rejects a second file as a client error and cleans up", async () => {
     const res = await upload()
       .field("version", "1.0.0")
       .attach("file", payload, "bot.zip")
       .attach("file", payload, "other.zip");
-    // Nest currently maps Multer's unexpected-file error to 500.
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Unexpected file field");
     expect(minio.putObject).not.toHaveBeenCalled();
   });
 

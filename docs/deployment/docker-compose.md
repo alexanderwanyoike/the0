@@ -167,9 +167,15 @@ overhead.
 Uploads use temporary disk space until object storage finishes reading them.
 Allow space for concurrent uploads and monitor the API container's writable
 storage. Cleanup failures are logged and preserve the original response, so
-check for leftover files after a storage or filesystem incident. The subsequent
-deploy request still buffers the ZIP for validation and frontend extraction;
-this upload limit does not make large deploys use bounded memory.
+check for leftover files after a storage or filesystem incident.
+
+::: warning API memory at deploy time
+Uploads stream to disk, but the later deploy request still reads the whole ZIP
+into memory for validation and frontend extraction, briefly holding about twice
+the ZIP's size. A ZIP near the 2 GiB default can need around 4 GiB of host
+memory when a bot is deployed from it. Keep `CUSTOM_BOT_UPLOAD_MAX_BYTES` below
+half the memory you can give the API.
+:::
 
 ### Storage Configuration
 
