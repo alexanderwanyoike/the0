@@ -1,11 +1,32 @@
 import { DrizzleQueryError } from "drizzle-orm";
-import { isForeignKeyViolation } from "../database-errors";
+import {
+  isForeignKeyViolation,
+  isUniqueConstraintError,
+} from "../database-errors";
 
 const driverError = (code: string) =>
   Object.assign(new Error(`database error ${code}`), { code });
 
 const queryError = (code: string) =>
   new DrizzleQueryError('delete from "custom_bots"', [], driverError(code));
+
+describe("isUniqueConstraintError", () => {
+  it("recognises a uniqueness violation wrapped by Drizzle", () => {
+    expect(isUniqueConstraintError(queryError("23505"))).toBe(true);
+  });
+
+  it("keeps direct driver errors supported", () => {
+    expect(isUniqueConstraintError(driverError("23505"))).toBe(true);
+    expect(
+      isUniqueConstraintError(driverError("SQLITE_CONSTRAINT_UNIQUE")),
+    ).toBe(true);
+  });
+
+  it("does not treat other database failures as unique violations", () => {
+    expect(isUniqueConstraintError(queryError("23503"))).toBe(false);
+    expect(isUniqueConstraintError(undefined)).toBe(false);
+  });
+});
 
 describe("isForeignKeyViolation", () => {
   it("recognises a delete a foreign key refused on Postgres before 18", () => {

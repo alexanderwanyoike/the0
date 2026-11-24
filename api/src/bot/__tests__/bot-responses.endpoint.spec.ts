@@ -175,6 +175,67 @@ describe("/bot responses", () => {
     const deployNamed = (name: string) =>
       api().post("/bot").set(asOwner).send({ name, config: botConfig() });
 
+    it("answers 409 when two deploys both pass the name lookup", async () => {
+      const repository = app.get(BotRepository);
+      const lookup = repository.hasBotNamed.bind(repository);
+      let release: () => void;
+      const bothLookedUp = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let lookups = 0;
+      jest
+        .spyOn(repository, "hasBotNamed")
+        .mockImplementation(async (userId, name) => {
+          const result = await lookup(userId, name);
+          lookups += 1;
+          if (lookups === 2) release();
+          await bothLookedUp;
+          return result;
+        });
+
+      const responses = await Promise.all([
+        deployNamed("SMA"),
+        deployNamed("SMA"),
+      ]);
+
+      expect(responses.map((res) => res.status).sort()).toEqual([201, 409]);
+      expect(responses.find((res) => res.status === 409)?.body).toEqual({
+        statusCode: 409,
+        message:
+          'Bot instance named "SMA" already exists. Use "bot update" to modify it.',
+        error: "Conflict",
+      });
+      expect(await db().select().from(botsTable)).toHaveLength(1);
+      expect(await db().select().from(botEventOutboxTable)).toHaveLength(1);
+    });
+
+    it("answers 409 for a rename to an existing name and keeps both bots unchanged", async () => {
+      await deployedBot();
+      const second = await deployNamed("Other");
+      expect(second.status).toBe(201);
+      const botsBefore = await db()
+        .select()
+        .from(botsTable)
+        .orderBy(botsTable.id);
+      const outboxBefore = await db().select().from(botEventOutboxTable);
+
+      const res = await api()
+        .put(`/bot/${second.body.id}`)
+        .set(asOwner)
+        .send({ name: "SMA", config: botConfig() });
+
+      expect(res.status).toBe(409);
+      expect(res.body.message).toBe(
+        'Bot instance named "SMA" already exists. Use "bot update" to modify it.',
+      );
+      expect(await db().select().from(botsTable).orderBy(botsTable.id)).toEqual(
+        botsBefore,
+      );
+      expect(await db().select().from(botEventOutboxTable)).toEqual(
+        outboxBefore,
+      );
+    });
+
     it("answers 409 and creates no bot and no event", async () => {
       await deployedBot();
       const outboxBefore = await db().select().from(botEventOutboxTable);
