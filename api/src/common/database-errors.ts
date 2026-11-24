@@ -47,9 +47,10 @@ export function isUniqueConstraintError(
       code === "SQLITE_CONSTRAINT" ||
       code === "SQLITE_CONSTRAINT_PRIMARYKEY" ||
       code === "SQLITE_CONSTRAINT_UNIQUE";
-    return unique && (
-      constraintName === undefined ||
-      (constraint_name ?? constraint) === constraintName
+    return (
+      unique &&
+      (constraintName === undefined ||
+        (constraint_name ?? constraint) === constraintName)
     );
   });
 }

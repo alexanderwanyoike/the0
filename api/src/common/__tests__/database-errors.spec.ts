@@ -30,12 +30,23 @@ describe("isUniqueConstraintError", () => {
   it.each(["constraint", "constraint_name"])(
     "matches the named constraint reported through %s",
     (property) => {
-      const wrapped = new DrizzleQueryError("insert into bots", [],
-        Object.assign(driverError("23505"), { [property]: "bots_user_id_name_unique" }),
+      const wrapped = new DrizzleQueryError(
+        "insert into bots",
+        [],
+        Object.assign(driverError("23505"), {
+          [property]: "bots_user_id_name_unique",
+        }),
       );
-      expect(isUniqueConstraintError(wrapped, "bots_user_id_name_unique")).toBe(true);
+      expect(isUniqueConstraintError(wrapped, "bots_user_id_name_unique")).toBe(
+        true,
+      );
       expect(isUniqueConstraintError(wrapped, "bots_pkey")).toBe(false);
-      expect(isUniqueConstraintError(queryError("23505"), "bots_user_id_name_unique")).toBe(false);
+      expect(
+        isUniqueConstraintError(
+          queryError("23505"),
+          "bots_user_id_name_unique",
+        ),
+      ).toBe(false);
     },
   );
 });

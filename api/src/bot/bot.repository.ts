@@ -9,7 +9,10 @@ import {
   READ_FAILED,
   WRITE_FAILED,
 } from "@/common/app-error";
-import { isForeignKeyViolation, isUniqueConstraintError } from "@/common/database-errors";
+import {
+  isForeignKeyViolation,
+  isUniqueConstraintError,
+} from "@/common/database-errors";
 import { Failure, Ok, Result } from "@/common/result";
 import { appendBotEvents, BotEvent, Executor } from "./bot-event-outbox";
 
@@ -187,7 +190,10 @@ export interface DisableAllOutcome {
 const isEnabled = (bot: Bot): boolean => bot.config?.enabled !== false;
 
 const writeFailure = (error: unknown, name?: string): AppError => {
-  if (name !== undefined && isUniqueConstraintError(error, "bots_user_id_name_unique")) {
+  if (
+    name !== undefined &&
+    isUniqueConstraintError(error, "bots_user_id_name_unique")
+  ) {
     return appError(
       "conflict",
       `Bot instance named "${name}" already exists. Use "bot update" to modify it.`,
