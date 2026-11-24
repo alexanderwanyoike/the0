@@ -3,6 +3,7 @@ import { ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { Logger } from "nestjs-pino";
+import pino from "pino";
 import { AppModule } from "./app.module";
 import { runMigrations } from "./database/migrate";
 import {
@@ -11,10 +12,15 @@ import {
   SWAGGER_UI_PATH,
 } from "./swagger/swagger.setup";
 
+const bootstrapLogger = pino({
+  name: "bootstrap",
+  level: process.env.LOG_LEVEL || "info",
+});
+
 async function bootstrap() {
   // Fail fast if JWT_SECRET is not configured
   if (!process.env.JWT_SECRET) {
-    console.error(
+    bootstrapLogger.fatal(
       "FATAL: JWT_SECRET environment variable is not set. " +
         "The API cannot start without a secure JWT secret. " +
         "Set JWT_SECRET in your environment before starting the server.",
@@ -23,10 +29,9 @@ async function bootstrap() {
   }
 
   // Run database migrations before starting the application
-  // Note: migrations run before NestJS app is created, so we use console here
-  console.log("Running database migrations...");
+  bootstrapLogger.info("Running database migrations...");
   await runMigrations();
-  console.log("Database migrations completed");
+  bootstrapLogger.info("Database migrations completed");
 
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
@@ -62,7 +67,7 @@ async function bootstrap() {
   }
 }
 
-bootstrap().catch((error) => {
-  console.error("Failed to start the0 API:", error);
+bootstrap().catch((error: unknown) => {
+  bootstrapLogger.error({ err: error }, "Failed to start the0 API");
   process.exit(1);
 });
