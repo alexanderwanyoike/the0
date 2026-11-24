@@ -31,12 +31,25 @@ export function isForeignKeyViolation(error: unknown): boolean {
   );
 }
 
-export function isUniqueConstraintError(error: unknown): boolean {
-  const code = (error as { code?: unknown })?.code;
-  return (
-    code === "23505" ||
-    code === "SQLITE_CONSTRAINT" ||
-    code === "SQLITE_CONSTRAINT_PRIMARYKEY" ||
-    code === "SQLITE_CONSTRAINT_UNIQUE"
-  );
+export function isUniqueConstraintError(
+  error: unknown,
+  constraintName?: string,
+): boolean {
+  const cause = (error as { cause?: unknown })?.cause;
+  return [error, cause].some((candidate) => {
+    const { code, constraint, constraint_name } = (candidate ?? {}) as {
+      code?: unknown;
+      constraint?: unknown;
+      constraint_name?: unknown;
+    };
+    const unique =
+      code === "23505" ||
+      code === "SQLITE_CONSTRAINT" ||
+      code === "SQLITE_CONSTRAINT_PRIMARYKEY" ||
+      code === "SQLITE_CONSTRAINT_UNIQUE";
+    return unique && (
+      constraintName === undefined ||
+      (constraint_name ?? constraint) === constraintName
+    );
+  });
 }

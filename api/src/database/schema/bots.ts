@@ -1,5 +1,5 @@
-import { pgTable, varchar, timestamp, jsonb, index } from "drizzle-orm/pg-core";
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { pgTable, varchar, timestamp, jsonb, index, unique } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer, unique as sqliteUnique } from "drizzle-orm/sqlite-core";
 import { createId } from "@paralleldrive/cuid2";
 import { usersTable, usersTableSqlite } from "./users";
 import { customBotsTable, customBotsTableSqlite } from "./custom-bots";
@@ -38,6 +38,7 @@ export const botsTable = pgTable("bots", {
 }, (table) => ({
   userIdIdx: index("bots_user_id_idx").on(table.userId),
   customBotIdIdx: index("bots_custom_bot_id_idx").on(table.customBotId),
+  userNameUnique: unique("bots_user_id_name_unique").on(table.userId, table.name),
 }));
 
 // SQLite Bots table
@@ -60,7 +61,9 @@ export const botsTableSqlite = sqliteTable("bots", {
   updatedAt: integer("updated_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
-});
+}, (table) => ({
+  userNameUnique: sqliteUnique("bots_user_id_name_unique").on(table.userId, table.name),
+}));
 
 export type Bot = typeof botsTable.$inferSelect;
 export type NewBot = typeof botsTable.$inferInsert;

@@ -9,7 +9,7 @@ import {
   READ_FAILED,
   WRITE_FAILED,
 } from "@/common/app-error";
-import { isForeignKeyViolation } from "@/common/database-errors";
+import { isForeignKeyViolation, isUniqueConstraintError } from "@/common/database-errors";
 import { Failure, Ok, Result } from "@/common/result";
 import { appendBotEvents, BotEvent, Executor } from "./bot-event-outbox";
 
@@ -40,7 +40,7 @@ export class BotRepository extends RoleRepository<Bot> {
       return Ok(this.transformSnapshotToData<Bot>(record));
     } catch (error: unknown) {
       logger.error({ err: error }, "Error creating bot");
-      return Failure(writeFailure(error));
+      return Failure(writeFailure(error, bot.name));
     }
   }
 
@@ -86,7 +86,7 @@ export class BotRepository extends RoleRepository<Bot> {
       return this.findOne(userId, id);
     } catch (error: unknown) {
       logger.error({ err: error }, "Error updating bot");
-      return Failure(writeFailure(error));
+      return Failure(writeFailure(error, changes.name));
     }
   }
 
@@ -186,8 +186,15 @@ export interface DisableAllOutcome {
 /** The runtime's rule (desired.IsEnabled): a bot runs unless config.enabled is false. */
 const isEnabled = (bot: Bot): boolean => bot.config?.enabled !== false;
 
-/** customBotId is the only reference a caller can break: by deleting the version. */
-const writeFailure = (error: unknown): AppError =>
-  isForeignKeyViolation(error)
+const writeFailure = (error: unknown, name?: string): AppError => {
+  if (name !== undefined && isUniqueConstraintError(error, "bots_user_id_name_unique")) {
+    return appError(
+      "conflict",
+      `Bot instance named "${name}" already exists. Use "bot update" to modify it.`,
+    );
+  }
+  // customBotId is the only reference a caller can break: by deleting the version.
+  return isForeignKeyViolation(error)
     ? appError("validation", "Custom bot version no longer exists")
     : WRITE_FAILED;
+};

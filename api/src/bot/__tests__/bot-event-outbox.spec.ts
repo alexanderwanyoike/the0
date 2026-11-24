@@ -164,7 +164,11 @@ describe("BotRepository writes with events", () => {
 
     it("disables none of the bots when any of their events cannot be stored", async () => {
       await repository.createWithEvents(newBot("bot-1"), []);
-      await repository.createWithEvents(newBot("bot-2"), []);
+      const second = await repository.createWithEvents(
+        { ...newBot("bot-2"), name: "SMA 2" },
+        [],
+      );
+      expect(second.success).toBe(true);
 
       const result = await repository.disableAllWithEvents(OWNER, (bot) =>
         Ok([

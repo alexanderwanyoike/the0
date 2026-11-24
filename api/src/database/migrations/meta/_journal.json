@@ -64,6 +64,13 @@
       "when": 1791763200000,
       "tag": "0008_restrict_custom_bot_version_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1795546800000,
+      "tag": "0009_unique_bot_names",
+      "breakpoints": true
     }
   ]
 }
