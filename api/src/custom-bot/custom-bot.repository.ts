@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import pino from "pino";
+import { PinoLogger } from "nestjs-pino";
 import { RoleRevisionRepository } from "@/common/role-revision.repository";
 import { READ_FAILED, appError, AppError } from "@/common/app-error";
 import {
@@ -11,8 +11,6 @@ import { Result, Ok, Failure, errorMessage } from "@/common/result";
 import { isForeignKeyViolation } from "@/common/database-errors";
 import { eq, and, desc, inArray, type SQL } from "drizzle-orm";
 
-const logger = pino({ name: "CustomBotRepository" });
-
 export type RemoveVersionsFailure =
   | { reason: "in-use" }
   | { reason: "error"; message: string };
@@ -21,8 +19,8 @@ export type RemoveVersionsFailure =
 export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
   protected readonly tableName = "customBots" as const;
 
-  constructor() {
-    super("name"); // Use 'name' as the revision key field
+  constructor(logger: PinoLogger) {
+    super(logger, "name");
   }
 
   async globalBotExists(name: string): Promise<Result<boolean, AppError>> {
@@ -140,7 +138,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
 
       return Ok(records.length);
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error counting custom bot instances");
+      this.logger.error({ err: error }, "Error counting custom bot instances");
       return Failure(READ_FAILED);
     }
   }
@@ -169,7 +167,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
 
       return Ok(counts);
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error counting custom bot instances");
+      this.logger.error({ err: error }, "Error counting custom bot instances");
       return Failure(READ_FAILED);
     }
   }
@@ -228,7 +226,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
         ),
       );
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error fetching the Catalogue");
+      this.logger.error({ err: error }, "Error fetching the Catalogue");
       return Failure(READ_FAILED);
     }
   }

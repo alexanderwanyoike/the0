@@ -3,14 +3,16 @@ import { Result, Ok, Failure } from "./result";
 import { getDatabase, getTables } from "@/database/connection";
 import { eq, and, desc } from "drizzle-orm";
 import Repository from "./repository";
-import pino from "pino";
-
-const logger = pino({ name: "RoleRepository" });
+import { PinoLogger } from "nestjs-pino";
 
 export abstract class RoleRepository<T> implements Repository<T> {
   protected readonly db = getDatabase();
   protected readonly tables = getTables();
   protected abstract readonly tableName: keyof typeof this.tables;
+
+  constructor(protected readonly logger: PinoLogger) {
+    this.logger.setContext(this.constructor.name);
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic table access via computed key
   protected get table(): any {
@@ -32,7 +34,7 @@ export abstract class RoleRepository<T> implements Repository<T> {
         ...data,
       } as T);
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error creating document");
+      this.logger.error({ err: error }, "Error creating document");
       return Failure(WRITE_FAILED);
     }
   }
@@ -55,7 +57,7 @@ export abstract class RoleRepository<T> implements Repository<T> {
         ),
       );
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error fetching documents");
+      this.logger.error({ err: error }, "Error fetching documents");
       return Failure(READ_FAILED);
     }
   }
@@ -77,7 +79,7 @@ export abstract class RoleRepository<T> implements Repository<T> {
 
       return Ok(this.transformSnapshotToData<T>(records[0]));
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error fetching document");
+      this.logger.error({ err: error }, "Error fetching document");
       return Failure(READ_FAILED);
     }
   }
@@ -104,7 +106,7 @@ export abstract class RoleRepository<T> implements Repository<T> {
 
       return this.findOne(userId, id);
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error updating document");
+      this.logger.error({ err: error }, "Error updating document");
       return Failure(WRITE_FAILED);
     }
   }
@@ -121,7 +123,7 @@ export abstract class RoleRepository<T> implements Repository<T> {
 
       return Ok(null);
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error deleting document");
+      this.logger.error({ err: error }, "Error deleting document");
       return Failure(WRITE_FAILED);
     }
   }

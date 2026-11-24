@@ -1,3 +1,5 @@
+import { PinoLogger } from "nestjs-pino";
+import { createMockLogger } from "@/test/mock-logger";
 import { BotRepository } from "../bot.repository";
 import { appError } from "@/common/app-error";
 import { BotEvent } from "../bot-event-outbox";
@@ -12,11 +14,6 @@ jest.mock(
   "@/database/connection",
   () => jest.requireActual("@/test/test-database").connection,
 );
-// The failure cases are expected, so their error logs are noise here.
-jest.mock("pino", () => ({
-  __esModule: true,
-  default: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn() }),
-}));
 
 const OWNER = TEST_OWNER_ID;
 const CUSTOM_BOT = "sma-bot-1.0.0";
@@ -45,7 +42,7 @@ describe("BotRepository writes with events", () => {
   });
 
   beforeAll(() => {
-    repository = new BotRepository();
+    repository = new BotRepository(createMockLogger() as unknown as PinoLogger);
   });
 
   beforeEach(async () => {

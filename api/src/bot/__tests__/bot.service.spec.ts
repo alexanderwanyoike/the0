@@ -5,6 +5,8 @@ import { BotRepository } from "../bot.repository";
 import { Ok, Failure } from "@/common/result";
 import { mockBot } from "@/test/mock-bot";
 import { mockActor } from "@/test/mock-actor";
+import { PinoLogger } from "nestjs-pino";
+import { createMockLogger } from "@/test/mock-logger";
 
 describe("BotService", () => {
   let service: BotService;
@@ -14,7 +16,11 @@ describe("BotService", () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [BotService, BotRepository],
+      providers: [
+        BotService,
+        BotRepository,
+        { provide: PinoLogger, useValue: createMockLogger() },
+      ],
     }).compile();
 
     service = module.get<BotService>(BotService);

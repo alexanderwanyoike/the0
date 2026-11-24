@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { and, asc, eq } from "drizzle-orm";
-import pino from "pino";
+import { PinoLogger } from "nestjs-pino";
 import { Bot } from "./entities/bot.entity";
 import { RoleRepository } from "@/common/role.repository";
 import {
@@ -13,14 +13,12 @@ import { isForeignKeyViolation } from "@/common/database-errors";
 import { Failure, Ok, Result } from "@/common/result";
 import { appendBotEvents, BotEvent, Executor } from "./bot-event-outbox";
 
-const logger = pino({ name: "BotRepository" });
-
 @Injectable()
 export class BotRepository extends RoleRepository<Bot> {
   protected readonly tableName = "bots" as const;
 
-  constructor() {
-    super();
+  constructor(logger: PinoLogger) {
+    super(logger);
   }
 
   async createWithEvents(
@@ -39,7 +37,7 @@ export class BotRepository extends RoleRepository<Bot> {
       });
       return Ok(this.transformSnapshotToData<Bot>(record));
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error creating bot");
+      this.logger.error({ err: error }, "Error creating bot");
       return Failure(writeFailure(error));
     }
   }
@@ -57,7 +55,7 @@ export class BotRepository extends RoleRepository<Bot> {
         .limit(1)) as unknown[];
       return Ok(rows.length > 0);
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error looking up bot name");
+      this.logger.error({ err: error }, "Error looking up bot name");
       return Failure(READ_FAILED);
     }
   }
@@ -85,7 +83,7 @@ export class BotRepository extends RoleRepository<Bot> {
       if (!updated) return Failure(appError("not_found", "Not found"));
       return this.findOne(userId, id);
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error updating bot");
+      this.logger.error({ err: error }, "Error updating bot");
       return Failure(writeFailure(error));
     }
   }
@@ -106,7 +104,7 @@ export class BotRepository extends RoleRepository<Bot> {
       });
       return Ok(null);
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error deleting bot");
+      this.logger.error({ err: error }, "Error deleting bot");
       return Failure(WRITE_FAILED);
     }
   }
@@ -166,7 +164,7 @@ export class BotRepository extends RoleRepository<Bot> {
       return Ok(outcome);
     } catch (error: unknown) {
       if (refusal.error) return Failure(refusal.error);
-      logger.error({ err: error }, "Error disabling bots");
+      this.logger.error({ err: error }, "Error disabling bots");
       return Failure(WRITE_FAILED);
     }
   }
