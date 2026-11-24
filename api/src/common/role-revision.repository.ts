@@ -2,9 +2,7 @@ import { appError, AppError, READ_FAILED, WRITE_FAILED } from "./app-error";
 import { Result, Ok, Failure } from "./result";
 import { getDatabase, getTables } from "@/database/connection";
 import { eq, and, desc } from "drizzle-orm";
-import pino from "pino";
-
-const logger = pino({ name: "RoleRevisionRepository" });
+import { PinoLogger } from "nestjs-pino";
 
 export interface RevisionEntity {
   id?: string;
@@ -19,8 +17,12 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
   protected abstract readonly tableName: keyof typeof this.tables;
   protected keyField: string;
 
-  constructor(revisionKeyField = "name") {
+  constructor(
+    protected readonly logger: PinoLogger,
+    revisionKeyField = "name",
+  ) {
     this.keyField = revisionKeyField;
+    this.logger.setContext(this.constructor.name);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic table access via computed key
@@ -43,7 +45,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         ...data,
       } as T);
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error creating document");
+      this.logger.error({ err: error }, "Error creating document");
       return Failure(WRITE_FAILED);
     }
   }
@@ -66,7 +68,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         ),
       );
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error fetching documents");
+      this.logger.error({ err: error }, "Error fetching documents");
       return Failure(READ_FAILED);
     }
   }
@@ -84,7 +86,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
 
       return Ok(this.transformRecordToData(records[0]));
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error fetching document by ID");
+      this.logger.error({ err: error }, "Error fetching document by ID");
       return Failure(READ_FAILED);
     }
   }
@@ -97,7 +99,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
 
       return Ok(null);
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error deleting document");
+      this.logger.error({ err: error }, "Error deleting document");
       return Failure(WRITE_FAILED);
     }
   }
@@ -122,7 +124,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         ),
       );
     } catch (error: unknown) {
-      logger.error(
+      this.logger.error(
         { err: error, keyField: this.keyField },
         "Error fetching documents by key",
       );
@@ -146,7 +148,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
 
       return Ok(this.transformRecordToData(records[0]));
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error fetching global latest version");
+      this.logger.error({ err: error }, "Error fetching global latest version");
       return Failure(READ_FAILED);
     }
   }
@@ -165,7 +167,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         ),
       );
     } catch (error: unknown) {
-      logger.error(
+      this.logger.error(
         { err: error, keyField: this.keyField },
         "Error fetching global documents by key",
       );
@@ -194,7 +196,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
 
       return Ok(this.transformRecordToData(records[0]));
     } catch (error: unknown) {
-      logger.error(
+      this.logger.error(
         { err: error, keyField: this.keyField },
         "Error fetching global document by key and version",
       );

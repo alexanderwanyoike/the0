@@ -1,3 +1,5 @@
+import { PinoLogger } from "nestjs-pino";
+import { createMockLogger } from "@/test/mock-logger";
 import { appError } from "@/common/app-error";
 import { Test, TestingModule } from "@nestjs/testing";
 import { ApiKeyRepository } from "../api-key.repository";
@@ -69,7 +71,10 @@ describe("ApiKeyRepository", () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ApiKeyRepository],
+      providers: [
+        ApiKeyRepository,
+        { provide: PinoLogger, useValue: createMockLogger() },
+      ],
     }).compile();
 
     repository = module.get<ApiKeyRepository>(ApiKeyRepository);

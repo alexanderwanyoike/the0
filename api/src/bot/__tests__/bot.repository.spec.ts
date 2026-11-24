@@ -1,3 +1,5 @@
+import { PinoLogger } from "nestjs-pino";
+import { createMockLogger } from "@/test/mock-logger";
 import { Test, TestingModule } from "@nestjs/testing";
 import { appError } from "@/common/app-error";
 import { BotRepository } from "../bot.repository";
@@ -9,7 +11,10 @@ describe("BotRepository", () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [BotRepository],
+      providers: [
+        BotRepository,
+        { provide: PinoLogger, useValue: createMockLogger() },
+      ],
     }).compile();
 
     repository = module.get<BotRepository>(BotRepository);

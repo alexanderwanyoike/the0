@@ -1,3 +1,5 @@
+import { PinoLogger } from "nestjs-pino";
+import { createMockLogger } from "@/test/mock-logger";
 import { appError } from "@/common/app-error";
 import { CustomBotRepository } from "../custom-bot.repository";
 import { CustomBot } from "../custom-bot.types";
@@ -61,7 +63,9 @@ describe("CustomBotRepository", () => {
     getDatabase.mockReturnValue(mockDb);
     getTables.mockReturnValue(mockTables);
 
-    repository = new CustomBotRepository();
+    repository = new CustomBotRepository(
+      createMockLogger() as unknown as PinoLogger,
+    );
   });
 
   afterEach(() => {

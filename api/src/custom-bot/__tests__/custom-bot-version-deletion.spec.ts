@@ -1,3 +1,5 @@
+import { PinoLogger } from "nestjs-pino";
+import { createMockLogger } from "@/test/mock-logger";
 import { CustomBotService } from "../custom-bot.service";
 import { CustomBotRepository } from "../custom-bot.repository";
 import { StorageService } from "../storage.service";
@@ -5,7 +7,6 @@ import { Ok } from "@/common/result";
 import { customBotsTable } from "@/database/schema/custom-bots";
 import { botsTable } from "@/database/schema/bots";
 import { mockBotConfig } from "@/test/mock-bot";
-import { createMockLogger } from "@/test/mock-logger";
 import { TEST_OWNER_ID, useTestDatabase } from "@/test/test-database";
 
 jest.mock(
@@ -56,7 +57,9 @@ describe("CustomBotService deleting versions", () => {
       });
 
   beforeEach(async () => {
-    repository = new CustomBotRepository();
+    repository = new CustomBotRepository(
+      createMockLogger() as unknown as PinoLogger,
+    );
     storage = {
       listObjects: jest.fn().mockResolvedValue(Ok([])),
       deleteFile: jest.fn().mockResolvedValue(Ok(undefined)),

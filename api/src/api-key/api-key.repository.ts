@@ -6,14 +6,16 @@ import { Result, Ok, Failure, errorMessage } from "@/common/result";
 import { eq, and } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import * as crypto from "crypto";
-import pino from "pino";
+import { PinoLogger } from "nestjs-pino";
 import { isConnectionError } from "@/common/database-errors";
-
-const logger = pino({ name: "ApiKeyRepository" });
 
 @Injectable()
 export class ApiKeyRepository extends RoleRepository<ApiKey> {
   protected readonly tableName = "apiKeys" as const;
+
+  constructor(logger: PinoLogger) {
+    super(logger);
+  }
 
   async createApiKey(
     userId: string,
@@ -75,7 +77,7 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
       if (isConnectionError(error)) {
         throw error;
       }
-      logger.error({ err: error }, "Error looking up API key");
+      this.logger.error({ err: error }, "Error looking up API key");
       return Failure(appError("internal", "API key lookup failed"));
     }
   }
@@ -114,7 +116,7 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
 
       return Ok(null);
     } catch (error: unknown) {
-      logger.error({ err: error }, "Error deleting API key");
+      this.logger.error({ err: error }, "Error deleting API key");
       return Failure(appError("internal", errorMessage(error)));
     }
   }
